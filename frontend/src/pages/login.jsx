@@ -4,65 +4,59 @@ import { useNavigate } from "react-router-dom";
 
 function Login() {
 
-  const [username,setUsername] = useState("");
-  const [password,setPassword] = useState("");
-
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
-    try{
+  const handleLogin = async () => {
 
-      const res = await api.post("/login",{
+    try {
+
+      const res = await api.post("/auth/login", {
         username,
         password
       });
 
-      localStorage.setItem("token",res.data.token);
+      localStorage.setItem("token", res.data.token);
 
       navigate("/dashboard");
 
-    }catch(err){
+    } catch (err) {
 
-      alert("login failed" & err.err);
+      alert("login failed");
 
     }
-  }
+
+  };
 
   return (
-
-    <div style={{padding:"40px"}}>
+    <div>
 
       <h2>Login</h2>
 
-      <form onSubmit={handleLogin}>
+      <input
+        placeholder="username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
 
-        <input
-          placeholder="username"
-          value={username}
-          onChange={(e)=>setUsername(e.target.value)}
-        />
+      <br /><br />
 
-        <br/><br/>
+      <input
+        type="password"
+        placeholder="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
 
-        <input
-          type="password"
-          placeholder="password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-        />
+      <br /><br />
 
-        <br/><br/>
-
-        <button type="submit">
-          Login
-        </button>
-
-      </form>
+      <button onClick={handleLogin}>
+        Login
+      </button>
 
     </div>
-
   );
 }
 
