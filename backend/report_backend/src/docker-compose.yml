@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  report-api:
+    build: .
+    container_name: report_backend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=n8n-postgres
+      - DB_USER=n8n
+      - DB_PASS=n8n
+      - DB_NAME=Unit_Reports
+      - PORT=3000
+    networks:
+      - n8n_default
+
+networks:
+  n8n_default:
+    external: true

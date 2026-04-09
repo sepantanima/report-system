@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  report-api:
+    build: .
+    container_name: report_backend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://n8n:n8n@n8n-postgres:5432/Unit_Reports
+      - PORT=3000
+    networks:
+      - n8n_default
+
+networks:
+  n8n_default:
+    external: true
