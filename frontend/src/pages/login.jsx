@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../api/api";
 import { useNavigate } from "react-router-dom";
+import "./login.css";
 
 function Login() {
 
@@ -13,7 +14,6 @@ function Login() {
 
     try {
 
-      
       const res = await api.post("/auth/login", {
         username,
         password
@@ -32,30 +32,72 @@ function Login() {
   };
 
   return (
-    <div>
+    <div className="loginPage">
 
-      <h2>Login</h2>
+      <div className="blob blob1"></div>
+      <div className="blob blob2"></div>
 
-      <input
-        placeholder="username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
+      <div className="loginCardWrap">
 
-      <br /><br />
+        <div className="loginHeader">
+          <div className="logoBox">
+            <img src="/logo.png" className="logoImg" />
+          </div>
 
-      <input
-        type="password"
-        placeholder="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+          <h2 className="title">ورود</h2>
+          <div className="subtitle">سیستم گزارشات</div>
+        </div>
 
-      <br /><br />
+        <div className="loginCard">
 
-      <button onClick={handleLogin}>
-        Login
-      </button>
+          <div className="loginForm">
+
+            <div className="field">
+              <label className="label">نام کاربری</label>
+
+              <div className="inputWrap">
+                <span className="icon">👤</span>
+
+                <input
+                  className="input"
+                  placeholder="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label">رمز عبور</label>
+
+              <div className="inputWrap">
+                <span className="icon">🔒</span>
+
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+
+              </div>
+            </div>
+
+            <button className="submitBtn" onClick={handleLogin}>
+              Login
+            </button>
+
+          </div>
+
+        </div>
+
+        <div className="footer">
+          Sepanta Report System
+        </div>
+
+      </div>
 
     </div>
   );
