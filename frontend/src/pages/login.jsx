@@ -13,6 +13,7 @@ function Login() {
 
     try {
 
+      
       const res = await api.post("/auth/login", {
         username,
         password
@@ -24,7 +25,7 @@ function Login() {
 
     } catch (err) {
 
-      alert("login failed");
+      alert("login failed    error text: " + err);
 
     }
 
