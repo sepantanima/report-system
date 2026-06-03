@@ -11,25 +11,16 @@ function Login() {
   const [password, setPassword] = useState("");
 
   const handleLogin = async () => {
-
-    try {
-
-      const res = await api.post("/auth/login", {
-        username,
-        password
-      });
-
-      localStorage.setItem("token", res.data.token);
-
-      navigate("/dashboard");
-
-    } catch (err) {
-
-      alert("login failed    error text: " + err);
-
-    }
-
-  };
+  if (!username || !password) return alert("لطفاً فیلدها را پر کنید");
+  
+  try {
+    const res = await api.post("/auth/login", { username, password });
+    localStorage.setItem("token", res.data.token);
+    navigate("/main"); // انتقال به فرم اصلی
+  } catch (err) {
+    alert("خطا در ورود: " + (err.response?.data?.message || "ارتباط با سرور برقرار نشد"));
+  }
+};
 
   return (
     <div className="loginPage">
@@ -104,3 +95,4 @@ function Login() {
 }
 
 export default Login;
+
