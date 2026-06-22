@@ -1,0 +1,179 @@
+/** نقش‌ها و دسترسی‌ها — منبع واحد frontend */
+
+export const ROLE_LABELS = {
+  admin: "مدیر کل",
+  analysis_manager: "مدیر تحلیل",
+  analyst: "تحلیل‌گر",
+  mentor: "راهنما",
+  topic_proposer: "پیشنهاددهنده",
+  topic_approver: "تاییدکننده موضوع",
+  news_monitor: "پایشگر اخبار",
+  news_editor: "دبیر اخبار",
+  news_chief: "سردبیر اخبار",
+  Field_admin: "مدیر میدانی",
+  user: "کاربر واحد",
+};
+
+/** نگاشت برچسب فارسی یا نام‌های قدیمی به شناسه انگلیسی */
+const ROLE_ALIASES = {
+  "مدیر کل": "admin",
+  "مدیر کل سیستم": "admin",
+  "مدیر تحلیل": "analysis_manager",
+  "مدیر تحلیل / سردبیر": "analysis_manager",
+  "تحلیل‌گر": "analyst",
+  "تحلیل گر": "analyst",
+  "راهنما": "mentor",
+  "راهنما / داور": "mentor",
+  "پیشنهاددهنده": "topic_proposer",
+  "پیشنهاددهنده موضوع": "topic_proposer",
+  "تاییدکننده": "topic_approver",
+  "تاییدکننده موضوع": "topic_approver",
+  "پایشگر اخبار": "news_monitor",
+  "دبیر اخبار": "news_editor",
+  "سردبیر اخبار": "news_chief",
+  "مدیر اخبار": "news_chief",
+  news_admin: "news_chief",
+  "مدیر میدانی": "Field_admin",
+  "مدیر گزارشات میدانی": "Field_admin",
+  "کاربر واحد": "user",
+  "کاربر واحد (ثبت گزارش)": "user",
+};
+
+export const ROLE_PERMISSIONS = {
+  admin: [
+    "create_report", "manage_users", "monitor_reports", "news_entry", "news_review",
+    "news_finalize", "news_duplicates", "ai_process",
+    "search_reports", "sys_settings", "analytics",
+    "analysis_manage", "analysis_topic_approve", "analysis_missions", "analysis_propose", "analysis_review",
+    "manage_prompts", "manage_ai_api", "field_mgmt_summary",
+  ],
+  analysis_manager: [
+    "manage_users", "analysis_manage", "analysis_topic_approve", "analysis_propose", "analysis_review", "sys_settings",
+  ],
+  analyst: ["analysis_missions", "sys_settings"],
+  mentor: ["analysis_review", "sys_settings"],
+  topic_proposer: ["analysis_propose", "sys_settings"],
+  topic_approver: ["analysis_topic_approve", "sys_settings"],
+  news_monitor: ["news_entry", "analytics", "sys_settings"],
+  news_editor: ["news_review", "ai_process", "analytics", "sys_settings"],
+  news_chief: ["news_review", "news_finalize", "news_duplicates", "ai_process", "analytics", "sys_settings"],
+  Field_admin: [
+    "manage_users", "create_report", "monitor_reports", "analytics", "sys_settings", "analysis_topic_approve",
+    "field_mgmt_summary",
+  ],
+  user: ["create_report", "sys_settings", "analytics"],
+};
+
+export function decodeToken(token) {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(
+      decodeURIComponent(
+        window.atob(base64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+      )
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function parseUserRoles(rawRole) {
+  if (rawRole == null || rawRole === "") return [];
+  if (Array.isArray(rawRole)) {
+    return rawRole.map((r) => String(r).trim()).filter(Boolean);
+  }
+  const str = String(rawRole).trim();
+  if (!str) return [];
+
+  if (str.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) {
+        return parsed.map((r) => String(r).trim()).filter(Boolean);
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (str.includes("{") || str.includes("}")) {
+    return str.replace(/[{}"\s]/g, "").split(",").filter(Boolean);
+  }
+
+  if (str.includes(",")) {
+    return str.split(",").map((r) => r.trim()).filter(Boolean);
+  }
+
+  return [str];
+}
+
+export function normalizeRoleKey(role) {
+  const key = String(role || "").trim();
+  if (!key) return "";
+  if (ROLE_PERMISSIONS[key]) return key;
+  if (ROLE_ALIASES[key]) return ROLE_ALIASES[key];
+  const lower = key.toLowerCase();
+  if (ROLE_PERMISSIONS[lower]) return lower;
+  return key;
+}
+
+export function normalizeRoles(rawRoles) {
+  const parsed = parseUserRoles(rawRoles);
+  const normalized = parsed.map(normalizeRoleKey).filter(Boolean);
+  return [...new Set(normalized)];
+}
+
+export function getSessionRoles() {
+  if (typeof window === "undefined") return ["user"];
+
+  const token = localStorage.getItem("token");
+  if (token) {
+    const decoded = decodeToken(token);
+    const fromToken = normalizeRoles(decoded.role);
+    if (fromToken.length) return fromToken;
+  }
+
+  const fromStorage = normalizeRoles(localStorage.getItem("role"));
+  return fromStorage.length ? fromStorage : ["user"];
+}
+
+export function serializeRoles(roles) {
+  return JSON.stringify(normalizeRoles(roles));
+}
+
+export function getRoleLabelFa(roleKey) {
+  const key = normalizeRoleKey(roleKey);
+  return ROLE_LABELS[key] || roleKey || "نقش نامشخص";
+}
+
+export function getPermissionsForRoles(roles) {
+  const perms = new Set();
+  normalizeRoles(roles).forEach((role) => {
+    (ROLE_PERMISSIONS[role] || []).forEach((p) => perms.add(p));
+  });
+  return perms;
+}
+
+export function hasPermission(roles, permission) {
+  return getPermissionsForRoles(roles).has(permission);
+}
+
+export function hasRole(roles, ...allowed) {
+  const normalized = normalizeRoles(roles);
+  if (normalized.includes("admin")) return true;
+  return allowed.some((r) => normalized.includes(r));
+}
+
+export function persistSessionRoles(roles) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("role", serializeRoles(roles));
+}
+
+export function getNewsRoleLevel(roles) {
+  const normalized = normalizeRoles(roles);
+  if (normalized.includes("admin")) return "admin";
+  if (normalized.includes("news_chief")) return "chief";
+  if (normalized.includes("news_editor")) return "editor";
+  if (normalized.includes("news_monitor")) return "monitor";
+  return null;
+}

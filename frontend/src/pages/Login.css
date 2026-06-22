@@ -161,6 +161,38 @@
   font-size: 13px;
 }
 
+/* تم روشن: وقتی body.light از تنظیمات سیستم اعمال شده */
+body.light .loginPage {
+  background: linear-gradient(180deg, #f1f5f9, #e2e8f0);
+}
+body.light .title {
+  color: #0f172a;
+}
+body.light .subtitle {
+  color: #475569;
+}
+body.light .loginCard {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+body.light .label {
+  color: #334155;
+}
+body.light .inputWrap {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+}
+body.light .inputWrap .icon {
+  color: #64748b;
+}
+body.light .input {
+  color: #0f172a;
+}
+body.light .footer {
+  color: #64748b;
+}
+
 
 
 /* ======================================================
@@ -254,3 +286,14 @@
     font-size: 11px;
   }
 }
+.custom-table th { text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.table-row:hover { background: rgba(255,255,255,0.03); }
+.action-btn { background: none; border: none; cursor: pointer; transition: 0.2s; }
+.action-btn.edit:hover { color: #fdcb6e; transform: scale(1.2); }
+.action-btn.delete:hover { color: #ff7675; transform: scale(1.2); }
+.badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; }
+.badge.admin { background: #6c5ce7; }
+.badge.user { background: #636e72; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(4px); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; color: #fff; }
+.modal-body { display: flex; flex-direction: column; gap: 15px; }

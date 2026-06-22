@@ -5,9 +5,19 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "migrate:analysis": "node scripts/runMigration.js"
+    "migrate:analysis": "node scripts/runMigration.js",
+    "migrate:field-mgmt": "node scripts/runMigration002.js",
+    "migrate:mgmt-summary-v2": "node scripts/runMigration003.js",
+    "migrate:news-platform": "node scripts/runMigration013.js",
+    "migrate:news-url": "node scripts/runMigration014.js",
+    "migrate:news-workflow-default": "node scripts/runMigration015.js",
+    "migrate:news-jalali-ascii": "node scripts/runMigration016.js",
+    "test:news-format": "node scripts/testNewsFormat.js",
+    "test:news-analytics": "node scripts/testNewsAnalyticsScoring.js"
   },
   "dependencies": {
+    "axios": "^1.7.9",
+    "docx": "^9.1.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -17,6 +27,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "pdfkit": "^0.18.0",
-    "pg": "^8.11.5"
+    "pdfmake": "^0.3.9",
+    "pg": "^8.11.5",
+    "puppeteer-core": "^25.1.0"
   }
 }

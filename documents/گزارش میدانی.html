@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سند تعاملی مشخصات فنی سامانه گزارشات</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Chosen Palette: Warm Neutrals with Amber and Sky accents -->
+<!-- Application Structure Plan: The SPA uses a dashboard-like thematic structure to transform a static SRS document into an explorable interactive experience. It features a sticky sidebar for navigation between core architectural components (Overview, Database, Workflow, Ranking Engine, Gemini AI Assistant, APIs). This structure allows technical stakeholders (developers, architects) to explore specific system layers non-linearly. The 'Gemini AI Assistant' tab integrates with the Gemini API to analyze raw text, redact sensitive intelligence, predict quality/priority scores, and inject those values back into the interactive 'Ranking Engine' simulator, showing the direct impact on system metrics. -->
+<!-- Visualization & Content Choices: 
+Goal: Inform (Database Schema) -> Method: Interactive Tables -> Interaction: Tab switching between tables -> Justification: Prevents information overload by showing one schema at a time -> Library: HTML/JS.
+Goal: Change/Understand (Workflow) -> Method: Interactive Step Diagram -> Interaction: Clickable stages to reveal state changes -> Justification: Clarifies the state machine transitions without complex external diagramming tools -> Library: HTML/Tailwind/JS.
+Goal: Compare & Understand (Ranking Engine) -> Method: Dynamic Bar Chart -> Interaction: Range sliders altering variables (Quality, Priority, Rate) to see real-time score calculation -> Justification: Makes complex mathematical formulas tangible and immediately understandable -> Library: Chart.js.
+Goal: Relationships & Synthesize (Gemini AI Assistant) -> Method: AI redactor and metric predictor -> Interaction: Interactive text inputs, preset incident scenarios, and a simulator injector -> Justification: Demonstrates LLM-powered guardrails, and maps AI-predicted data to chart inputs for end-to-end flow testing -> Library: Gemini API (gemini-2.5-flash-preview-09-2025).
+-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<style>
+body {
+    background-color: #faf9f6;
+    color: #333333;
+    font-family: Tahoma, Arial, sans-serif;
+}
+.chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    height: 350px;
+    max-height: 450px;
+}
+@media (min-width: 768px) {
+    .chart-container {
+        height: 400px;
+    }
+}
+.tab-active {
+    background-color: #f59e0b;
+    color: white;
+    font-weight: bold;
+    border-right: 4px solid #b45309;
+}
+.tab-inactive {
+    background-color: transparent;
+    color: #4b5563;
+}
+.tab-inactive:hover {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+.db-tab-active {
+    border-bottom: 2px solid #0284c7;
+    color: #0284c7;
+    font-weight: bold;
+}
+.workflow-box {
+    transition: all 0.3s;
+}
+.workflow-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+</style>
+</head>
+<body class="min-h-screen flex flex-col md:flex-row overflow-x-hidden">
+
+<nav class="w-full md:w-64 bg-white shadow-lg md:min-h-screen flex flex-col sticky top-0 z-10 border-l border-amber-100">
+    <div class="p-6 bg-amber-50 border-b border-amber-200">
+        <h1 class="text-xl font-bold text-amber-900 leading-tight">پایش گزارشات یگان</h1>
+        <p class="text-xs text-amber-700 mt-2">سند تعاملی مشخصات فنی (SRS)</p>
+    </div>
+    <div class="flex flex-row md:flex-col overflow-x-auto md:overflow-visible py-2 md:py-4">
+        <button class="nav-btn tab-active px-6 py-3 text-right text-sm whitespace-nowrap transition-colors" data-target="sec-intro">📋 اهداف و مقدمه</button>
+        <button class="nav-btn tab-inactive px-6 py-3 text-right text-sm whitespace-nowrap transition-colors" data-target="sec-db">🗄️ پایگاه داده</button>
+        <button class="nav-btn tab-inactive px-6 py-3 text-right text-sm whitespace-nowrap transition-colors" data-target="sec-workflow">🔄 چرخه کاری (Workflow)</button>
+        <button class="nav-btn tab-inactive px-6 py-3 text-right text-sm whitespace-nowrap transition-colors" data-target="sec-ranking">📈 الگوریتم رتبه‌بندی</button>
+        <button class="nav-btn tab-inactive px-6 py-3 text-right text-sm whitespace-nowrap transition-colors text-amber-600 font-semibold" data-target="sec-gemini">✨ دستیار هوشمند Gemini</button>
+        <button class="nav-btn tab-inactive px-6 py-3 text-right text-sm whitespace-nowrap transition-colors" data-target="sec-api">🔌 وب‌سرویس‌ها (API)</button>
+    </div>
+</nav>
+
+<main class="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
+    
+    <section id="sec-intro" class="content-section block">
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+            <h2 class="text-2xl font-bold text-amber-600 border-b-2 border-amber-100 pb-3 mb-6">مقدمه و معماری کلان</h2>
+            <p class="text-stone-600 leading-relaxed text-justify mb-6">
+                این بستر تعاملی، ترجمان دقیقی از سند شناخت و تحلیل سیستم (SRS) سامانه پایش و مدیریت گزارشات میدانی یگان است. 
+                هدف اصلی این سامانه ایجاد یک پلتفرم امن و هوشمند جهت تجمیع، ویراستاری، و تحلیل بلادرنگ رخدادهای میدانی می‌باشد. 
+                در این بستر، شما می‌توانید معماری داده، چرخه‌های وضعیت، رتبه بندی و توانمندی‌های هوش مصنوعی سامانه را به صورت زنده ارزیابی کنید.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                <div class="bg-sky-50 p-6 rounded-lg border border-sky-100">
+                    <div class="text-3xl mb-3">🏢</div>
+                    <h3 class="font-bold text-sky-800 mb-2">پنل کاربر یگان (Unit Portal)</h3>
+                    <ul class="text-sm text-sky-700 space-y-2 list-disc list-inside px-2">
+                        <li>ثبت گزارشات با استاندارد ۵W</li>
+                        <li>اصلاح و ویرایش گزارشات برگشتی</li>
+                        <li>مشاهده خروجی‌های روزانه و چاپ</li>
+                    </ul>
+                </div>
+                <div class="bg-amber-50 p-6 rounded-lg border border-amber-100">
+                    <div class="text-3xl mb-3">🛡️</div>
+                    <h3 class="font-bold text-amber-800 mb-2">پنل مانیتورینگ (Manager Portal)</h3>
+                    <ul class="text-sm text-amber-700 space-y-2 list-disc list-inside px-2">
+                        <li>پایش زنده و ویراستاری نهایی متون</li>
+                        <li>تعیین کیفیت (سیستم ۵ ستاره) و اولویت</li>
+                        <li>تحلیل داشبوردی و رتبه‌بندی علمی یگان‌ها</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="sec-db" class="content-section hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+            <h2 class="text-2xl font-bold text-sky-600 border-b-2 border-sky-100 pb-3 mb-6">معماری پایگاه داده (PostgreSQL)</h2>
+            <p class="text-sm text-stone-600 mb-6">
+                برای مشاهده جزئیات فیلدهای هر جدول، روی نام آن کلیک کنید. این ساختار تضمین‌کننده یکپارچگی اطلاعاتی سامانه است.
+            </p>
+            
+            <div class="flex border-b border-stone-200 mb-6">
+                <button class="db-tab-btn db-tab-active px-4 py-2 text-sm" data-table="tbl-events">tbl_unit_events</button>
+                <button class="db-tab-btn px-4 py-2 text-sm text-stone-500" data-table="tbl-units">tbl_units</button>
+                <button class="db-tab-btn px-4 py-2 text-sm text-stone-500" data-table="tbl-types">tbl_report_types</button>
+            </div>
+
+            <div id="tbl-events" class="db-table-content block overflow-x-auto">
+                <table class="w-full text-right text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-sky-50 text-sky-800 border-b border-sky-200">
+                            <th class="p-3 font-semibold">نام فیلد</th>
+                            <th class="p-3 font-semibold">نوع داده</th>
+                            <th class="p-3 font-semibold">وضعیت</th>
+                            <th class="p-3 font-semibold">توصیف فنی</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-stone-700">
+                        <tr class="border-b border-stone-100 hover:bg-stone-50">
+                            <td class="p-3 font-mono text-xs">hash_key</td><td class="p-3">VARCHAR(15)</td><td class="p-3"><span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs">Unique</span></td><td class="p-3">شناسه امن و یکتای ارجاعات</td>
+                        </tr>
+                        <tr class="border-b border-stone-100 hover:bg-stone-50">
+                            <td class="p-3 font-mono text-xs">raw_text</td><td class="p-3">TEXT</td><td class="p-3">-</td><td class="p-3">متن خام ارسالی (حفظ اصالت)</td>
+                        </tr>
+                        <tr class="border-b border-stone-100 hover:bg-stone-50">
+                            <td class="p-3 font-mono text-xs">cleaned_text</td><td class="p-3">TEXT</td><td class="p-3">-</td><td class="p-3">متن پیراسته و ویراستاری‌شده مدیر</td>
+                        </tr>
+                        <tr class="border-b border-stone-100 hover:bg-stone-50">
+                            <td class="p-3 font-mono text-xs">quality</td><td class="p-3">SMALLINT</td><td class="p-3">-</td><td class="p-3">شاخص کیفیت (۱ تا ۵ ستاره)</td>
+                        </tr>
+                        <tr class="border-b border-stone-100 hover:bg-stone-50">
+                            <td class="p-3 font-mono text-xs">state</td><td class="p-3">VARCHAR(15)</td><td class="p-3">-</td><td class="p-3">وضعیت: pending, verified, rejected</td>
+                        </tr>
+                        <tr class="hover:bg-stone-50">
+                            <td class="p-3 font-mono text-xs">workflow_logs</td><td class="p-3">TEXT</td><td class="p-3">-</td><td class="p-3">لاگ رفت‌وبرگشت‌ها و علل رد</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="tbl-units" class="db-table-content hidden overflow-x-auto">
+                <table class="w-full text-right text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-amber-50 text-amber-800 border-b border-amber-200">
+                            <th class="p-3 font-semibold">نام فیلد</th><th class="p-3 font-semibold">نوع داده</th><th class="p-3 font-semibold">توصیف فنی</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-stone-700">
+                        <tr class="border-b border-stone-100"><td class="p-3 font-mono text-xs">UnitCode</td><td class="p-3">INTEGER (PK)</td><td class="p-3">کد عددی مرجع یگان</td></tr>
+                        <tr class="border-b border-stone-100"><td class="p-3 font-mono text-xs">UnitShortName</td><td class="p-3">VARCHAR(150)</td><td class="p-3">نام رسمی متنی واحد</td></tr>
+                        <tr><td class="p-3 font-mono text-xs">StateName</td><td class="p-3">VARCHAR(100)</td><td class="p-3">استان تحت پوشش</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="tbl-types" class="db-table-content hidden overflow-x-auto">
+                <table class="w-full text-right text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-stone-100 text-stone-800 border-b border-stone-300">
+                            <th class="p-3 font-semibold">عنوان فارسی</th><th class="p-3 font-semibold">کد سیستمی</th><th class="p-3 font-semibold">توصیف و شمول</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-stone-700">
+                        <tr class="border-b border-stone-100"><td class="p-3">نقاط قوت</td><td class="p-3 font-mono text-xs">STRENGTH</td><td class="p-3">دستاوردها و ابتکارات یگان</td></tr>
+                        <tr class="border-b border-stone-100"><td class="p-3">شایعات</td><td class="p-3 font-mono text-xs">RUMOR</td><td class="p-3">پایش اخبار تایید نشده محلی</td></tr>
+                        <tr><td class="p-3">تهدیدات</td><td class="p-3 font-mono text-xs">THREAT</td><td class="p-3">تهدیدات مستقیم فیزیکی و پیرامونی</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section id="sec-workflow" class="content-section hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+            <h2 class="text-2xl font-bold text-indigo-600 border-b-2 border-indigo-100 pb-3 mb-6">ماشین وضعیت و چرخه کاری</h2>
+            <p class="text-sm text-stone-600 mb-8">
+                برای درک فرآیند رفت‌وبرگشت گزارش و تغییرات فیلد state، روی مراحل زیر کلیک کنید تا رفتار سیستم را در قالب یک شبیه‌ساز مشاهده نمایید.
+            </p>
+
+            <div class="flex flex-col lg:flex-row gap-6 items-center lg:items-stretch mb-10">
+                <div class="flex-1 w-full bg-stone-50 rounded-lg p-6 border border-stone-200">
+                    <div class="flex flex-col space-y-4 relative">
+                        <div class="absolute left-6 top-10 bottom-10 w-1 bg-stone-200 z-0"></div>
+                        
+                        <div class="workflow-box cursor-pointer z-10 flex items-center gap-4 bg-white p-4 rounded border-2 border-indigo-300" onclick="showState('pending')">
+                            <div class="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">۱</div>
+                            <div>
+                                <h4 class="font-bold text-stone-800">ثبت واقعه توسط یگان</h4>
+                                <p class="text-xs text-stone-500">ارسال متن خام</p>
+                            </div>
+                        </div>
+
+                        <div class="workflow-box cursor-pointer z-10 flex items-center gap-4 bg-white p-4 rounded border-2 border-amber-300" onclick="showState('action')">
+                            <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold">۲</div>
+                            <div>
+                                <h4 class="font-bold text-stone-800">پایش مدیریت ارشد</h4>
+                                <p class="text-xs text-stone-500">ویراستاری، کیفیت و تصمیم</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 z-10 pl-16">
+                            <div class="workflow-box cursor-pointer bg-white p-3 rounded border-2 border-emerald-300 text-center" onclick="showState('verified')">
+                                <span class="block text-emerald-600 font-bold mb-1">✔️ تایید و انتشار</span>
+                            </div>
+                            <div class="workflow-box cursor-pointer bg-white p-3 rounded border-2 border-rose-300 text-center" onclick="showState('rejected')">
+                                <span class="block text-rose-600 font-bold mb-1">❌ عودت به یگان</span>
+                            </div>
+                        </div>
+                        
+                        <div class="workflow-box cursor-pointer z-10 flex items-center gap-4 bg-white p-4 rounded border-2 border-sky-300 ml-16 mt-4" onclick="showState('amend')">
+                            <div class="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold">۳</div>
+                            <div>
+                                <h4 class="font-bold text-stone-800">اصلاحیه یگان</h4>
+                                <p class="text-xs text-stone-500">بازگشت به چرخه بررسی</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-full lg:w-1/3 bg-slate-800 text-slate-100 rounded-lg p-6 border border-slate-700 shadow-inner flex flex-col">
+                    <h3 class="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">وضعیت دیتابیس (شبیه‌ساز)</h3>
+                    <div id="state-display" class="flex-1 font-mono text-sm leading-relaxed whitespace-pre-wrap text-emerald-400">
+لطفا روی یکی از مراحل نمودار کلیک کنید.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="sec-ranking" class="content-section hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+            <h2 class="text-2xl font-bold text-emerald-600 border-b-2 border-emerald-100 pb-3 mb-6">الگوریتم تعاملی رتبه‌بندی علمی</h2>
+            <p class="text-sm text-stone-600 mb-6 text-justify">
+                این بخش به شما اجازه می‌دهد فرمول ریاضی مستقر در کنترلر بک‌اند را به صورت ملموس تست کنید.
+                فرمول مصوب سیستم: 
+                <span class="inline-block px-2 py-1 bg-stone-100 rounded font-mono text-xs text-stone-800 my-1 font-bold border border-stone-200">Score = Quality × Priority × (Total / Days)</span>
+                اگر نرخ گزارش (Total/Days) کمتر از ۲ باشد، یگان از رده‌بندی حذف می‌گردد.
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1 bg-stone-50 p-6 rounded-lg border border-stone-200">
+                    <h3 class="font-bold text-stone-800 mb-4 border-b border-stone-300 pb-2">شبیه‌ساز یگان متغیر (آبی)</h3>
+                    
+                    <div class="mb-5">
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs font-bold text-stone-600">میانگین کیفیت (۱ تا ۵)</label>
+                            <span id="val-q" class="text-xs font-mono font-bold text-sky-600">3.0</span>
+                        </div>
+                        <input type="range" id="inp-q" min="1" max="5" step="0.1" value="3" class="w-full accent-sky-500">
+                    </div>
+
+                    <div class="mb-5">
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs font-bold text-stone-600">میانگین اولویت (۱ تا ۵)</label>
+                            <span id="val-p" class="text-xs font-mono font-bold text-sky-600">2.0</span>
+                        </div>
+                        <input type="range" id="inp-p" min="1" max="5" step="0.1" value="2" class="w-full accent-sky-500">
+                    </div>
+
+                    <div class="mb-5">
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs font-bold text-stone-600">گزارشات ارسالی (در بازه ۳۰ روزه)</label>
+                            <span id="val-t" class="text-xs font-mono font-bold text-sky-600">90</span>
+                        </div>
+                        <input type="range" id="inp-t" min="10" max="150" step="1" value="90" class="w-full accent-sky-500">
+                    </div>
+
+                    <div class="mt-6 p-4 bg-sky-100 rounded-lg border border-sky-200 text-center">
+                        <div class="text-xs text-sky-800 mb-1">نرخ روزانه: <span id="val-rate" class="font-bold">3.00</span></div>
+                        <div class="text-xs text-sky-800 mb-1">امتیاز نهایی یگان:</div>
+                        <div id="val-score" class="text-2xl font-black text-sky-700">18.00</div>
+                        <div id="val-warning" class="text-xs text-rose-600 font-bold mt-2 hidden">⚠️ حذف از رتبه‌بندی (نرخ &lt; 2)</div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <div class="chart-container">
+                        <canvas id="rankingChart"></canvas>
+                    </div>
+                    <p class="text-xs text-center text-stone-400 mt-4">جابجایی اسلایدرها ساختار نمودار را به صورت بلادرنگ تغییر می‌دهد.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 NEW INTERACTIVE SECTION: Gemini AI Assistant 🌟 -->
+    <section id="sec-gemini" class="content-section hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+            <h2 class="text-2xl font-bold text-amber-600 border-b-2 border-amber-100 pb-3 mb-4 flex items-center gap-2">
+                <span>ویراستار هوشمند حفاظتی با قدرت Gemini</span>
+            </h2>
+            <p class="text-sm text-stone-600 mb-6 text-justify">
+                این بخش به صورت زنده به مدل <code class="bg-stone-100 px-1 rounded">gemini-2.5-flash-preview-09-2025</code> متصل است. شما می‌توانید گزارش‌های میدانی خام را بنویسید یا از سناریوهای آماده استفاده کنید تا هوش مصنوعی بلافاصله اسناد را از فیلترهای حفاظتی عبور داده، مشخصات طبقه‌بندی شده را حذف کرده، و پارامترهای آماری واقعه را پیش‌بینی کند.
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Left Side: Input & Settings -->
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-2">انتخاب سناریوهای نمونه برای تست:</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="loadScenario(1)" class="text-right p-2.5 text-xs bg-stone-100 hover:bg-stone-200 rounded border border-stone-200 transition-colors">🚨 حادثه امنیتی یگان تهران</button>
+                            <button onclick="loadScenario(2)" class="text-right p-2.5 text-xs bg-stone-100 hover:bg-stone-200 rounded border border-stone-200 transition-colors">📢 تجمع مقابل آموزش و پرورش</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-2">متن خام گزارش میدانی (Raw Text):</label>
+                        <textarea id="ai-raw-text" class="w-full h-40 p-3 text-sm bg-stone-50 border border-stone-300 rounded focus:outline-none focus:border-amber-500 leading-relaxed" placeholder="گزارش خام را در این کادر بنویسید یا یکی از سناریوهای پیش‌فرض بالا را انتخاب کنید..."></textarea>
+                    </div>
+
+                    <button id="btn-run-ai" onclick="runAiAnalysis()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded shadow transition-all flex items-center justify-center gap-2">
+                        <span>✨ اعمال فیلتر حفاظتی و تحلیل هوشمند</span>
+                    </button>
+                </div>
+
+                <!-- Right Side: AI Output -->
+                <div class="bg-stone-50 rounded-lg p-6 border border-stone-200 flex flex-col gap-4">
+                    <h3 class="font-bold text-stone-800 border-b border-stone-300 pb-2 flex items-center justify-between">
+                        <span>نتیجه پردازش هوشمند حفاظتی</span>
+                        <span id="ai-loading" class="text-xs text-amber-600 font-bold hidden animate-pulse">درحال تحلیل گزارش...</span>
+                    </h3>
+
+                    <!-- Refined layout cards for AI results -->
+                    <div class="flex flex-col gap-4 text-sm">
+                        <div class="bg-white p-4 rounded border border-stone-200">
+                            <h4 class="font-bold text-emerald-700 text-xs mb-1.5">📝 متن پیراسته و نهایی جهت انتشار (Cleaned Text)</h4>
+                            <p id="ai-cleaned-text" class="text-stone-700 leading-relaxed text-xs">هنوز تحلیلی انجام نشده است.</p>
+                        </div>
+
+                        <div class="bg-white p-4 rounded border border-stone-200">
+                            <h4 class="font-bold text-rose-700 text-xs mb-1.5">🔒 اطلاعات حساس ردیابی شده و حذف گردیده</h4>
+                            <p id="ai-redacted-info" class="text-stone-700 leading-relaxed text-xs">هنوز تحلیلی انجام نشده است.</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-white p-3 rounded border border-stone-200 text-center">
+                                <h4 class="font-bold text-indigo-700 text-xs mb-1">📊 اولویت پیشنهادی</h4>
+                                <span id="ai-priority" class="text-lg font-black text-indigo-600">-</span>
+                            </div>
+                            <div class="bg-white p-3 rounded border border-stone-200 text-center">
+                                <h4 class="font-bold text-amber-700 text-xs mb-1">⭐ کیفیت پیشنهادی</h4>
+                                <span id="ai-quality" class="text-lg font-black text-amber-600">-</span>
+                            </div>
+                        </div>
+
+                        <div id="ai-reasoning-container" class="bg-amber-50 p-4 rounded border border-amber-200 hidden">
+                            <h4 class="font-bold text-amber-900 text-xs mb-1">💡 استدلال هوش مصنوعی:</h4>
+                            <p id="ai-reasoning" class="text-stone-700 leading-relaxed text-xs"></p>
+                        </div>
+
+                        <!-- Integration trigger to close the loop with ranking engine -->
+                        <button id="btn-inject-simulator" onclick="injectToSimulator()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs transition-all hidden">
+                            <span>✨ تزریق مستقیم داده‌ها به شبیه‌ساز رتبه‌بندی</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="sec-api" class="content-section hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+            <h2 class="text-2xl font-bold text-rose-600 border-b-2 border-rose-100 pb-3 mb-6">وب‌سرویس‌ها و تبادل داده (API)</h2>
+            <p class="text-sm text-stone-600 mb-6">
+                معماری یکپارچه‌سازی و تبادل اطلاعات (RFP) برای اتصال به هاب تحلیل ارشد فرماندهی. برای باز کردن ساختار JSON روی هر آدرس کلیک کنید.
+            </p>
+
+            <div class="space-y-4">
+                <div class="border border-stone-200 rounded-lg overflow-hidden">
+                    <button class="w-full text-right p-4 bg-stone-50 hover:bg-stone-100 font-mono text-sm font-bold flex justify-between items-center text-stone-700 transition-colors" onclick="toggleApi('api-1')">
+                        <span dir="ltr">GET /api/reports/admin/unit-rankings</span>
+                        <span>▼</span>
+                    </button>
+                    <div id="api-1" class="hidden p-4 bg-slate-800 text-emerald-400 font-mono text-xs whitespace-pre overflow-x-auto border-t border-stone-200">
+[
+  {
+    "unitcd": 300940,
+    "unit_name": "واحد فارس ۳۰۰۹۴۰",
+    "total_reports": 45,
+    "range_days": 12,
+    "avg_quality": 4.2,
+    "avg_priority": 3.8,
+    "reports_per_day": 3.75,
+    "score": 59.85
+  }
+]
+                    </div>
+                </div>
+
+                <div class="border border-stone-200 rounded-lg overflow-hidden">
+                    <button class="w-full text-right p-4 bg-stone-50 hover:bg-stone-100 font-mono text-sm font-bold flex justify-between items-center text-stone-700 transition-colors" onclick="toggleApi('api-2')">
+                        <span dir="ltr">PUT /api/reports/admin/verify/:hash_key</span>
+                        <span>▼</span>
+                    </button>
+                    <div id="api-2" class="hidden p-4 bg-slate-800 text-sky-400 font-mono text-xs whitespace-pre overflow-x-auto border-t border-stone-200">
+// Payload ارسال شده توسط مدیر
+{
+  "title": "عنوان نهایی ویراستاری شده",
+  "chat_title": "تجمعات",
+  "cleaned_text": "متن پیراسته فاقد اطلاعات طبقه‌بندی شده...",
+  "admin_note": "آرشیو مدیریتی",
+  "priority": 3,
+  "quality": 5, // 1 to 5
+  "state": "verified",
+  "manager_comment": null
+}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<script>
+    const navBtns = document.querySelectorAll('.nav-btn');
+    const sections = document.querySelectorAll('.content-section');
+
+    navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            
+            navBtns.forEach(b => {
+                b.classList.remove('tab-active');
+                b.classList.add('tab-inactive');
+            });
+            btn.classList.add('tab-active');
+            btn.classList.remove('tab-inactive');
+
+            sections.forEach(sec => {
+                if (sec.id === targetId) {
+                    sec.classList.remove('hidden');
+                    sec.classList.add('block');
+                } else {
+                    sec.classList.remove('block');
+                    sec.classList.add('hidden');
+                }
+            });
+        });
+    });
+
+    const dbBtns = document.querySelectorAll('.db-tab-btn');
+    const dbContents = document.querySelectorAll('.db-table-content');
+
+    dbBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-table');
+            
+            dbBtns.forEach(b => {
+                b.classList.remove('db-tab-active', 'text-sky-600', 'text-amber-600', 'border-sky-500', 'border-amber-500');
+                b.classList.add('text-stone-500');
+                b.style.borderBottomColor = 'transparent';
+            });
+            
+            btn.classList.remove('text-stone-500');
+            btn.classList.add('db-tab-active');
+            
+            if(targetId === 'tbl-events') btn.style.borderBottomColor = '#0284c7';
+            else if(targetId === 'tbl-units') btn.style.borderBottomColor = '#d97706';
+            else btn.style.borderBottomColor = '#57534e';
+
+            dbContents.forEach(content => {
+                if (content.id === targetId) {
+                    content.classList.remove('hidden');
+                    content.classList.add('block');
+                } else {
+                    content.classList.remove('block');
+                    content.classList.add('hidden');
+                }
+            });
+        });
+    });
+
+    function showState(state) {
+        const display = document.getElementById('state-display');
+        let html = '';
+        if(state === 'pending') {
+            html = `{\n  "state": "pending",\n  "raw_text": "شرح اولیه کاربر...",\n  "cleaned_text": null,\n  "workflow_logs": null\n}`;
+        } else if (state === 'action') {
+            html = `// مدیر در حال بررسی است...\n// مشاهده raw_text\n// تایپ در cleaned_text\n// انتخاب quality (1-5)`;
+        } else if (state === 'verified') {
+            html = `{\n  "state": "verified",\n  "quality": 5,\n  "priority": 3,\n  "cleaned_text": "ویراستاری شد.",\n  "workflow_logs": "[1405-02-28] تایید و انتشار نهایی."\n}`;
+        } else if (state === 'rejected') {
+            html = `<span class="text-rose-400">{\n  "state": "rejected",\n  "workflow_logs": "[1405-02-28] عودت به یگان: متن دارای ابهام است."\n}</span>`;
+        } else if (state === 'amend') {
+            html = `{\n  "state": "pending",\n  "raw_text": "متن اصلاح شده...",\n  "workflow_logs": "[1405-02-28] عودت...\n[1405-02-29] اصلاحیه کاربر: متن تصحیح شد."\n}`;
+        }
+        display.innerHTML = html;
+    }
+
+    function toggleApi(id) {
+        const el = document.getElementById(id);
+        if(el.classList.contains('hidden')) {
+            el.classList.remove('hidden');
+            el.classList.add('block');
+        } else {
+            el.classList.remove('block');
+            el.classList.add('hidden');
+        }
+    }
+
+    const ctx = document.getElementById('rankingChart').getContext('2d');
+    
+    const baseData = [
+        {name: 'یگان متغیر', score: 18.0}, 
+        {name: 'یگان تهران', score: 45.2},
+        {name: 'یگان اصفهان', score: 32.1},
+        {name: 'یگان فارس', score: 15.5}
+    ];
+
+    const rankingChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: baseData.map(d => d.name),
+            datasets: [{
+                label: 'امتیاز علمی',
+                data: baseData.map(d => d.score),
+                backgroundColor: [
+                    '#0ea5e9', 
+                    '#d6d3d1',
+                    '#d6d3d1',
+                    '#d6d3d1'
+                ],
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    rtl: true,
+                    titleFont: { family: 'Tahoma' },
+                    bodyFont: { family: 'Tahoma' }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 125,
+                    grid: { color: '#f5f5f4' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { family: 'Tahoma' } }
+                }
+            },
+            animation: {
+                duration: 400
+            }
+        }
+    });
+
+    const inQ = document.getElementById('inp-q');
+    const inP = document.getElementById('inp-p');
+    const inT = document.getElementById('inp-t');
+    
+    const outQ = document.getElementById('val-q');
+    const outP = document.getElementById('val-p');
+    const outT = document.getElementById('val-t');
+    const outRate = document.getElementById('val-rate');
+    const outScore = document.getElementById('val-score');
+    const warnLabel = document.getElementById('val-warning');
+
+    function updateSim() {
+        const q = parseFloat(inQ.value);
+        const p = parseFloat(inP.value);
+        const t = parseFloat(inT.value);
+        const days = 30.0; 
+        
+        outQ.innerText = q.toFixed(1);
+        outP.innerText = p.toFixed(1);
+        outT.innerText = t;
+
+        const rate = t / days;
+        outRate.innerText = rate.toFixed(2);
+
+        let finalScore = 0;
+        if(rate >= 2.0) {
+            finalScore = q * p * rate;
+            warnLabel.classList.add('hidden');
+            outScore.classList.remove('text-stone-300');
+        } else {
+            finalScore = 0; 
+            warnLabel.classList.remove('hidden');
+            outScore.classList.add('text-stone-300');
+        }
+
+        outScore.innerText = finalScore.toFixed(2);
+
+        rankingChart.data.datasets[0].data[0] = finalScore;
+        
+        let mappedData = rankingChart.data.labels.map((l, i) => {
+            return {
+                label: l,
+                val: rankingChart.data.datasets[0].data[i],
+                color: rankingChart.data.datasets[0].backgroundColor[i]
+            }
+        });
+        
+        mappedData.sort((a,b) => b.val - a.val);
+
+        rankingChart.data.labels = mappedData.map(d => d.label);
+        rankingChart.data.datasets[0].data = mappedData.map(d => d.val);
+        rankingChart.data.datasets[0].backgroundColor = mappedData.map(d => d.color);
+
+        rankingChart.update();
+    }
+
+    inQ.addEventListener('input', updateSim);
+    inP.addEventListener('input', updateSim);
+    inT.addEventListener('input', updateSim);
+
+    // 🌟 Gemini API Integrations & Features 🌟
+    const scenarios = {
+        1: "گزارش فوری از یگان تهران: دیشب حوالی ساعت ۲۲:۳۰، گروهی متشکل از ۴۰ نفر از اخلالگران تحت رهبری فردی به نام کامران ملقب به شاهین اقدام به تجمع فیزیکی در چهارراه ولیعصر کردند. پرسنل ناجا با استفاده از گاز اشک‌آور تجمع را متفرق نمودند. یک نفر از نیروهای خودی به نام گروهبان رضایی دچار صدمه جزیی از ناحیه کتف گردید. با توجه به تهدیدات رصد شده، احتمالا شایعاتی درباره شدت صدمات در کانال‌های ضد انقلاب پخش شود.",
+        2: "گزارش عادی از یگان فارس: امروز صبح ساعت ۸، جمعی صنفی متشکل از ۱۵۰ نفر از معلمان بازنشسته در اعتراض به مسائل معیشتی روبروی اداره آموزش و پرورش منطقه ۳ شیراز گردهم آمدند. تجمع کاملاً آرام و بدون تنش فیزیکی بود. نماینده معلمان نامه مطالبات را به رئیس حراست اداره تحویل داد و افراد پس از یک ساعت متفرق شدند. وضعیت عمومی شهر شیراز در کمال آرامش است."
+    };
+
+    function loadScenario(num) {
+        document.getElementById('ai-raw-text').value = scenarios[num];
+    }
+
+    // Exponential Backoff Fetch wrapper
+    async function fetchGeminiWithBackoff(promptText, systemInstruction, schema) {
+        const apiKey = ""; // Will be injected at runtime
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        
+        const payload = {
+            contents: [{ parts: [{ text: promptText }] }],
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema
+            }
+        };
+
+        let delay = 1000;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    return await response.json();
+                }
+                throw new Error(`API Error status code: ${response.status}`);
+            } catch (err) {
+                if (attempt === 4) throw err;
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+        }
+    }
+
+    // Global AI metrics variables for simulator integration
+    let aiPredictedQuality = 3.0;
+    let aiPredictedPriority = 2.0;
+
+    async function runAiAnalysis() {
+        const rawText = document.getElementById('ai-raw-text').value;
+        if (!rawText.trim()) {
+            alert("لطفاً ابتدا متنی را برای تحلیل وارد کنید یا یک سناریوی آماده را انتخاب نمایید.");
+            return;
+        }
+
+        const runButton = document.getElementById('btn-run-ai');
+        const loadingText = document.getElementById('ai-loading');
+        
+        runButton.disabled = true;
+        runButton.classList.add('opacity-50');
+        loadingText.classList.remove('hidden');
+
+        const systemInstruction = `شما یک ویراستار اطلاعاتی ارشد و متخصص امنیت حفاظتی هستید. وظیفه شما دریافت متن خام گزارشات میدانی و تبدیل آن به یک متن پیراسته (cleaned_text) بدون نشت اطلاعات حساس (مانند نام واقعی افراد، رده‌های طبقه‌بندی، شماره تلفن، یا آدرس و مختصات دقیق جغرافیایی) است. همچنین باید اولویت پیشنهادی (1 برای عادی، 3 برای مهم، 5 برای فوری) و کیفیت پیشنهادی (1 تا 5) را محاسبه نمایید. خروجی باید کاملا مطابق ساختار JSON مشخص شده باشد.`;
+        
+        const schema = {
+            type: "OBJECT",
+            properties: {
+                cleaned_text: { type: "STRING", description: "متن ویراستاری شده و ایمن سازی شده بدون اطلاعات حساس" },
+                redacted_info: { type: "STRING", description: "اطلاعاتی که به دلیل حساسیت حفاظتی حذف یا اصلاح شده اند" },
+                suggested_priority: { type: "INTEGER", description: "اولویت پیشنهادی: 1 برای عادی، 3 برای مهم، 5 برای فوری" },
+                suggested_quality: { type: "INTEGER", description: "کیفیت پیشنهادی گزارش از 1 تا 5 ستاره بر اساس ساختار ۵ ستاره نگارش اطلاعات" },
+                reasoning: { type: "STRING", description: "استدلال شما برای امتیازات و رده‌های انتخابی" }
+            },
+            required: ["cleaned_text", "redacted_info", "suggested_priority", "suggested_quality", "reasoning"]
+        };
+
+        try {
+            const result = await fetchGeminiWithBackoff(rawText, systemInstruction, schema);
+            
+            const rawJsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!rawJsonText) {
+                throw new Error("پاسخی از مدل دریافت نشد.");
+            }
+
+            const aiResponse = JSON.parse(rawJsonText);
+            
+            // Set UI Output
+            document.getElementById('ai-cleaned-text').innerText = aiResponse.cleaned_text;
+            document.getElementById('ai-redacted-info').innerText = aiResponse.redacted_info;
+            document.getElementById('ai-priority').innerText = toPersianDigits(aiResponse.suggested_priority);
+            document.getElementById('ai-quality').innerText = toPersianDigits(aiResponse.suggested_quality) + " ستاره";
+            document.getElementById('ai-reasoning').innerText = aiResponse.reasoning;
+            document.getElementById('ai-reasoning-container').classList.remove('hidden');
+
+            // Store AI metrics for simulator injection
+            aiPredictedQuality = aiResponse.suggested_quality;
+            aiPredictedPriority = aiResponse.suggested_priority;
+
+            // Show simulator injection button
+            document.getElementById('btn-inject-simulator').classList.remove('hidden');
+            
+        } catch (err) {
+            console.error("Gemini API Error:", err);
+            alert("خطا در برقراری ارتباط با هوش مصنوعی. لطفاً اتصال اینترنت خود را بررسی نمایید یا مجدداً تلاش کنید.");
+        } finally {
+            runButton.disabled = false;
+            runButton.classList.remove('opacity-50');
+            loadingText.classList.add('hidden');
+        }
+    }
+
+    // Inject AI outputs back into our SPA interactive simulator
+    function injectToSimulator() {
+        document.getElementById('inp-q').value = aiPredictedQuality;
+        document.getElementById('inp-p').value = aiPredictedPriority;
+        
+        // Go to Ranking tab visually
+        const rankingBtn = document.querySelector('[data-target="sec-ranking"]');
+        if (rankingBtn) {
+            rankingBtn.click();
+            updateSim();
+            alert("کیفیت و اولویت پیش‌بینی شده توسط هوش مصنوعی با موفقیت به بخش الگوریتم رتبه‌بندی تزریق گردید!");
+        }
+    }
+
+</script>
+</body>
+</html>

@@ -1,63 +1,68 @@
 import { Router } from "express";
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import db from "../db.js";
+import bcrypt from "bcrypt";
+import pool from "../db.js";
 
 const router = Router();
 
-// مسیر ثبت‌نام
-router.post("/register", async (req, res) => {
-  const { name, email, password, username } = req.body;
-  try {
-    const hash = await bcrypt.hash(password, 10);
-    const result = await db.query(
-      `INSERT INTO users (name, email, password, username, role, active)
-       VALUES ($1, $2, $3, $4, 'user', true)
-       RETURNING id, name, email, username`,
-      [name, email, hash, username]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Register failed" });
-  }
-});
-
-// مسیر لاگین (اصلاح شده)
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
+
   try {
-    // اصلاح کوئری: اضافه کردن password و active و role
-    const result = await db.query(
-      "SELECT id, username, password, role, active FROM users WHERE username=$1",
-      [username]
-    );
+    // ۱. کوئری اصلاح شده: فیلدها از جدول کاربر و استان از جدول واحدها
+    const query = `
+      SELECT 
+        u.id, u.username, u.name, u.password, u.role, u.active, u.unit_cd,
+        un."StateName", un."UnitShortName"
+      FROM tbl_users u
+      LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
+      WHERE u.username = $1
+    `;
+    
+    const result = await pool.query(query, [username]);
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ error: "User not found" });
+      return res.status(400).json({ error: "کاربر یافت نشد" });
     }
 
     const user = result.rows[0];
 
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "رمز عبور اشتباه است" });
+    }
+
     if (!user.active) {
-      return res.status(403).json({ error: "User is inactive" });
+      return res.status(403).json({ error: "حساب کاربری شما غیرفعال است" });
     }
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(400).json({ error: "Wrong password" });
-    }
-
+    // ۲. ساخت توکن با فیلدهای صحیح و JOIN شده
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { 
+        id: user.id, 
+        username: user.username, 
+        name: user.name, 
+        unitcd: user.unit_cd,        // کد واحد
+        unitName: user.UnitShortName, // نام واحد (اختیاری برای نمایش)
+        statename: user.StateName ,    // نام استان از جدول tbl_units
+        role: user.role
+      }, 
       process.env.JWT_SECRET || "mysecretkey",
-      { expiresIn: "7d" }
+      { expiresIn: "24h" }
     );
 
-    res.json({ token, role: user.role });
+    console.log(`✅ ورود موفق: ${username} | واحد: ${user.unit_cd} | استان: ${user.StateName}`);
+
+    res.json({
+      token,
+      role: user.role,
+      unitcd: user.unit_cd,
+      userName: user.username,
+      name: user.name,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Login failed" });
+    console.error("❌ Error:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

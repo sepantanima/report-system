@@ -1,0 +1,71 @@
+/* DatePicker theming — matches analysis/unit form inputs, no white flash */
+
+.themed-date-picker {
+  width: 100%;
+}
+
+.themed-date-picker .rmdp-input,
+.themed-date-picker .themed-date-input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  width: 100%;
+  padding: 0;
+  min-height: 22px;
+}
+
+.themed-date-picker .rmdp-container {
+  width: 100%;
+}
+
+/* Calendar popup — dark */
+.rmdp-wrapper.analysis-calendar-dark .rmdp-calendar {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
+
+.rmdp-wrapper.analysis-calendar-dark .rmdp-day:not(.rmdp-disabled):not(.rmdp-day-hidden) span:hover {
+  background: rgba(56, 189, 248, 0.2) !important;
+}
+
+.rmdp-wrapper.analysis-calendar-dark .rmdp-day.rmdp-selected span:not(.highlight) {
+  background: #38bdf8 !important;
+  color: #0f172a !important;
+}
+
+.rmdp-wrapper.analysis-calendar-dark .rmdp-header-values,
+.rmdp-wrapper.analysis-calendar-dark .rmdp-week-day,
+.rmdp-wrapper.analysis-calendar-dark .rmdp-day span {
+  color: #e2e8f0 !important;
+}
+
+.rmdp-wrapper.analysis-calendar-dark .rmdp-arrow {
+  border-color: #94a3b8 !important;
+}
+
+.rmdp-wrapper.analysis-calendar-dark .rmdp-arrow-container:hover {
+  background: rgba(56, 189, 248, 0.15) !important;
+}
+
+/* Calendar popup — light */
+.rmdp-wrapper.analysis-calendar-light .rmdp-calendar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+}
+
+.rmdp-wrapper.analysis-calendar-light .rmdp-day.rmdp-selected span:not(.highlight) {
+  background: #0ea5e9 !important;
+  color: #fff !important;
+}
+
+.rmdp-wrapper.analysis-calendar-light .rmdp-header-values,
+.rmdp-wrapper.analysis-calendar-light .rmdp-week-day,
+.rmdp-wrapper.analysis-calendar-light .rmdp-day span {
+  color: #334155 !important;
+}

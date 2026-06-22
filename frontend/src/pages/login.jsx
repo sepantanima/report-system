@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../api/api";
 import { useNavigate } from "react-router-dom";
+import { normalizeRoles, persistSessionRoles } from "../utils/userRoles.js";
 import "./login.css";
 
 function Login() {
@@ -15,10 +16,24 @@ function Login() {
   
   try {
     const res = await api.post("/auth/login", { username, password });
+    const roles = normalizeRoles(res.data.role);
+
     localStorage.setItem("token", res.data.token);
-    navigate("/main"); // انتقال به فرم اصلی
+    persistSessionRoles(roles);
+    localStorage.setItem("unitcd", res.data.unitcd || "");
+    localStorage.setItem("username", res.data.userName || res.data.username || username);
+    localStorage.setItem("name", res.data.name || res.data.userName || username);
+
+    navigate("/main"); 
   } catch (err) {
-    alert("خطا در ورود: " + (err.response?.data?.message || "ارتباط با سرور برقرار نشد"));
+    const fromBody = err.response?.data?.error;
+    const status = err.response?.status;
+    const detail =
+      fromBody ||
+      (status ? `پاسخ سرور: ${status} (احتمالاً nginx مسیر /api را به بک‌اند پروکسی نمی‌کند)` : null) ||
+      err.message ||
+      "ارتباط با سرور برقرار نشد";
+    alert("خطا: " + detail);
   }
 };
 

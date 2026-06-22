@@ -7,11 +7,20 @@ import newsRoutes from "./routes/news.js";
 import reportsRoutes from "./routes/reports.js";
 import analysisRoutes from "./routes/analysis.js";
 import auth from "./middleware/auth.js";
+import adminPromptsRoutes from "./routes/adminPrompts.js";
+import adminAiApiConfigsRoutes from "./routes/adminAiApiConfigs.js";
+import adminAiProviderTemplatesRoutes from "./routes/adminAiProviderTemplates.js";
+import adminAiFormActionsRoutes from "./routes/adminAiFormActions.js";
+import adminNewsCleanPatternsRoutes from "./routes/adminNewsCleanPatterns.js";
 
 const app = express();
 
 // --- تنظیمات اصلی ---
-app.use(cors());
+app.use(cors({
+  origin: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.json()); // حتما باید قبل از لاگر باشد تا Body را بخوانیم
 
 // --- لاگر هوشمند و جامع ---
@@ -36,6 +45,9 @@ app.use((req, res, next) => {
     // برای امنیت، پسورد را در لاگ نشان نمی‌دهیم
     const safeBody = { ...req.body };
     if (safeBody.password) safeBody.password = "******";
+    if (req.url.includes("ai-api-configs") && safeBody.credential_secret_cipher) {
+      safeBody.credential_secret_cipher = "******";
+    }
     console.log(`   📦 Body:`, JSON.stringify(safeBody, null, 2));
   }
 
@@ -53,13 +65,21 @@ app.use("/api/users", usersRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/analysis", auth, analysisRoutes);
+app.use("/api/admin/prompts", adminPromptsRoutes);
+app.use("/api/admin/ai-api-configs", adminAiApiConfigsRoutes);
+app.use("/api/admin/ai-provider-templates", adminAiProviderTemplatesRoutes);
+app.use("/api/admin/ai/form-actions", adminAiFormActionsRoutes);
+app.use("/api/admin/news-clean-patterns", adminNewsCleanPatternsRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Report API running" });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(">>> Environment loaded successfully <<<");
 });
+server.timeout = 180000;
+server.keepAliveTimeout = 180000;
+server.headersTimeout = 185000;

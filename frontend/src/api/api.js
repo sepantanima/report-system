@@ -1,26 +1,30 @@
 import axios from "axios";
 
-/**
- * Axios instance configured for the Report System API.
- *
- * - Base URL: http://report.sepanta.org/api
- * - Use this instance for all HTTP requests to the report backend (e.g. api.get('/reports')).
- * - Interceptors, default headers, and other configuration may be added elsewhere.
- *
- * @type {import('axios').AxiosInstance}
- */
+// استفاده از آدرس دامنه در صورت عدم تعریف متغیر محیطی برای جلوگیری از خطای 404
+const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+
 const api = axios.create({
-  baseURL: "http://report.sepanta.org/api"
+  baseURL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
-
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-
   return config;
 });
+
+// برای تست در پروداکشن: لاگ دقیق خطا
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    console.error("API Error Details:", error.response?.status, error.config?.url);
+    return Promise.reject(error);
+  }
+);
 
 export default api;
