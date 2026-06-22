@@ -1,0 +1,22 @@
+/** ارتفاع پیش‌فرض جعبه متن — حدود ۱۱ خط با line-height 1.8 (دسکتاپ) */
+export const NEWS_EDITOR_LINE_COUNT = 11;
+export const NEWS_EDITOR_LINE_HEIGHT = 1.8;
+export const NEWS_EDITOR_FONT_PX = 14;
+export const NEWS_EDITOR_TOOLBAR_PX = 40;
+
+export const NEWS_EDITOR_BODY_HEIGHT = Math.round(
+  NEWS_EDITOR_LINE_COUNT * NEWS_EDITOR_LINE_HEIGHT * NEWS_EDITOR_FONT_PX,
+);
+
+export const NEWS_EDITOR_BOX_HEIGHT = NEWS_EDITOR_BODY_HEIGHT + NEWS_EDITOR_TOOLBAR_PX;
+
+/** موبایل — حدود ۷ خط با اسکرول داخلی */
+export const NEWS_EDITOR_MOBILE_LINE_COUNT = 7;
+export const NEWS_EDITOR_MOBILE_FONT_PX = 13;
+export const NEWS_EDITOR_MOBILE_TOOLBAR_PX = 34;
+
+export const NEWS_EDITOR_MOBILE_BODY_HEIGHT = Math.round(
+  NEWS_EDITOR_MOBILE_LINE_COUNT * NEWS_EDITOR_LINE_HEIGHT * NEWS_EDITOR_MOBILE_FONT_PX,
+);
+
+export const NEWS_EDITOR_MOBILE_BOX_HEIGHT = NEWS_EDITOR_MOBILE_BODY_HEIGHT + NEWS_EDITOR_MOBILE_TOOLBAR_PX;

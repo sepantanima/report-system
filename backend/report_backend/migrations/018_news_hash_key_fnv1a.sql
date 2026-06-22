@@ -1,0 +1,2 @@
+-- بازمحاسبه hash_key با FNV-1a (اجرای واقعی در scripts/recomputeNewsHashKeys.js)
+-- این فایل فقط مستندسازی است؛ منطق hash در newsHashKey.js

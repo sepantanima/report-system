@@ -1,0 +1,117 @@
+import api from "../api/api";
+
+const BASE = "/news";
+
+const newsMonitorService = {
+  list: async (params) => {
+    const res = await api.get(`${BASE}/monitor`, { params });
+    return res.data;
+  },
+
+  myDrafts: async () => {
+    const res = await api.get(`${BASE}/monitor/my-drafts`);
+    return res.data;
+  },
+
+  deleteDraft: async (id) => {
+    const res = await api.post(`${BASE}/monitor/my-drafts/${id}/delete`);
+    return res.data;
+  },
+
+  exportText: async (id, format = "telegram") => {
+    const res = await api.get(`${BASE}/monitor/export-text/${id}`, { params: { format } });
+    return res.data;
+  },
+
+  bulkExportText: async (params) => {
+    const res = await api.get(`${BASE}/monitor/bulk-export`, { params });
+    return res.data;
+  },
+
+  listAiActions: async (formName = "news_monitor_manage") => {
+    const res = await api.get(`${BASE}/monitor/ai/form-actions`, { params: { form_name: formName } });
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
+  runAiAction: async ({ form_name, action_name, form_data }) => {
+    const res = await api.post(`${BASE}/monitor/ai/run`, { form_name, action_name, form_data }, { timeout: 180000 });
+    return res.data;
+  },
+
+  deleteNews: async (id) => {
+    const res = await api.delete(`${BASE}/monitor/${id}`);
+    return res.data;
+  },
+
+  summaryStats: async (params) => {
+    const res = await api.get(`${BASE}/summary-stats`, { params });
+    return res.data;
+  },
+
+  categories: async () => {
+    const res = await api.get(`${BASE}/categories`);
+    return res.data;
+  },
+
+  sources: async () => {
+    const res = await api.get(`${BASE}/sources`);
+    return res.data;
+  },
+
+  update: async (id, payload) => {
+    const res = await api.patch(`${BASE}/${id}`, payload);
+    return res.data;
+  },
+
+  create: async (payload) => {
+    const res = await api.post(`${BASE}/monitor/create`, payload);
+    return res.data;
+  },
+
+  submit: async (id) => {
+    const res = await api.post(`${BASE}/monitor/${id}/submit`);
+    return res.data;
+  },
+
+  finalize: async (id) => {
+    const res = await api.post(`${BASE}/monitor/${id}/finalize`);
+    return res.data;
+  },
+
+  flagDuplicate: async (id) => {
+    const res = await api.post(`${BASE}/monitor/${id}/flag-duplicate`);
+    return res.data;
+  },
+
+  unflagDuplicate: async (id) => {
+    const res = await api.post(`${BASE}/monitor/${id}/unflag-duplicate`);
+    return res.data;
+  },
+
+  listDuplicates: async (params) => {
+    const res = await api.get(`${BASE}/monitor/duplicates`, { params });
+    return res.data;
+  },
+
+  searchParent: async (q) => {
+    const res = await api.get(`${BASE}/monitor/parent-search`, { params: { q } });
+    return res.data;
+  },
+
+  linkDuplicate: async (id, parentId) => {
+    const res = await api.patch(`${BASE}/monitor/duplicates/${id}/link`, { parent_id: parentId });
+    return res.data;
+  },
+
+  clearDuplicate: async (id) => {
+    const res = await api.post(`${BASE}/monitor/duplicates/${id}/clear`);
+    return res.data;
+  },
+
+  getAudit: async (id) => {
+    const res = await api.get(`${BASE}/monitor/${id}/audit`);
+    return res.data;
+  },
+};
+
+export default newsMonitorService;
