@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowRight, HelpCircle, Plus, Search, RotateCcw, Edit3, ListOrdered,
+  Plus, Search, RotateCcw, Edit3, ListOrdered,
   FileDown, Printer, X, ChevronUp, ChevronDown, Loader2, Save,
 } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -15,7 +16,6 @@ import managementSummaryService from "../services/managementSummaryService.js";
 import { getSessionRoles, hasPermission, hasRole } from "../utils/userRoles.js";
 import { MANAGEMENT_SUMMARY_BODY_MAX } from "../constants/promptFieldLimits.js";
 import { FIELD_MGMT_SUMMARY_HELP } from "../content/fieldFormHelp.jsx";
-import HelpModal from "../components/common/HelpModal.jsx";
 import { clampText } from "../utils/limitInput.js";
 
 const toPersianDigits = (val) =>
@@ -134,7 +134,6 @@ export default function FieldManagementSummary() {
   const [data, setData] = useState({ total: 0, rows: [] });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [showHelp, setShowHelp] = useState(false);
 
   const [provinceOptions, setProvinceOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
@@ -343,31 +342,26 @@ export default function FieldManagementSummary() {
   const totalPages = Math.max(1, Math.ceil(data.total / limit));
 
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", background: "#0f172a", color: "#e2e8f0", padding: 20 }}>
-      {/* هدر */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <button type="button" style={btnStyle()} onClick={() => navigate("/main")}>
-          <ArrowRight size={18} />
-          منو
-        </button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>لیست خلاصه‌های مدیریتی گزارشات میدانی</h1>
-        <div style={{ display: "flex", gap: 8 }}>
+    <FormPageLayout
+      title="گزارشات قبلی — خلاصه مدیریتی"
+      documentTitle="خلاصه مدیریتی میدانی"
+      onHelp={() => <FIELD_MGMT_SUMMARY_HELP />}
+      helpTitle="راهنمای خلاصه مدیریتی میدانی"
+      contentPadding="20px"
+      toolbarExtra={(
+        <>
           {isAdmin ? (
-            <button type="button" style={{ ...btnStyle(), fontSize: 12 }} onClick={() => navigate("/admin/prompts")}>
+            <button type="button" style={{ ...btnStyle(), fontSize: "0.86em" }} onClick={() => navigate("/admin/prompts")}>
               پرامپت‌ها
             </button>
           ) : null}
-          <button type="button" style={btnStyle()} onClick={() => setShowHelp(true)}>
-            <HelpCircle size={17} />
-            راهنما
-          </button>
-          <button type="button" style={btnStyle("primary")} onClick={() => navigate("/field-management-summary/new")}>
+          <button type="button" className="v3-add-fab" style={{ padding: "6px 12px", fontSize: "0.86em" }} onClick={() => navigate("/field-management-summary")}>
             <Plus size={17} />
-            افزودن خلاصه مدیریتی جدید
+            خلاصه جدید
           </button>
-        </div>
-      </div>
-
+        </>
+      )}
+    >
       {err ? <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div> : null}
 
       {/* نوار فیلتر */}
@@ -725,11 +719,7 @@ export default function FieldManagementSummary() {
         </div>
       ) : null}
 
-      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} title="راهنمای خلاصه مدیریتی میدانی" maxWidth={540}>
-        <FIELD_MGMT_SUMMARY_HELP />
-      </HelpModal>
-
       <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
-    </div>
+    </FormPageLayout>
   );
 }

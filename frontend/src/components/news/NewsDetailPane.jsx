@@ -7,7 +7,7 @@ import RichTextEditor from "../analysis/RichTextEditor.jsx";
 import NewsFormatPreviewModal from "./NewsFormatPreviewModal.jsx";
 import NewsFormatExportMenu from "./NewsFormatExportMenu.jsx";
 import { FORMAT } from "../../utils/newsFormat/index.js";
-import { NEWS_WORKFLOW_STATES } from "../../constants/newsMonitorMeta.js";
+import { getNewsDisplayStatus } from "../../utils/newsDisplayStatus.js";
 import { NEWS_FIELD_LIMITS } from "../../constants/newsFieldLimits.js";
 import {
   NEWS_EDITOR_BODY_HEIGHT,
@@ -60,11 +60,10 @@ export default function NewsDetailPane({
     );
   }
 
-  const ws = NEWS_WORKFLOW_STATES[item.workflow_status] || NEWS_WORKFLOW_STATES.pending;
+  const { primaryLabel, primaryColor, secondaryTags } = getNewsDisplayStatus(item);
   const total = items.length;
   const atStart = index <= 0;
   const atEnd = index >= total - 1;
-  const isDuplicateMarked = item.duplicate_status === "suspicious" || item.duplicate_status === "confirmed";
   const canToggleDuplicate = item.duplicate_status !== "confirmed";
 
   const dateStr = toPersianDigits(String(item.source_date_jalali || "").replace(/-/g, "/"));
@@ -177,15 +176,12 @@ export default function NewsDetailPane({
         {isMobile ? (
           <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", marginBottom: 4 }}>
-              {badge(`مرحله: ${ws.label}`, `${ws.color}22`, ws.color)}
+              {badge(primaryLabel, `${primaryColor}22`, primaryColor, { fontWeight: 600 })}
               {badge(`#${toPersianDigits(item.id)}`, "rgba(148,163,184,0.15)", theme.text)}
               {dateTimeStr ? badge(dateTimeStr, "rgba(56,189,248,0.12)", "#7dd3fc") : null}
-              {isDuplicateMarked ? badge(
-                item.duplicate_status === "confirmed" ? "تکراری" : "مشکوک",
-                "rgba(245,158,11,0.2)",
-                "#f59e0b",
-                { fontWeight: 600 },
-              ) : null}
+              {secondaryTags.filter((t) => t.label.includes("تکرار") || t.label.includes("مشکوک")).map((t) => (
+                <React.Fragment key={t.label}>{badge(t.label, `${t.color}22`, t.color, { fontWeight: 600 })}</React.Fragment>
+              ))}
             </div>
             <div
               style={{
@@ -204,14 +200,11 @@ export default function NewsDetailPane({
         ) : (
           <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
-              {badge(`مرحله: ${ws.label}`, `${ws.color}22`, ws.color)}
+              {badge(primaryLabel, `${primaryColor}22`, primaryColor, { fontWeight: 600 })}
               {badge(`#${toPersianDigits(item.id)}`, "rgba(148,163,184,0.15)", theme.text)}
-              {isDuplicateMarked ? badge(
-                item.duplicate_status === "confirmed" ? "تکراری تأییدشده" : "مشکوک به تکرار",
-                "rgba(245,158,11,0.2)",
-                "#f59e0b",
-                { fontWeight: 600 },
-              ) : null}
+              {secondaryTags.filter((t) => t.label.includes("تکرار") || t.label.includes("مشکوک")).map((t) => (
+                <React.Fragment key={t.label}>{badge(t.label, `${t.color}22`, t.color, { fontWeight: 600 })}</React.Fragment>
+              ))}
             </div>
             <div style={{ fontSize: pxToEm(11), opacity: 0.8, textAlign: "justify" }}>
               {item.source} · {item.sender || item.observer_first_name || "—"} · {dateTimeStr}

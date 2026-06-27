@@ -7,6 +7,8 @@ import {
   syncLegacyApprovalFields,
   inferReviewState,
   inferWorkflowStatus,
+  resolveDuplicateStatus,
+  normalizeDbEnum,
   clampPriority,
   clampQuality,
   duplicateStatusToLegacyFlag,
@@ -31,6 +33,20 @@ import {
   normalizeFormat,
   normalizeSourcePlatform,
 } from "./newsFormat/index.js";
+import { validateNewsEntryPayload, validateNewsManagePayload } from "../constants/newsFieldLimits.js";
+import {
+  sqlNewsDuplicateStatus,
+  sqlNewsWorkflow,
+  sqlEffectiveNewsWorkflow,
+  sqlNewsReviewState,
+  sqlNewsIsFlaggedDuplicate,
+} from "./newsDbEnums.js";
+
+const WS = sqlNewsWorkflow();
+const EWS = sqlEffectiveNewsWorkflow();
+const DS = sqlNewsDuplicateStatus();
+const RS = sqlNewsReviewState();
+const DUP_FLAG = sqlNewsIsFlaggedDuplicate();
 
 /** CTE هم‌راستا با query واکشی n8n */
 export const NEWS_REF_KEY_CTE = `
@@ -65,7 +81,7 @@ export const NEWS_REF_KEY_CTE = `
       AND COALESCE(n.is_deleted, false) = false
   ),
   base_key AS (
-    SELECT *, (ref_date || ref_hm) AS ref_key FROM base
+    SELECT *, (regexp_replace(ref_date, '[^0-9]', '', 'g') || ref_hm) AS ref_key FROM base
   )
 `;
 
@@ -109,9 +125,9 @@ export function resolveNewsRoleLevel(userRole) {
 }
 
 function mapRow(row) {
-  const rs = row.review_state || inferReviewState(row.is_approved, row.status);
+  const rs = normalizeDbEnum(row.review_state) || inferReviewState(row.is_approved, row.status);
   const ws = inferWorkflowStatus({ ...row, review_state: rs });
-  const dup = row.duplicate_status || (row.is_duplicate ? "suspicious" : "none");
+  const dup = resolveDuplicateStatus(row);
   return {
     ...row,
     review_state: rs,
@@ -188,7 +204,7 @@ export async function listNewsMonitor(query = {}, userId = null) {
     if (!Number.isFinite(uid)) throw new Error("کاربر نامعتبر است");
     params.push(uid);
     where += ` AND bk.observer_id = $${params.length}`;
-    where += ` AND COALESCE(bk.workflow_status, 'new') = 'new'`;
+    where += ` AND ${WS} = 'new'`;
   } else {
     const fromKey = query.from_ref_key || jalaliDateToRefKeyStart(query.start_date);
     const toKey = query.to_ref_key || jalaliDateToRefKeyEnd(query.end_date);
@@ -204,24 +220,24 @@ export async function listNewsMonitor(query = {}, userId = null) {
 
   const duplicateMode = String(query.duplicate || "exclude").toLowerCase();
   if (duplicateMode === "exclude") {
-    where += ` AND COALESCE(bk.duplicate_status, 'none') = 'none'`;
+    where += ` AND NOT ${DUP_FLAG}`;
   } else if (duplicateMode === "only") {
-    where += ` AND COALESCE(bk.duplicate_status, 'none') <> 'none'`;
+    where += ` AND ${DUP_FLAG}`;
   } else if (duplicateMode === "suspicious") {
-    where += ` AND COALESCE(bk.duplicate_status, 'none') = 'suspicious'`;
+    where += ` AND (${DS} = 'suspicious' OR (COALESCE(bk.is_duplicate, false) = true AND ${DS} = 'none'))`;
   }
 
   const workflowStatus = String(query.workflow_status || "").trim();
   if (!myDrafts && workflowStatus && workflowStatus !== "all" && VALID_WORKFLOW_STATES.has(workflowStatus)) {
     params.push(workflowStatus);
-    where += ` AND COALESCE(bk.workflow_status, 'new') = $${params.length}`;
+    where += ` AND ${EWS} = $${params.length}`;
   }
 
   const reviewState = String(query.review_state ?? (myDrafts ? "all" : "pending")).trim();
   if (reviewState && reviewState !== "all") {
     if (VALID_REVIEW_STATES.has(reviewState)) {
       params.push(reviewState);
-      where += ` AND COALESCE(bk.review_state, 'pending') = $${params.length}`;
+      where += ` AND ${RS} = $${params.length}`;
     }
   }
 
@@ -314,15 +330,15 @@ export async function getSummaryStats(query = {}) {
     ${NEWS_REF_KEY_CTE}
     SELECT
       COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE COALESCE(bk.workflow_status, 'new') = 'new')::int AS wf_new,
-      COUNT(*) FILTER (WHERE COALESCE(bk.workflow_status, 'new') = 'pending')::int AS wf_pending,
-      COUNT(*) FILTER (WHERE COALESCE(bk.workflow_status, 'new') = 'reviewed')::int AS wf_reviewed,
-      COUNT(*) FILTER (WHERE COALESCE(bk.workflow_status, 'new') = 'finalized')::int AS wf_finalized,
+      COUNT(*) FILTER (WHERE ${EWS} = 'new')::int AS wf_new,
+      COUNT(*) FILTER (WHERE ${EWS} = 'pending')::int AS wf_pending,
+      COUNT(*) FILTER (WHERE ${EWS} = 'reviewed')::int AS wf_reviewed,
+      COUNT(*) FILTER (WHERE ${EWS} = 'finalized')::int AS wf_finalized,
       COUNT(*) FILTER (WHERE COALESCE(bk.review_state, 'pending') = 'pending')::int AS pending,
       COUNT(*) FILTER (WHERE COALESCE(bk.review_state, 'pending') = 'approved')::int AS approved,
       COUNT(*) FILTER (WHERE COALESCE(bk.review_state, 'pending') = 'rejected')::int AS rejected,
       COUNT(*) FILTER (WHERE COALESCE(bk.review_state, 'pending') = 'rumor')::int AS rumor,
-      COUNT(*) FILTER (WHERE COALESCE(bk.duplicate_status, 'none') <> 'none')::int AS duplicate,
+      COUNT(*) FILTER (WHERE ${DUP_FLAG})::int AS duplicate,
       COUNT(*) FILTER (WHERE bk.priority = 1)::int AS priority_instant,
       COUNT(*) FILTER (WHERE bk.priority = 2)::int AS priority_urgent
     FROM base_key bk
@@ -330,11 +346,12 @@ export async function getSummaryStats(query = {}) {
   `;
 
   const r = await pool.query(sql, params);
-  return r.rows[0] || {
+  const row = r.rows[0] || {
     total: 0, wf_new: 0, wf_pending: 0, wf_reviewed: 0, wf_finalized: 0,
     pending: 0, approved: 0, rejected: 0, rumor: 0, duplicate: 0,
     priority_instant: 0, priority_urgent: 0,
   };
+  return row;
 }
 
 async function setNewsCategories(client, newsId, categoryIds) {
@@ -364,6 +381,9 @@ async function getUserObserverFields(userId) {
 }
 
 export async function createNewsByMonitor(body = {}, userId = null) {
+  const fieldErr = validateNewsEntryPayload(body);
+  if (fieldErr) throw new Error(fieldErr);
+
   const rawText = String(body.raw_text ?? "").trim();
   const plain = stripHtml(rawText);
   if (!plain) throw new Error("متن خبر الزامی است");
@@ -735,6 +755,24 @@ export async function updateNewsItem(id, body = {}, userId = null, userRole = nu
   if (existing.is_deleted) throw new Error("این خبر حذف شده است");
   const roleLevel = resolveNewsRoleLevel(userRole);
 
+  if (roleLevel === "monitor") {
+    const fieldErr = validateNewsEntryPayload({
+      raw_text: body.raw_text !== undefined ? body.raw_text : existing.raw_text,
+      source: body.source !== undefined ? body.source : existing.source,
+      source_url: body.source_url !== undefined ? body.source_url : existing.source_url,
+    });
+    if (fieldErr) throw new Error(fieldErr);
+  } else if (
+    body.cleaned_text !== undefined
+    || body.summary !== undefined
+    || body.status_note !== undefined
+    || body.source !== undefined
+    || body.source_url !== undefined
+  ) {
+    const fieldErr = validateNewsManagePayload(body);
+    if (fieldErr) throw new Error(fieldErr);
+  }
+
   let reviewState = body.review_state != null
     ? String(body.review_state).trim()
     : (existing.review_state || inferReviewState(existing.is_approved, existing.status));
@@ -817,8 +855,11 @@ export async function updateNewsItem(id, body = {}, userId = null, userRole = nu
     }
   }
 
+  const VERDICT_STATES = new Set(["approved", "rejected", "rumor"]);
+  const verdictGiven = body.review_state != null && VERDICT_STATES.has(reviewState);
+
   if (roleLevel === "editor" || roleLevel === "chief" || roleLevel === "admin") {
-    if (body.review_state != null && workflowStatus === "pending") {
+    if (verdictGiven && workflowStatus === "pending") {
       workflowStatus = "reviewed";
     }
   }
@@ -827,7 +868,6 @@ export async function updateNewsItem(id, body = {}, userId = null, userRole = nu
   const cleanedPlain = stripHtml(cleanedText);
   const charCount = computeCharCount(cleanedPlain);
   const hashKey = computeHashKey(cleanedPlain, source);
-  const reviewTouched = body.review_state != null || body.quality != null || body.cleaned_text != null;
 
   const client = await pool.connect();
   try {
@@ -855,7 +895,7 @@ export async function updateNewsItem(id, body = {}, userId = null, userRole = nu
          is_duplicate = $19,
          source_platform = $20,
          source_url = $21,
-         reviewed_by = $22,
+         reviewed_by = CASE WHEN $23 THEN $22 ELSE reviewed_by END,
          reviewed_at = CASE WHEN $23 THEN CURRENT_TIMESTAMP ELSE reviewed_at END,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $24
@@ -883,7 +923,7 @@ export async function updateNewsItem(id, body = {}, userId = null, userRole = nu
         sourcePlatform,
         sourceUrl,
         userId ?? null,
-        reviewTouched,
+        verdictGiven,
         newsId,
       ],
     );

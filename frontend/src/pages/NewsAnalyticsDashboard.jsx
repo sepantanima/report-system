@@ -5,7 +5,8 @@ import persian from "react-date-object/calendars/persian";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
-import { ArrowRight, HelpCircle, X, FileSpreadsheet, FileText, BarChart3, Table2, LayoutDashboard } from "lucide-react";
+import { FileSpreadsheet, FileText, BarChart3, Table2, LayoutDashboard } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import { StatChart } from "../components/StatChart.jsx";
 import AnalyticsFilterBar from "../components/news/analytics/AnalyticsFilterBar.jsx";
 import newsAnalyticsService from "../services/newsAnalyticsService.js";
@@ -237,7 +238,6 @@ export default function NewsAnalyticsDashboard() {
   } = useDashboardWidgets("news-analytics-dashboard", NEWS_WIDGET_DEFS);
 
   const [meta, setMeta] = useState(null);
-  const [showHelp, setShowHelp] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [appliedVersion, setAppliedVersion] = useState(0);
   const [dateRange, setDateRange] = useState([
@@ -602,19 +602,14 @@ export default function NewsAnalyticsDashboard() {
   }
 
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", background: theme.bg, color: theme.text, padding: 16 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>داشبورد تحلیلی اخبار</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={() => setShowHelp(true)} style={hdrBtn(theme)}>
-            <HelpCircle size={16} /> راهنما
-          </button>
-          <button type="button" onClick={() => navigate("/main")} style={hdrBtn(theme)}>
-            <ArrowRight size={16} /> بازگشت
-          </button>
-        </div>
-      </header>
-
+    <FormPageLayout
+      title="داشبورد تحلیلی اخبار"
+      documentTitle="داشبورد تحلیلی اخبار"
+      onHelp={() => NEWS_ANALYTICS_HELP()}
+      helpTitle="راهنمای داشبورد تحلیلی اخبار"
+      contentPadding="16px"
+      fillViewport
+    >
       {myRankBanner ? (
         <div style={{ marginBottom: 12, padding: 10, borderRadius: 10, background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.3)", fontSize: 12 }}>
           {myRankBanner.monitor ? `رتبه پایشگری شما: ${toPersianDigits(myRankBanner.monitor.rank)} · امتیاز ${toPersianDigits(myRankBanner.monitor.score)}` : null}
@@ -689,21 +684,7 @@ export default function NewsAnalyticsDashboard() {
         })}
       </div>
 
-      {showHelp ? (
-        <div className="v3-modal-overlay" onClick={() => setShowHelp(false)}>
-          <div className="v3-modal-box" style={{ background: theme.card, border: `1px solid ${theme.border}` }} onClick={(e) => e.stopPropagation()}>
-            <div className="v3-modal-header-new">
-              <button type="button" onClick={() => setShowHelp(false)} className="v3-icon-btn" style={{ color: "#f87171", border: "none" }}><X size={18} /></button>
-              <span>راهنمای داشبورد تحلیلی اخبار</span>
-            </div>
-            <div className="v3-modal-body">{NEWS_ANALYTICS_HELP()}</div>
-            <div className="v3-modal-footer-new">
-              <button type="button" className="v3-btn-footer v3-primary-solid" onClick={() => setShowHelp(false)}>متوجه شدم</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </FormPageLayout>
   );
 }
 
@@ -727,12 +708,4 @@ function TimelineChart({ data, theme, title }) {
       </div>
     </div>
   );
-}
-
-function hdrBtn(theme) {
-  return {
-    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px",
-    borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.card,
-    color: theme.text, cursor: "pointer", fontFamily: "inherit", fontSize: 12,
-  };
 }

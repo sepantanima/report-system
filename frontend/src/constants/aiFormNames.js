@@ -4,6 +4,11 @@ export const FORM_AI_NAMES = {
   ACTION_GENERATE_SUMMARY: "generate_summary",
   NEWS_MONITOR_MANAGE: "news_monitor_manage",
   ACTION_SUMMARIZE_TEXT: "summarize_text",
+  NEWS_SMART_ANALYSIS: "news_smart_analysis",
+  ACTION_ANALYZE_OVERVIEW: "analyze_overview",
+  ACTION_ANALYZE_THEMATIC: "analyze_thematic",
+  ACTION_ANALYZE_TRENDS: "analyze_trends",
+  ACTION_ANALYZE_RISK: "analyze_risk",
   SAMPLE_FORM: "sample_form",
   ACTION_SAMPLE_SUMMARIZE: "sample_summarize",
   ACTION_SAMPLE_SECURE: "sample_secure",
@@ -38,6 +43,32 @@ export const REGISTERED_FORM_AI_ACTIONS = [
     ],
   },
   {
+    form_name: FORM_AI_NAMES.NEWS_SMART_ANALYSIS,
+    label_fa: "پردازش هوشمند اخبار",
+    actions: [
+      {
+        action_name: FORM_AI_NAMES.ACTION_ANALYZE_OVERVIEW,
+        label_fa: "خلاصه کلی",
+        default_button_label_fa: "خلاصه کلی",
+      },
+      {
+        action_name: FORM_AI_NAMES.ACTION_ANALYZE_THEMATIC,
+        label_fa: "تحلیل موضوعی",
+        default_button_label_fa: "تحلیل موضوعی",
+      },
+      {
+        action_name: FORM_AI_NAMES.ACTION_ANALYZE_TRENDS,
+        label_fa: "روند و الگو",
+        default_button_label_fa: "روند و الگو",
+      },
+      {
+        action_name: FORM_AI_NAMES.ACTION_ANALYZE_RISK,
+        label_fa: "ریسک و تهدید",
+        default_button_label_fa: "ریسک و تهدید",
+      },
+    ],
+  },
+  {
     form_name: FORM_AI_NAMES.SAMPLE_FORM,
     label_fa: "فرم نمونه",
     actions: [
@@ -61,6 +92,7 @@ export const AI_FORM_ACTION_SIMPLE_FLOW_FA = [
   "همیشه یک پرامپت از «مدیریت پرامپت‌ها» انتخاب کنید؛ متن اصلی ارسال به مدل از همان پرامپت خوانده می‌شود.",
   "برای «خلاصه مدیریتی» اگر در پرامپت از {{PERIOD_START}}، {{PERIOD_END}}، {{PERIOD_KIND_FA}}، {{REPORTS_DIGEST}} استفاده کنید، سرور آن‌ها را از بازه و گزارش‌های پایگاه پر می‌کند.",
   "برای «مدیریت اخبار» در پرامپت می‌توانید از {{FORM_cleaned_text}}، {{FORM_source}} و سایر فیلدهای JSON استفاده کنید.",
+  "برای «پردازش هوشمند اخبار» از {{PERIOD_START}}، {{PERIOD_END}}، {{NEWS_COUNT}}، {{FILTER_SUMMARY}}، {{NEWS_DIGEST}} در پرامپت استفاده کنید.",
   "کاربرد API (usage_key) را مثل همان چیزی که در «مدیریت API هوش» ثبت کرده‌اید انتخاب کنید؛ در صورت نیاز یک ردیف مشخص را برای اولویت بگذارید.",
   "فیلدهای فرم را در JSON به صورت آرایهٔ نام فیلد بدهید تا در مسیرهای دیگر زیر پرامپت اضافه شوند؛ در متن پرامپت می‌توانید از {{FORM_نام_فیلد}} استفاده کنید.",
 ];

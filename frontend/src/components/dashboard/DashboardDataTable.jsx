@@ -25,6 +25,12 @@ export default function DashboardDataTable({
   getCellValue,
   renderCell,
   justifyKeys = [],
+  rowKey = "id",
+  loading = false,
+  serverPagination = null,
+  onExportAll = null,
+  selection = null,
+  emptyMessage = "داده‌ای یافت نشد.",
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -33,16 +39,25 @@ export default function DashboardDataTable({
   });
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(serverPagination?.pageSize || 20);
   const [columnConfig, setColumnConfig] = useState(columnsProp || []);
+  const [exporting, setExporting] = useState(false);
+
+  const isServerMode = Boolean(serverPagination);
 
   useEffect(() => {
     setColumnConfig(columnsProp || []);
   }, [columnsProp]);
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [data, searchTerm, itemsPerPage]);
+    if (isServerMode && serverPagination?.pageSize) {
+      setItemsPerPage(serverPagination.pageSize);
+    }
+  }, [isServerMode, serverPagination?.pageSize]);
+
+  useEffect(() => {
+    if (!isServerMode) setCurrentPage(1);
+  }, [data, searchTerm, itemsPerPage, isServerMode]);
 
   const resolveCell = (row, col) => {
     if (renderCell) {
@@ -78,33 +93,64 @@ export default function DashboardDataTable({
     return result;
   }, [data, searchTerm, sortConfig, getCellValue]);
 
+  const activePage = isServerMode ? serverPagination.page : currentPage;
+  const activePageSize = isServerMode ? serverPagination.pageSize : itemsPerPage;
+  const totalRows = isServerMode ? (serverPagination.total || 0) : sortedRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / activePageSize) || 1);
+
   const currentData = useMemo(() => {
+    if (isServerMode) return sortedRows;
     const start = (currentPage - 1) * itemsPerPage;
     return sortedRows.slice(start, start + itemsPerPage);
-  }, [currentPage, itemsPerPage, sortedRows]);
+  }, [isServerMode, sortedRows, currentPage, itemsPerPage]);
 
   const visibleCols = columnConfig.filter((c) => c.visible !== false);
 
-  const handleExport = () => {
-    const rows = sortedRows.map((row) => {
-      const o = {};
-      visibleCols.forEach((col) => {
-        const raw = getCellValue ? getCellValue(row, col.key) : row[col.key];
-        o[col.title] = raw ?? "—";
-      });
-      return o;
+  const rowNumberBase = isServerMode
+    ? (activePage - 1) * activePageSize
+    : (currentPage - 1) * itemsPerPage;
+
+  const buildExportRows = (sourceRows) => sourceRows.map((row) => {
+    const o = {};
+    visibleCols.forEach((col) => {
+      const raw = getCellValue ? getCellValue(row, col.key) : row[col.key];
+      o[col.title] = raw ?? "—";
     });
-    if (!rows.length) return alert("داده‌ای برای خروجی وجود ندارد.");
-    const fileName = exportDateRange
-      ? buildExportFileName(exportBaseName, exportDateRange)
-      : `${String(dynamicTitle).replace(/[\\/:*?"<>|]/g, "").trim()}.xlsx`;
-    exportToExcel(rows, fileName);
+    return o;
+  });
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      let sourceRows = sortedRows;
+      if (onExportAll) {
+        sourceRows = await onExportAll();
+      }
+      const rows = buildExportRows(sourceRows || []);
+      if (!rows.length) {
+        alert("داده‌ای برای خروجی وجود ندارد.");
+        return;
+      }
+      const fileName = exportDateRange
+        ? buildExportFileName(exportBaseName, exportDateRange)
+        : `${String(dynamicTitle).replace(/[\\/:*?"<>|]/g, "").trim()}.xlsx`;
+      exportToExcel(rows, fileName);
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    let sourceRows = sortedRows;
+    if (onExportAll) {
+      try {
+        sourceRows = await onExportAll();
+      } catch {
+        sourceRows = sortedRows;
+      }
+    }
     const safeTitle = String(dynamicTitle).replace(/[\\/:*?"<>|]/g, "").trim();
-    const rowsHtml = sortedRows
-      .map((r, i) => `
+    const rowsHtml = (sourceRows || []).map((r, i) => `
         <tr>
           <td style="text-align:center;width:40px;">${toFa(i + 1)}</td>
           ${visibleCols.map((c) => {
@@ -113,8 +159,7 @@ export default function DashboardDataTable({
             const justify = justifyKeys.includes(c.key);
             return `<td style="text-align:${justify ? "justify" : "center"}">${toFa(text)}</td>`;
           }).join("")}
-        </tr>`)
-      .join("");
+        </tr>`).join("");
 
     const w = window.open("", "_blank");
     w.document.write(`
@@ -130,10 +175,32 @@ export default function DashboardDataTable({
       </style></head>
       <body onload="window.print(); window.close();">
         <h2>${toFa(dynamicTitle)}</h2>
-        <table><thead><tr><th style="width:40px;">ردیف</th>${visibleCols.map((c) => `<th>${c.title}</th>`).join("")}</tr></thead>
+        <table><thead><tr>
+          ${selection ? "<th style='width:30px;'></th>" : ""}
+          <th style="width:40px;">ردیف</th>
+          ${visibleCols.map((c) => `<th>${c.title}</th>`).join("")}
+        </tr></thead>
         <tbody>${rowsHtml}</tbody></table>
       </body></html>`);
     w.document.close();
+  };
+
+  const onPagePrev = () => {
+    if (isServerMode) serverPagination.onPageChange(activePage - 1);
+    else setCurrentPage((p) => p - 1);
+  };
+
+  const onPageNext = () => {
+    if (isServerMode) serverPagination.onPageChange(activePage + 1);
+    else setCurrentPage((p) => p + 1);
+  };
+
+  const onPageSizeChange = (val) => {
+    if (isServerMode) serverPagination.onPageSizeChange(val);
+    else {
+      setItemsPerPage(val);
+      setCurrentPage(1);
+    }
   };
 
   const bg = isDarkMode ? "#1e293b" : "#fff";
@@ -141,29 +208,42 @@ export default function DashboardDataTable({
   const text = isDarkMode ? "#fff" : "#000";
   const border = isDarkMode ? "#334155" : "#ccc";
 
-  if (!data?.length) {
-    return <p style={{ fontSize: 12, opacity: 0.6, textAlign: "center", padding: 10 }}>داده‌ای یافت نشد.</p>;
+  if (!loading && !data?.length && !isServerMode) {
+    return <p style={{ fontSize: 12, opacity: 0.6, textAlign: "center", padding: 10 }}>{emptyMessage}</p>;
   }
+
+  if (!loading && !data?.length && isServerMode && totalRows === 0) {
+    return <p style={{ fontSize: 12, opacity: 0.6, textAlign: "center", padding: 10 }}>{emptyMessage}</p>;
+  }
+
+  const getRowId = (row) => (selection?.getRowId ? selection.getRowId(row) : row[rowKey]);
 
   return (
     <div style={{ width: "100%", padding: 10, direction: "rtl", fontFamily: "Tahoma", boxSizing: "border-box", background: bg, color: text, borderRadius: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         <input
           type="text"
-          placeholder="جستجو در تمام فیلدها..."
+          placeholder={isServerMode ? "جستجو در صفحه جاری..." : "جستجو در تمام فیلدها..."}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ flex: 1, minWidth: 200, height: 36, padding: "0 10px", borderRadius: 6, border: `1px solid ${border}`, background: inputBg, color: text, fontFamily: "inherit", fontSize: 12 }}
         />
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          <button type="button" onClick={handleExport} style={s.btnExcel} title="دریافت فایل اکسل">📊 اکسل</button>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
+          {selection?.onTogglePageAll && (
+            <button type="button" onClick={selection.onTogglePageAll} style={s.btnSec(isDarkMode, border)}>
+              انتخاب صفحه
+            </button>
+          )}
+          <button type="button" disabled={exporting} onClick={handleExport} style={s.btnExcel} title="دریافت فایل اکسل">
+            {exporting ? "…" : "📊 اکسل"}
+          </button>
           <button type="button" onClick={handlePrint} style={s.btnPrint} title="چاپ">🖨️ چاپ</button>
           <button type="button" onClick={() => setShowColumnSettings(!showColumnSettings)} style={s.btnSec(isDarkMode, border)} title="تنظیم ستون‌ها">
             <SettingsIcon />
           </button>
           <select
-            value={itemsPerPage}
-            onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+            value={activePageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
             style={{ height: 34, padding: "0 8px", borderRadius: 6, border: `1px solid ${border}`, background: inputBg, color: text, fontFamily: "inherit", fontSize: 11 }}
           >
             {[10, 20, 50, 100].map((v) => (
@@ -172,6 +252,14 @@ export default function DashboardDataTable({
           </select>
         </div>
       </div>
+
+      {selection?.selectedIds && (
+        <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.85 }}>
+          {selection.selectedIds.length
+            ? `${toFa(selection.selectedIds.length)} خبر انتخاب‌شده`
+            : "بدون انتخاب = همه نتایج در خروجی"}
+        </div>
+      )}
 
       {showColumnSettings ? (
         <div style={{ ...s.settingsPanel, borderColor: border }}>
@@ -192,6 +280,7 @@ export default function DashboardDataTable({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
           <thead>
             <tr style={{ background: isDarkMode ? "#0f172a" : "#f5f5f5" }}>
+              {selection && <th style={{ width: 36, padding: 8, border: `1px solid ${border}` }}>✓</th>}
               <th style={{ width: 45, padding: 12, border: `1px solid ${border}` }}>ردیف</th>
               {visibleCols.map((col) => (
                 <th key={col.key} style={{ padding: 10, border: `1px solid ${border}`, width: col.width ? `${col.width}px` : undefined }}>
@@ -210,37 +299,57 @@ export default function DashboardDataTable({
             </tr>
           </thead>
           <tbody>
-            {currentData.map((row, idx) => (
-              <tr key={row.user_id || row.unit_cd || row.rank || idx}>
-                <td style={{ padding: 8, border: `1px solid ${border}`, textAlign: "center" }}>
-                  {toFa((currentPage - 1) * itemsPerPage + idx + 1)}
+            {loading && (
+              <tr>
+                <td colSpan={visibleCols.length + 1 + (selection ? 1 : 0)} style={{ padding: 24, textAlign: "center" }}>
+                  در حال بارگذاری…
                 </td>
-                {visibleCols.map((col) => (
-                  <td
-                    key={col.key}
-                    style={{
-                      padding: 8,
-                      border: `1px solid ${border}`,
-                      textAlign: justifyKeys.includes(col.key) ? "justify" : "center",
-                      verticalAlign: "top",
-                      wordWrap: "break-word",
-                    }}
-                  >
-                    {resolveCell(row, col)}
-                  </td>
-                ))}
               </tr>
-            ))}
+            )}
+            {!loading && currentData.map((row, idx) => {
+              const rid = getRowId(row);
+              return (
+                <tr key={rid ?? idx}>
+                  {selection && (
+                    <td style={{ padding: 8, border: `1px solid ${border}`, textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={selection.selectedIds?.includes(rid)}
+                        onChange={() => selection.onToggle?.(rid)}
+                      />
+                    </td>
+                  )}
+                  <td style={{ padding: 8, border: `1px solid ${border}`, textAlign: "center" }}>
+                    {toFa(rowNumberBase + idx + 1)}
+                  </td>
+                  {visibleCols.map((col) => (
+                    <td
+                      key={col.key}
+                      style={{
+                        padding: 8,
+                        border: `1px solid ${border}`,
+                        textAlign: justifyKeys.includes(col.key) ? "justify" : "center",
+                        verticalAlign: "top",
+                        wordWrap: "break-word",
+                      }}
+                    >
+                      {resolveCell(row, col)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 15, marginTop: 15 }}>
-        <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} style={s.pageBtn}>قبلی</button>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 15, marginTop: 15, flexWrap: "wrap" }}>
+        <button type="button" disabled={activePage <= 1 || loading} onClick={onPagePrev} style={s.pageBtn}>قبلی</button>
         <span style={{ fontSize: 12, opacity: 0.8 }}>
-          صفحه {toFa(currentPage)} از {toFa(Math.ceil(sortedRows.length / itemsPerPage) || 1)}
+          صفحه {toFa(activePage)} از {toFa(totalPages)}
+          {isServerMode ? ` — ${toFa(totalRows)} ردیف` : ""}
         </span>
-        <button type="button" disabled={currentPage >= Math.ceil(sortedRows.length / itemsPerPage)} onClick={() => setCurrentPage((p) => p + 1)} style={s.pageBtn}>بعدی</button>
+        <button type="button" disabled={activePage >= totalPages || loading} onClick={onPageNext} style={s.pageBtn}>بعدی</button>
       </div>
     </div>
   );
@@ -249,7 +358,7 @@ export default function DashboardDataTable({
 const s = {
   btnExcel: { background: "#10b981", color: "#fff", border: "none", height: 34, padding: "0 12px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: "bold" },
   btnPrint: { background: "#0ea5e9", color: "#fff", border: "none", height: 34, padding: "0 12px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: "bold" },
-  btnSec: (dark, border) => ({ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 6, border: `1px solid ${border}`, background: dark ? "#0f172a" : "#f8fafc", cursor: "pointer", color: "inherit" }),
+  btnSec: (dark, border) => ({ display: "flex", alignItems: "center", justifyContent: "center", height: 34, padding: "0 10px", borderRadius: 6, border: `1px solid ${border}`, background: dark ? "#0f172a" : "#f8fafc", cursor: "pointer", color: "inherit", fontFamily: "inherit", fontSize: 11 }),
   settingsPanel: { padding: 15, borderRadius: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 15, marginBottom: 15, fontSize: 11, border: "1px solid" },
   pageBtn: { padding: "5px 12px", cursor: "pointer", borderRadius: 5, background: "#3b82f6", color: "#fff", border: "none", fontFamily: "inherit", fontSize: 11 },
 };

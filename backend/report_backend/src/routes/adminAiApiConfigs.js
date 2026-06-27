@@ -11,6 +11,7 @@ import {
 } from "../services/aiApiConfigService.js";
 import { validateAiApiConfigBody } from "../constants/promptFieldLimits.js";
 import { invokeLlmSingleRow } from "../services/llmInvoke.js";
+import { fetchConfigCredit } from "../services/aiProviderCreditService.js";
 import { assertProviderSlugAllowed } from "../services/aiProviderTemplateService.js";
 
 const router = Router();
@@ -24,6 +25,17 @@ router.get("/", auth, requireRole("admin"), async (req, res) => {
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/:id/credit", auth, requireRole("admin"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "شناسه نامعتبر" });
+    const data = await fetchConfigCredit(id);
+    res.json(data);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 

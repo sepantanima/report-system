@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, Trash2, Save, HelpCircle } from "lucide-react";
+import { Plus, Trash2, Save } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import api from "../api/api";
 import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
 import {
@@ -13,7 +14,6 @@ import {
   getActionLabelFa,
 } from "../constants/aiFormNames.js";
 import { AI_FORM_ACTIONS_HELP } from "../content/aiFormActionsHelp.jsx";
-import HelpModal from "../components/common/HelpModal.jsx";
 import { PROMPT_KEY_BY_CLASSIFICATION } from "../constants/promptKeys.js";
 import { AI_USAGE_KEYS } from "../constants/aiUsageKeys.js";
 
@@ -44,7 +44,6 @@ export default function AiFormActionsManagement() {
   const [saving, setSaving] = useState(false);
   const [aiConfigRows, setAiConfigRows] = useState([]);
   const [promptRows, setPromptRows] = useState([]);
-  const [showPageHelp, setShowPageHelp] = useState(false);
 
   const fetchRows = async () => {
     if (!allowed) return;
@@ -333,17 +332,7 @@ export default function AiFormActionsManagement() {
   const comboValid = formInRegistry && actionInRegistry;
 
   return (
-    <div
-      style={{
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: 20,
-        paddingTop: err ? 64 : 20,
-        background: "#0f172a",
-        minHeight: "100vh",
-        color: "#e2e8f0",
-      }}
-    >
+    <>
       {err ? (
         <div
           role="alert"
@@ -381,27 +370,18 @@ export default function AiFormActionsManagement() {
           </button>
         </div>
       ) : null}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <button type="button" onClick={() => navigate("/main")} style={btnGhost}>
-          <ArrowRight size={18} />
-          منو
-        </button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>اکشن‌های AI فرم‌ها</h1>
-        <button type="button" onClick={() => setShowPageHelp(true)} style={{ ...btnGhost, marginRight: "auto" }}>
-          <HelpCircle size={18} />
-          راهنما
-        </button>
-      </div>
-
-      <HelpModal open={showPageHelp} onClose={() => setShowPageHelp(false)} title="راهنمای اکشن‌های AI فرم‌ها" maxWidth={640}>
-        <AI_FORM_ACTIONS_HELP />
-      </HelpModal>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12, alignItems: "flex-end" }}>
-        <div>
-          <label style={{ fontSize: 12, opacity: 0.85, display: "block" }}>فیلتر فرم</label>
+      <FormPageLayout
+        title="اکشن‌های AI فرم‌ها"
+        documentTitle="اکشن‌های AI فرم‌ها"
+        onHelp={() => <AI_FORM_ACTIONS_HELP />}
+        helpTitle="راهنمای اکشن‌های AI فرم‌ها"
+        contentPadding={err ? "64px 20px 20px" : "20px"}
+      >
+      <div className="form-page-filter-row">
+        <div className="form-page-filter-field">
+          <label style={{ fontSize: "0.86em", opacity: 0.85, display: "block", marginBottom: 4 }}>فیلتر فرم</label>
           <select
-            style={{ ...inp, marginBottom: 0, minWidth: 260 }}
+            style={{ ...inp, marginBottom: 0, width: "100%" }}
             value={filterForm}
             onChange={(e) => setFilterForm(e.target.value)}
           >
@@ -413,68 +393,70 @@ export default function AiFormActionsManagement() {
             ))}
           </select>
         </div>
-        <button type="button" onClick={() => void fetchRows()} style={btnGhost}>
-          اعمال
-        </button>
+        <div className="form-page-filter-actions">
+          <button type="button" onClick={() => void fetchRows()} className="form-page-btn form-page-btn-secondary">
+            اعمال
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14, alignItems: "center" }}>
-        <button type="button" onClick={openCreate} style={btnPrimary}>
+      <div className="form-page-actions-row">
+        <button type="button" onClick={openCreate} className="form-page-btn form-page-btn-primary">
           <Plus size={17} />
           اکشن جدید
         </button>
-        <button type="button" onClick={() => void fetchRows()} style={btnGhost}>
+        <button type="button" onClick={() => void fetchRows()} className="form-page-btn form-page-btn-secondary">
           بروزرسانی
         </button>
       </div>
 
       {loading ? <div>در حال بارگذاری…</div> : null}
 
-      <div style={{ overflowX: "auto", border: "1px solid #334155", borderRadius: 8 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div className="form-page-table-wrap">
+        <table className="form-page-table">
           <thead>
             <tr style={{ background: "#1e293b" }}>
-              <th style={{ padding: 8 }}>شناسه</th>
-              <th style={{ padding: 8 }}>فرم</th>
-              <th style={{ padding: 8 }}>اکشن</th>
-              <th style={{ padding: 8 }}>متن دکمه</th>
-              <th style={{ padding: 8 }}>روش ساخت متن</th>
-              <th style={{ padding: 8 }}>کاربرد API / ردیف ویژه</th>
-              <th style={{ padding: 8 }}>فعال</th>
-              <th style={{ padding: 8 }}>—</th>
+              <th className="col-narrow">شناسه</th>
+              <th className="col-wide">فرم</th>
+              <th className="col-wide">اکشن</th>
+              <th className="col-title">متن دکمه</th>
+              <th className="col-wide">روش ساخت متن</th>
+              <th className="col-wide">کاربرد API / ردیف ویژه</th>
+              <th className="col-short">فعال</th>
+              <th className="col-actions">—</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid #334155" }}>
-                <td style={{ padding: 8 }}>{r.id}</td>
-                <td style={{ padding: 8, fontSize: 12 }}>
+                <td className="col-narrow">{r.id}</td>
+                <td className="col-wide">
                   <div>{getFormLabelFa(r.form_name)}</div>
-                  <div style={{ opacity: 0.65, fontFamily: "monospace", fontSize: 11, marginTop: 4 }} dir="ltr">
+                  <div className="col-mono" style={{ opacity: 0.65, marginTop: 4 }} dir="ltr">
                     {r.form_name}
                   </div>
                 </td>
-                <td style={{ padding: 8, fontSize: 12 }}>
+                <td className="col-wide">
                   <div>{getActionLabelFa(r.form_name, r.action_name)}</div>
-                  <div style={{ opacity: 0.65, fontFamily: "monospace", fontSize: 11, marginTop: 4 }} dir="ltr">
+                  <div className="col-mono" style={{ opacity: 0.65, marginTop: 4 }} dir="ltr">
                     {r.action_name}
                   </div>
                 </td>
-                <td style={{ padding: 8 }}>{r.button_label_fa}</td>
-                <td style={{ padding: 8, fontSize: 11, maxWidth: 200 }}>
+                <td className="col-title">{r.button_label_fa}</td>
+                <td className="col-wide">
                   <div>یکسان — پرامپت + داده</div>
-                  <div style={{ opacity: 0.55, fontFamily: "monospace", marginTop: 4, fontSize: 10 }} dir="ltr">
+                  <div className="col-mono" style={{ opacity: 0.55, marginTop: 4 }} dir="ltr">
                     {r.assembly_strategy}
                   </div>
                 </td>
-                <td style={{ padding: 8, fontSize: 11 }} dir="ltr">
+                <td className="col-wide" dir="ltr">
                   {r.usage_key || "—"}
                   {r.ai_config_id != null ? (
                     <div style={{ opacity: 0.85, marginTop: 4 }}>اولویت ردیف #{r.ai_config_id}</div>
                   ) : null}
                 </td>
-                <td style={{ padding: 8 }}>{r.is_enabled ? "بله" : "خیر"}</td>
-                <td style={{ padding: 8, whiteSpace: "nowrap" }}>
+                <td className="col-short">{r.is_enabled ? "بله" : "خیر"}</td>
+                <td className="col-actions">
                   <button type="button" onClick={() => openEdit(r)} style={btnTable}>
                     ویرایش
                   </button>
@@ -654,6 +636,7 @@ export default function AiFormActionsManagement() {
           </div>
         </div>
       ) : null}
-    </div>
+      </FormPageLayout>
+    </>
   );
 }

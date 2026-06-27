@@ -14,7 +14,7 @@ export const NEWS_QUALITY = {
 };
 
 export const NEWS_REVIEW_STATES = {
-  pending: { label: "بررسی", color: "#64748b" },
+  pending: { label: "بدون حکم", color: "#64748b" },
   approved: { label: "تأیید", color: "#22c55e" },
   rejected: { label: "رد", color: "#ef4444" },
   rumor: { label: "شایعه", color: "#a855f7" },
@@ -22,15 +22,15 @@ export const NEWS_REVIEW_STATES = {
 
 export const NEWS_WORKFLOW_STATES = {
   new: { label: "پیش‌نویس", color: "#38bdf8" },
-  pending: { label: "در انتظار", color: "#64748b" },
-  reviewed: { label: "بررسی‌شده", color: "#eab308" },
-  finalized: { label: "نهایی", color: "#22c55e" },
+  pending: { label: "صف دبیر", color: "#64748b" },
+  reviewed: { label: "ارسال به سردبیر", color: "#eab308" },
+  finalized: { label: "آماده انتشار", color: "#22c55e" },
 };
 
 export const DUPLICATE_STATUSES = {
   none: { label: "—", color: "#64748b" },
-  suspicious: { label: "مشکوک", color: "#f59e0b" },
-  confirmed: { label: "تکراری", color: "#94a3b8" },
+  suspicious: { label: "مشکوک به تکرار", color: "#f59e0b" },
+  confirmed: { label: "تکراری تأییدشده", color: "#94a3b8" },
 };
 
 export const DUPLICATE_FILTER_OPTIONS = [
@@ -39,3 +39,16 @@ export const DUPLICATE_FILTER_OPTIONS = [
   { value: "only", label: "همه تکراری" },
   { value: "include", label: "همه (شامل تکراری)" },
 ];
+
+/** n8n گاهی enum را با کوتیشن اضافی ذخیره می‌کند: 'pending' */
+export function normalizeDbEnum(value, fallback = "") {
+  let s = String(value ?? "").trim();
+  if (!s) return fallback;
+  while (
+    (s.startsWith("'") && s.endsWith("'"))
+    || (s.startsWith('"') && s.endsWith('"'))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s || fallback;
+}

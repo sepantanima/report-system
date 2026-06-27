@@ -15,6 +15,11 @@ import {
   QUALITY_LABELS,
   STATUS_LABELS,
 } from "../constants/newsAnalyticsScoring.js";
+import { sqlNewsDuplicateStatus, sqlNewsReviewState, sqlNewsWorkflow } from "./newsDbEnums.js";
+
+const WS = sqlNewsWorkflow();
+const RS = sqlNewsReviewState();
+const DS = sqlNewsDuplicateStatus();
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_ROWS = 500;
@@ -48,18 +53,15 @@ function statusSql(status) {
   const s = String(status || "").trim();
   switch (s) {
     case "registered":
-      return `COALESCE(bk.workflow_status, 'new') = 'new'`;
+      return `${WS} = 'new'`;
     case "in_review":
-      return `COALESCE(bk.workflow_status, 'new') IN ('pending', 'reviewed')
-              AND COALESCE(bk.review_state, 'pending') = 'pending'`;
+      return `${WS} IN ('pending', 'reviewed') AND ${RS} = 'pending'`;
     case "approved":
-      return `COALESCE(bk.review_state, 'pending') = 'approved'`;
+      return `${RS} = 'approved'`;
     case "rejected":
-      return `COALESCE(bk.review_state, 'pending') = 'rejected'`;
+      return `${RS} = 'rejected'`;
     case "published":
-      return `COALESCE(bk.workflow_status, 'new') = 'finalized'
-              AND COALESCE(bk.is_approved, 0) = 1
-              AND COALESCE(bk.duplicate_status, 'none') = 'none'`;
+      return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${DS} = 'none'`;
     default:
       return null;
   }
@@ -83,9 +85,9 @@ export function buildAnalyticsWhere(filters = {}, scope = {}) {
 
   const duplicateMode = String(filters.duplicate || "exclude").toLowerCase();
   if (duplicateMode === "exclude") {
-    where += ` AND COALESCE(bk.duplicate_status, 'none') = 'none'`;
+    where += ` AND ${DS} = 'none'`;
   } else if (duplicateMode === "only") {
-    where += ` AND COALESCE(bk.duplicate_status, 'none') <> 'none'`;
+    where += ` AND ${DS} <> 'none'`;
   }
 
   const statusCond = statusSql(filters.status);

@@ -62,12 +62,36 @@ export function buildNewsFilterLabels(filters, meta) {
   const labels = [];
   const pick = (opts, val) => (opts || []).find((o) => String(o.value) === String(val))?.label;
 
-  if (filters.status) labels.push(`وضعیت: ${pick(meta?.statusOptions, filters.status) || filters.status}`);
-  if (filters.priority) labels.push(`اولویت: ${pick(meta?.priorityOptions, filters.priority) || filters.priority}`);
-  if (filters.quality) labels.push(`کیفیت: ${pick(meta?.qualityOptions, filters.quality) || filters.quality}`);
-  if (filters.unit_cd) {
-    const u = (meta?.units || []).find((x) => String(x.unit_cd) === String(filters.unit_cd));
-    labels.push(`واحد: ${u?.unit_name || filters.unit_cd}`);
+  const statusList = filters.statuses?.length
+    ? filters.statuses
+    : (filters.status ? [filters.status] : []);
+  if (statusList.length) {
+    const names = statusList.map((v) => pick(meta?.statusOptions, v) || v);
+    labels.push(`وضعیت: ${names.join("، ")}`);
+  }
+  const priorities = filters.priorities?.length
+    ? filters.priorities
+    : (filters.priority ? [filters.priority] : []);
+  if (priorities.length) {
+    const names = priorities.map((v) => pick(meta?.priorityOptions, v) || v);
+    labels.push(`اولویت: ${names.join("، ")}`);
+  }
+  const qualities = filters.qualities?.length
+    ? filters.qualities
+    : (filters.quality ? [filters.quality] : []);
+  if (qualities.length) {
+    const names = qualities.map((v) => pick(meta?.qualityOptions, v) || v);
+    labels.push(`کیفیت: ${names.join("، ")}`);
+  }
+  const unitList = filters.units?.length
+    ? filters.units
+    : (filters.unit_cd ? [filters.unit_cd] : []);
+  if (unitList.length) {
+    const names = unitList.map((id) => {
+      const u = (meta?.units || []).find((x) => String(x.unit_cd) === String(id));
+      return u?.unit_name || id;
+    });
+    labels.push(`واحد: ${names.join("، ")}`);
   }
   if (filters.categories?.length) {
     const names = filters.categories.map((id) => {
@@ -90,26 +114,60 @@ export function buildNewsFilterLabels(filters, meta) {
 }
 
 export function buildFieldFilterLabels({
-  targetTopic, targetPriority, targetStatus, targetQuality,
-  targetClassification, targetProvince, targetUnitCd, units,
+  targetTopics = [],
+  targetTopic,
+  targetPriorities = [],
+  targetPriority,
+  targetStatuses = [],
+  targetStatus,
+  targetQualities = [],
+  targetQuality,
+  targetClassifications = [],
+  targetClassification,
+  targetProvinces = [],
+  targetProvince,
+  targetUnitCds = [],
+  targetUnitCd,
+  units,
 }) {
   const labels = [];
-  if (targetTopic) labels.push(`موضوع: ${targetTopic}`);
-  if (targetProvince) labels.push(`استان: ${targetProvince}`);
-  if (targetUnitCd) {
-    const u = (units || []).find((x) => (x?.UnitCode || x?.id) == targetUnitCd);
-    labels.push(`واحد: ${u?.UnitShortName || u?.name || targetUnitCd}`);
+  const topics = targetTopics?.length ? targetTopics : (targetTopic ? [targetTopic] : []);
+  if (topics.length) labels.push(`موضوع: ${topics.join("، ")}`);
+
+  const provinces = targetProvinces?.length ? targetProvinces : (targetProvince ? [targetProvince] : []);
+  if (provinces.length) labels.push(`استان: ${provinces.join("، ")}`);
+
+  const unitCds = targetUnitCds?.length ? targetUnitCds : (targetUnitCd ? [targetUnitCd] : []);
+  if (unitCds.length) {
+    const names = unitCds.map((cd) => {
+      const u = (units || []).find((x) => (x?.UnitCode || x?.id) == cd);
+      return u?.UnitShortName || u?.name || cd;
+    });
+    labels.push(`واحد: ${names.join("، ")}`);
   }
-  if (targetStatus === "pending") labels.push("وضعیت: بررسی نشده");
-  else if (targetStatus === "verified") labels.push("وضعیت: تأیید شده");
-  else if (targetStatus === "rejected") labels.push("وضعیت: برگشت خورده");
-  if (targetPriority === "5") labels.push("اولویت: فوری");
-  else if (targetPriority === "3") labels.push("اولویت: مهم");
-  else if (targetPriority === "1") labels.push("اولویت: عادی");
-  if (targetQuality) labels.push(`کیفیت: ${targetQuality} ستاره`);
-  if (targetClassification === "1") labels.push("دامنه: عمومی");
-  else if (targetClassification === "2") labels.push("دامنه: استانی");
-  else if (targetClassification === "3") labels.push("دامنه: واحد");
-  else if (targetClassification === "4") labels.push("دامنه: خاص");
+
+  const statuses = targetStatuses?.length ? targetStatuses : (targetStatus ? [targetStatus] : []);
+  if (statuses.length) {
+    const map = { pending: "بررسی نشده", verified: "تأیید شده", rejected: "برگشت خورده" };
+    labels.push(`وضعیت: ${statuses.map((s) => map[s] || s).join("، ")}`);
+  }
+
+  const priorities = targetPriorities?.length ? targetPriorities : (targetPriority ? [targetPriority] : []);
+  if (priorities.length) {
+    const map = { 5: "فوری", 3: "مهم", 1: "عادی", "5": "فوری", "3": "مهم", "1": "عادی" };
+    labels.push(`اولویت: ${priorities.map((p) => map[p] || p).join("، ")}`);
+  }
+
+  const qualities = targetQualities?.length ? targetQualities : (targetQuality ? [targetQuality] : []);
+  if (qualities.length) labels.push(`کیفیت: ${qualities.map((q) => `${q} ستاره`).join("، ")}`);
+
+  const classifications = targetClassifications?.length
+    ? targetClassifications
+    : (targetClassification ? [targetClassification] : []);
+  if (classifications.length) {
+    const map = { 1: "عمومی", 2: "استانی", 3: "واحد", 4: "خاص", "1": "عمومی", "2": "استانی", "3": "واحد", "4": "خاص" };
+    labels.push(`دامنه: ${classifications.map((c) => map[c] || c).join("، ")}`);
+  }
+
   return labels;
 }

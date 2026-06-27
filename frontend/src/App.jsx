@@ -11,7 +11,7 @@ import UnitReportForm from "./pages/UnitReportForm";
 import FieldMonitor from "./pages/FieldMonitor";
 import FieldReportDashboard from './pages/FieldReportDashboard';
 import SystemSetting from './pages/SystemSetting';
-import SmartAIProcessor from './pages/SmartAIProcessor';
+import NewsSmartAnalysisWorkspace from "./pages/newsSmartAnalysis/NewsSmartAnalysisWorkspace.jsx";
 import AnalysisManagerRedirect from "./pages/AnalysisManager";
 import AnalysisMissionDetail from "./pages/AnalysisMissionDetail";
 import AnalysisManagerPanel from "./pages/analysis/AnalysisManagerPanel";
@@ -24,7 +24,11 @@ import AnalysisMissionManage from "./pages/analysis/AnalysisMissionManage";
 import PromptManagement from "./pages/PromptManagement.jsx";
 import AiApiManagement from "./pages/AiApiManagement.jsx";
 import AiFormActionsManagement from "./pages/AiFormActionsManagement.jsx";
+import AiRunLogsManagement from "./pages/AiRunLogsManagement.jsx";
 import NewsCleanPatternManagement from "./pages/NewsCleanPatternManagement.jsx";
+import MessengerChannelManagement from "./pages/MessengerChannelManagement.jsx";
+import NewsReportGenerator from "./pages/NewsReportGenerator.jsx";
+import NewsReportSettingsAdmin from "./pages/NewsReportSettingsAdmin.jsx";
 import FieldManagementSummary from "./pages/FieldManagementSummary.jsx";
 import FieldManagementSummaryCreate from "./pages/FieldManagementSummaryCreate.jsx";
 
@@ -54,18 +58,23 @@ function App() {
         {/* مسیر جدید برای پردازش هوشمند هوش مصنوعی */}
         <Route 
           path="/ai-processor" 
-          element={<PrivateRoute><SmartAIProcessor /></PrivateRoute>} 
+          element={<PrivateRoute><NewsSmartAnalysisWorkspace /></PrivateRoute>} 
         />
 
         <Route path="/report" element={<PrivateRoute><UnitReportForm /></PrivateRoute>} />
         <Route path="/field-monitor" element={<PrivateRoute><FieldMonitor /></PrivateRoute>} />
         <Route path="/field-reports-dashboard" element={<PrivateRoute><FieldReportDashboard /></PrivateRoute>} />
-        <Route path="/field-management-summary" element={<PrivateRoute><FieldManagementSummary /></PrivateRoute>} />
-        <Route path="/field-management-summary/new" element={<PrivateRoute><FieldManagementSummaryCreate /></PrivateRoute>} />
+        <Route path="/field-management-summary" element={<PrivateRoute><FieldManagementSummaryCreate /></PrivateRoute>} />
+        <Route path="/field-management-summary/list" element={<PrivateRoute><FieldManagementSummary /></PrivateRoute>} />
+        <Route path="/field-management-summary/new" element={<Navigate to="/field-management-summary" replace />} />
         <Route path="/admin/prompts" element={<PrivateRoute><PromptManagement /></PrivateRoute>} />
         <Route path="/admin/ai-api-configs" element={<PrivateRoute><AiApiManagement /></PrivateRoute>} />
         <Route path="/admin/ai-form-actions" element={<PrivateRoute><AiFormActionsManagement /></PrivateRoute>} />
+        <Route path="/admin/ai-run-logs" element={<PrivateRoute><AiRunLogsManagement /></PrivateRoute>} />
         <Route path="/admin/news-clean-patterns" element={<PrivateRoute><NewsCleanPatternManagement /></PrivateRoute>} />
+        <Route path="/admin/messenger-channels" element={<PrivateRoute><MessengerChannelManagement /></PrivateRoute>} />
+        <Route path="/news-reports" element={<PrivateRoute><NewsReportGenerator /></PrivateRoute>} />
+        <Route path="/admin/news-report-settings" element={<PrivateRoute><NewsReportSettingsAdmin /></PrivateRoute>} />
         <Route path="/SystemSetting" element={<PrivateRoute><SystemSetting /></PrivateRoute>} />
         <Route path="/analysis/management" element={<PrivateRoute><AnalysisManagerPanel /></PrivateRoute>} />
         <Route path="/analysis/management/approve/:id" element={<PrivateRoute><AnalysisTopicApprovalDetail /></PrivateRoute>} />

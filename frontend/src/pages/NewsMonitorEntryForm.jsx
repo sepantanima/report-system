@@ -3,26 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { Save, Send, ArrowRight, ClipboardPaste, FileText, PlusCircle, Trash2 } from "lucide-react";
-import HelpModal from "../components/common/HelpModal.jsx";
+import { Save, Send, ClipboardPaste, FileText, PlusCircle, Trash2 } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
 import RichTextEditor, { stripHtml } from "../components/analysis/RichTextEditor.jsx";
 import MultiSelect from "../components/MultiSelect.jsx";
 import NewsChoiceButtons from "../components/news/NewsChoiceButtons.jsx";
 import SearchableSourceSelect from "../components/news/SearchableSourceSelect.jsx";
 import NewsSourceUrlField from "../components/news/NewsSourceUrlField.jsx";
-import PageToolbarButtons from "../components/common/PageToolbarButtons.jsx";
 import newsMonitorService from "../services/newsMonitorService.js";
 import { decodeToken, getSessionRoles, hasPermission } from "../utils/userRoles.js";
 import { useAppTheme } from "../context/ThemeContext.jsx";
-import { usePageFontSize } from "../utils/pageFontSize.js";
 import { plainTextLength } from "../constants/analysisFieldLimits.js";
 import { NEWS_PRIORITIES } from "../constants/newsMonitorMeta.js";
-import { NEWS_FIELD_LIMITS } from "../constants/newsFieldLimits.js";
+import { NEWS_FIELD_LIMITS, validateNewsEntryPayload } from "../constants/newsFieldLimits.js";
 import { NEWS_ENTRY_HELP } from "../content/newsFormHelp.jsx";
 import { clampText } from "../utils/limitInput.js";
 import { toPersianDigits, toEnDigit } from "../utils/analysisMonitorUtils.js";
-import { ANALYSIS_MONITOR_CSS } from "../theme/analysisMonitorStyles.js";
 import { NEWS_EDITOR_BODY_HEIGHT, NEWS_EDITOR_BOX_HEIGHT } from "../constants/newsEditorLayout.js";
 
 const emptyForm = (sender = "") => ({
@@ -58,8 +55,6 @@ export default function NewsMonitorEntryForm() {
   const roles = getSessionRoles();
   const allowed = hasPermission(roles, "news_entry");
   const { isDarkMode } = useAppTheme();
-  const { level: fontLevel, cycleFont, fontSizePx } = usePageFontSize();
-  const [showHelp, setShowHelp] = useState(false);
   const [drafts, setDrafts] = useState([]);
   const [draftsOpen, setDraftsOpen] = useState(true);
   const [editingDraftId, setEditingDraftId] = useState(null);
@@ -117,15 +112,22 @@ export default function NewsMonitorEntryForm() {
   }, []);
 
   useEffect(() => {
-    document.title = "ورود خبر (پایشگر)";
-  }, []);
-
-  useEffect(() => {
     if (allowed) {
       loadMeta();
       loadDrafts();
     }
   }, [allowed, loadMeta, loadDrafts]);
+
+  const entryFieldError = useMemo(
+    () => validateNewsEntryPayload({
+      raw_text: form.raw_text,
+      source: form.source,
+      source_url: form.source_url,
+    }),
+    [form.raw_text, form.source, form.source_url],
+  );
+
+  const rawTextLen = plainTextLength(form.raw_text);
 
   const buildPayload = (submit = false) => {
     const dateObj = form.source_date;
@@ -147,16 +149,13 @@ export default function NewsMonitorEntryForm() {
   };
 
   const validate = () => {
-    if (!stripHtml(form.raw_text).trim()) {
-      showToast("متن خبر الزامی است");
-      return false;
-    }
-    if (!form.source.trim()) {
-      showToast("منبع الزامی است");
-      return false;
-    }
-    if (plainTextLength(form.raw_text) > NEWS_FIELD_LIMITS.rawText) {
-      showToast(`متن حداکثر ${toPersianDigits(NEWS_FIELD_LIMITS.rawText)} کاراکتر`);
+    const err = validateNewsEntryPayload({
+      raw_text: form.raw_text,
+      source: form.source,
+      source_url: form.source_url,
+    });
+    if (err) {
+      showToast(err);
       return false;
     }
     return true;
@@ -238,7 +237,7 @@ export default function NewsMonitorEntryForm() {
       const current = stripHtml(form.raw_text);
       const merged = current ? `${current}\n${text}` : text;
       const clipped = merged.slice(0, NEWS_FIELD_LIMITS.rawText);
-      set("raw_text", clipped === current ? form.raw_text : `<p>${clipped.replace(/\n/g, "<br>")}</p>`);
+      set("raw_text", `<p>${clipped.replace(/\n/g, "<br>")}</p>`);
     } catch {
       showToast("دسترسی به کلیپ‌بورد ممکن نیست");
     }
@@ -281,40 +280,22 @@ export default function NewsMonitorEntryForm() {
   });
 
   return (
-    <div
-      dir="rtl"
-      className="page-font-root"
-      style={{
-        minHeight: "100vh",
-        background: theme.bg,
-        color: theme.text,
-        fontFamily: "Tahoma, sans-serif",
-        fontSize: fontSizePx,
-        ["--page-font-size"]: fontSizePx,
-      }}
+    <FormPageLayout
+      title="ورود خبر (پایشگر)"
+      documentTitle="ورود خبر (پایشگر)"
+      backTo="/main"
+      onHelp={() => <NEWS_ENTRY_HELP />}
+      helpTitle="راهنمای ثبت خبر"
+      contentPadding="16px 16px 80px"
+      maxWidth="720px"
     >
-      <style>{ANALYSIS_MONITOR_CSS}</style>
-
-      <header style={{ background: theme.card, borderBottom: `1px solid ${theme.border}`, padding: "12px 16px", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" onClick={() => navigate("/main")} className="v3-icon-btn" title="بازگشت">
-            <ArrowRight size={18} />
-          </button>
-          <h1 style={{ fontSize: "1.1em", margin: 0, flex: 1, minWidth: 120 }}>ورود خبر (پایشگر)</h1>
-          <div className="v3-nav-tools">
-            <PageToolbarButtons fontLevel={fontLevel} onCycleFont={cycleFont} onHelp={() => setShowHelp(true)} btnClass="v3-icon-btn" />
-          </div>
+      {toast ? (
+        <div style={{ marginBottom: 12, padding: "0.5em 0.75em", borderRadius: 8, background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.35)", fontSize: "0.9em" }}>
+          {toast}
         </div>
-      </header>
+      ) : null}
 
-      <div style={{ padding: "16px 16px 80px" }}>
-        {toast ? (
-          <div style={{ marginBottom: 12, padding: "0.5em 0.75em", borderRadius: 8, background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.35)", fontSize: "0.9em" }}>
-            {toast}
-          </div>
-        ) : null}
-
-        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+      <div>
           {drafts.length > 0 ? (
             <div style={{ marginBottom: 14, background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: "hidden" }}>
               <button
@@ -422,6 +403,10 @@ export default function NewsMonitorEntryForm() {
                   <label style={{ fontSize: "0.85em", opacity: 0.8, display: "block" }}>متن کامل خبر *</label>
                   <div style={{ fontSize: "0.8em", opacity: 0.75, marginTop: 4 }}>
                     فرستنده (از سیستم): <b style={{ color: theme.accent }}>{defaultSender || "—"}</b>
+                    {" · "}
+                    <span style={{ color: rawTextLen > NEWS_FIELD_LIMITS.rawText ? "#ef4444" : undefined }}>
+                      {toPersianDigits(rawTextLen)} / {toPersianDigits(NEWS_FIELD_LIMITS.rawText)} کاراکتر
+                    </span>
                   </div>
                 </div>
                 <button type="button" onClick={pasteFromClipboard} style={{ ...btnStyle(false), minHeight: "2.2em", padding: "0.4em 0.75em", fontSize: "0.85em", color: theme.accent }}>
@@ -445,7 +430,12 @@ export default function NewsMonitorEntryForm() {
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: "0.85em", opacity: 0.8, display: "block", marginBottom: 6 }}>منبع *</label>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <label style={{ fontSize: "0.85em", opacity: 0.8 }}>منبع *</label>
+                <span style={{ fontSize: "0.75em", color: form.source.length > NEWS_FIELD_LIMITS.source ? "#ef4444" : "#64748b" }}>
+                  {toPersianDigits(form.source.length)} / {toPersianDigits(NEWS_FIELD_LIMITS.source)}
+                </span>
+              </div>
               <SearchableSourceSelect
                 value={form.source}
                 onChange={(v) => set("source", v)}
@@ -507,20 +497,25 @@ export default function NewsMonitorEntryForm() {
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" disabled={saving} onClick={() => handleSave(false)} style={btnStyle(false)}>
+              <button
+                type="button"
+                disabled={saving || !!entryFieldError}
+                onClick={() => handleSave(false)}
+                style={{ ...btnStyle(false), opacity: saving || entryFieldError ? 0.55 : 1, cursor: entryFieldError ? "not-allowed" : "pointer" }}
+              >
                 <Save size={16} /> {editingDraftId ? "ذخیره پیش‌نویس" : "ذخیره پیش‌نویس"}
               </button>
-              <button type="button" disabled={saving} onClick={() => handleSave(true)} style={btnStyle(true)}>
+              <button
+                type="button"
+                disabled={saving || !!entryFieldError}
+                onClick={() => handleSave(true)}
+                style={{ ...btnStyle(true), opacity: saving || entryFieldError ? 0.55 : 1, cursor: entryFieldError ? "not-allowed" : "pointer" }}
+              >
                 <Send size={16} /> {saving ? "در حال ارسال..." : "ارسال برای بررسی"}
               </button>
             </div>
           </div>
         </div>
-      </div>
-
-      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} title="راهنمای ثبت خبر" maxWidth={560}>
-        <NEWS_ENTRY_HELP />
-      </HelpModal>
-    </div>
+    </FormPageLayout>
   );
 }

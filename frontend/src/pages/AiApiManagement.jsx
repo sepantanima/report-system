@@ -1,13 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, HelpCircle, Plus, Trash2, Save, FlaskConical } from "lucide-react";
+import { HelpCircle, Plus, Trash2, Save, FlaskConical, Wallet } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import api from "../api/api";
 import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 import { AI_API_FIELD_LIMITS } from "../constants/promptFieldLimits.js";
 import { AI_USAGE_KEYS } from "../constants/aiUsageKeys.js";
 import { clampText } from "../utils/limitInput.js";
 import { AI_API_FORM_HELP } from "../content/aiApiFormHelp.jsx";
-import HelpModal from "../components/common/HelpModal.jsx";
+import {
+  EMPTY_CREDIT_FORM,
+  creditFieldsFromExtra,
+  creditFieldsFromTemplate,
+  extraWithoutCreditCheck,
+  mergeCreditIntoExtra,
+  rowHasCreditCheck,
+  buildTemplateCreditMap,
+} from "../utils/aiCreditCheckConfig.js";
 
 function CharCounter({ value, max }) {
   const n = value != null ? String(value).length : 0;
@@ -38,6 +47,7 @@ function buildEmptyForm(templates) {
     credential_env_name: t?.default_credential_env_name || "GEMINI_API_KEY",
     credential_secret_cipher: "",
     is_enabled: true,
+    ...EMPTY_CREDIT_FORM,
   };
 }
 
@@ -85,11 +95,12 @@ export default function AiApiManagement() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [showHelp, setShowHelp] = useState(false);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(() => buildEmptyForm([]));
   const [saving, setSaving] = useState(false);
   const [testMsg, setTestMsg] = useState("");
+  const [creditBusyId, setCreditBusyId] = useState(null);
+  const [creditById, setCreditById] = useState({});
   const [providerTemplates, setProviderTemplates] = useState([]);
 
   const L = AI_API_FIELD_LIMITS;
@@ -140,9 +151,11 @@ export default function AiApiManagement() {
   };
 
   const openEdit = (row) => {
+    const extra = row.extra_config && typeof row.extra_config === "object" ? row.extra_config : {};
+    const creditFields = creditFieldsFromExtra(extra);
     let extraJson = "{}";
     try {
-      extraJson = JSON.stringify(row.extra_config && typeof row.extra_config === "object" ? row.extra_config : {}, null, 2);
+      extraJson = JSON.stringify(extraWithoutCreditCheck(extra), null, 2);
     } catch {
       extraJson = "{}";
     }
@@ -157,6 +170,7 @@ export default function AiApiManagement() {
       credential_env_name: row.credential_env_name || "",
       credential_secret_cipher: "",
       is_enabled: row.is_enabled,
+      ...creditFields,
     });
     setModal({ mode: "edit", id: row.id });
     setTestMsg("");
@@ -174,7 +188,13 @@ export default function AiApiManagement() {
           next.credential_env_name = String(t.default_credential_env_name).trim();
         }
         const ex = t.default_extra_config && typeof t.default_extra_config === "object" ? t.default_extra_config : {};
-        next.extra_config_json = JSON.stringify(ex, null, 2);
+        next.extra_config_json = JSON.stringify(extraWithoutCreditCheck(ex), null, 2);
+        const tplCredit = creditFieldsFromTemplate(t);
+        if (tplCredit.credit_enabled) {
+          Object.assign(next, tplCredit);
+        } else {
+          Object.assign(next, EMPTY_CREDIT_FORM);
+        }
       }
       return next;
     });
@@ -206,6 +226,7 @@ export default function AiApiManagement() {
     try {
       extra_config = JSON.parse(form.extra_config_json || "{}");
       if (typeof extra_config !== "object" || extra_config === null) extra_config = {};
+      extra_config = mergeCreditIntoExtra(extra_config, form);
     } catch {
       setErr("فرمت JSON تنظیمات اضافی نامعتبر است");
       setSaving(false);
@@ -214,6 +235,11 @@ export default function AiApiManagement() {
     try {
       const payload = { ...form, extra_config };
       delete payload.extra_config_json;
+      delete payload.credit_enabled;
+      delete payload.credit_url;
+      delete payload.credit_balance_path;
+      delete payload.credit_balance_path_secondary;
+      delete payload.credit_currency_label;
       if (payload.credential_mode === "env_ref") {
         payload.credential_secret_cipher = null;
       } else if (modal?.mode === "edit" && (!payload.credential_secret_cipher || !String(payload.credential_secret_cipher).trim())) {
@@ -253,6 +279,36 @@ export default function AiApiManagement() {
     }
   };
 
+  const checkCredit = async (id) => {
+    setCreditBusyId(id);
+    setErr("");
+    try {
+      const res = await api.get(`/admin/ai-api-configs/${id}/credit`);
+      setCreditById((prev) => ({
+        ...prev,
+        [id]: {
+          balance: res.data?.balance_display ?? String(res.data?.balance ?? "—"),
+          currency: "",
+          checked_at: res.data?.checked_at,
+          error: null,
+        },
+      }));
+    } catch (e) {
+      const msg = e.response?.data?.error || e.message;
+      setCreditById((prev) => ({
+        ...prev,
+        [id]: { balance: null, currency: "", error: msg },
+      }));
+    } finally {
+      setCreditBusyId(null);
+    }
+  };
+
+  const templateCreditMap = useMemo(
+    () => buildTemplateCreditMap(providerTemplates),
+    [providerTemplates],
+  );
+
   if (!allowed) {
     return (
       <div style={{ padding: 24, textAlign: "center" }}>
@@ -264,66 +320,55 @@ export default function AiApiManagement() {
     );
   }
 
-  const card = {
-    maxWidth: 1100,
-    margin: "0 auto",
-    padding: 20,
-    fontFamily: "inherit",
-  };
-
   return (
-    <div style={{ ...card, background: "#0f172a", minHeight: "100vh", color: "#e2e8f0" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <button type="button" onClick={() => navigate("/main")} style={btnGhost}>
-          <ArrowRight size={18} />
-          منو
-        </button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>مدیریت API هوش مصنوعی</h1>
-        <button type="button" onClick={() => setShowHelp(true)} style={{ ...btnGhost, padding: "8px 12px" }}>
-          <HelpCircle size={18} />
-          راهنما
-        </button>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", marginBottom: 12 }}>
-        <div>
-          <label style={{ display: "block", fontSize: 12, opacity: 0.85, marginBottom: 4 }}>فیلتر کاربرد (usage_key)</label>
+    <FormPageLayout
+      title="مدیریت API هوش مصنوعی"
+      documentTitle="مدیریت API هوش مصنوعی"
+      onHelp={() => <AI_API_FORM_HELP />}
+      helpTitle="راهنمای مدیریت API هوش مصنوعی"
+      contentPadding="20px"
+    >
+      <div className="form-page-filter-row">
+        <div className="form-page-filter-field">
+          <label style={{ display: "block", fontSize: "0.86em", opacity: 0.85, marginBottom: 4 }}>فیلتر کاربرد (usage_key)</label>
           <input
-            style={{ ...inp, marginBottom: 0, minWidth: 220 }}
+            style={{ ...inp, marginBottom: 0, width: "100%" }}
             value={filterUsageKey}
             onChange={(e) => setFilterUsageKey(e.target.value)}
             placeholder="مثلاً field.management_summary"
             dir="ltr"
           />
         </div>
-        <div>
-          <label style={{ display: "block", fontSize: 12, opacity: 0.85, marginBottom: 4 }}>فیلتر نوع ارائه‌دهنده</label>
+        <div className="form-page-filter-field">
+          <label style={{ display: "block", fontSize: "0.86em", opacity: 0.85, marginBottom: 4 }}>فیلتر نوع ارائه‌دهنده</label>
           <input
-            style={{ ...inp, marginBottom: 0, minWidth: 160 }}
+            style={{ ...inp, marginBottom: 0, width: "100%" }}
             value={filterProviderType}
             onChange={(e) => setFilterProviderType(e.target.value)}
             placeholder="مثلاً google_gemini یا avalai"
             dir="ltr"
           />
         </div>
-        <button type="button" onClick={() => void fetchConfigs()} style={{ padding: "8px 14px", borderRadius: 8, cursor: "pointer" }}>
-          اعمال فیلتر
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setFilterUsageKey("");
-            setFilterProviderType("");
-            void fetchConfigs({ usage_key: "", provider_type: "" });
-          }}
-          style={{ padding: "8px 14px", borderRadius: 8, cursor: "pointer" }}
-        >
-          پاک کردن فیلتر
-        </button>
+        <div className="form-page-filter-actions">
+          <button type="button" onClick={() => void fetchConfigs()} className="form-page-btn form-page-btn-secondary">
+            اعمال فیلتر
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterUsageKey("");
+              setFilterProviderType("");
+              void fetchConfigs({ usage_key: "", provider_type: "" });
+            }}
+            className="form-page-btn form-page-btn-secondary"
+          >
+            پاک کردن فیلتر
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 12 }}>
-        <button type="button" onClick={openCreate} style={{ ...btnPrimary, background: "#0ea5e9" }}>
+      <div className="form-page-actions-row">
+        <button type="button" onClick={openCreate} className="form-page-btn form-page-btn-primary">
           <Plus size={18} />
           ردیف جدید
         </button>
@@ -331,7 +376,7 @@ export default function AiApiManagement() {
           type="button"
           onClick={() => void fetchConfigs()}
           title="دوباره خواندن لیست ردیف‌ها از سرور (بدون تغییر فیلترها)"
-          style={{ padding: "8px 14px", borderRadius: 8, cursor: "pointer" }}
+          className="form-page-btn form-page-btn-secondary"
         >
           بروزرسانی لیست از سرور
         </button>
@@ -341,38 +386,39 @@ export default function AiApiManagement() {
       {testMsg ? <div style={{ marginBottom: 12, color: "#94a3b8" }}>نتیجه تست: {testMsg}</div> : null}
       {loading ? <div>در حال بارگذاری…</div> : null}
 
-      <div style={{ overflowX: "auto", border: "1px solid #334155", borderRadius: 8 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div className="form-page-table-wrap">
+        <table className="form-page-table">
           <thead>
             <tr style={{ background: "#1e293b" }}>
-              <th style={{ padding: 10, textAlign: "right" }}>id</th>
-              <th style={{ padding: 10, textAlign: "right" }}>کاربرد</th>
-              <th style={{ padding: 10, textAlign: "right" }}>ترتیب</th>
-              <th style={{ padding: 10, textAlign: "right" }}>عنوان</th>
-              <th style={{ padding: 10, textAlign: "right" }}>نوع</th>
-              <th style={{ padding: 10, textAlign: "right" }}>مدل</th>
-              <th style={{ padding: 10, textAlign: "right" }}>فعال</th>
-              <th style={{ padding: 10, textAlign: "right" }}>اعتبارنامه</th>
-              <th style={{ padding: 10 }}>—</th>
+              <th className="col-narrow">id</th>
+              <th className="col-wide">کاربرد</th>
+              <th className="col-short">ترتیب</th>
+              <th className="col-title">عنوان</th>
+              <th className="col-text">نوع</th>
+              <th className="col-text">مدل</th>
+              <th className="col-short">فعال</th>
+              <th className="col-text">اعتبارنامه</th>
+              <th className="col-short">مانده</th>
+              <th className="col-actions">—</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid #334155" }}>
-                <td style={{ padding: 10 }}>{r.id}</td>
-                <td style={{ padding: 10, fontFamily: "monospace", fontSize: 12 }} dir="ltr">
+                <td className="col-narrow">{r.id}</td>
+                <td className="col-wide col-mono" dir="ltr">
                   {r.usage_key}
                 </td>
-                <td style={{ padding: 10 }}>{r.sort_order}</td>
-                <td style={{ padding: 10 }}>{r.title_fa}</td>
-                <td style={{ padding: 10, fontFamily: "monospace", fontSize: 12 }} dir="ltr">
+                <td className="col-short">{r.sort_order}</td>
+                <td className="col-title">{r.title_fa}</td>
+                <td className="col-text col-mono" dir="ltr">
                   {r.provider_type}
                 </td>
-                <td style={{ padding: 10 }}>{r.model_id}</td>
-                <td style={{ padding: 10 }}>{r.is_enabled ? "بله" : "خیر"}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>
+                <td className="col-text">{r.model_id}</td>
+                <td className="col-short">{r.is_enabled ? "بله" : "خیر"}</td>
+                <td className="col-text">
                   {r.credential_mode === "env_ref" ? (
-                    <span style={{ fontFamily: "monospace" }} dir="ltr">
+                    <span className="col-mono" dir="ltr">
                       env: {r.credential_env_name || "—"}
                     </span>
                   ) : (
@@ -384,13 +430,36 @@ export default function AiApiManagement() {
                     </span>
                   )}
                 </td>
-                <td style={{ padding: 10, whiteSpace: "nowrap" }}>
+                <td className="col-short" style={{ fontSize: 12 }}>
+                  {creditById[r.id]?.error ? (
+                    <span style={{ color: "#f87171" }} title={creditById[r.id].error}>خطا</span>
+                  ) : creditById[r.id]?.balance != null ? (
+                    <span title={creditById[r.id].checked_at || ""}>
+                      {creditById[r.id].balance}
+                      {creditById[r.id].currency ? ` ${creditById[r.id].currency}` : ""}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="col-actions">
                   <button type="button" onClick={() => openEdit(r)} style={{ cursor: "pointer", marginLeft: 6 }}>
                     ویرایش
                   </button>
                   <button type="button" onClick={() => testRow(r.id)} style={{ cursor: "pointer", marginLeft: 6 }} title="یک درخواست آزمایشی کوتاه به این ردیف">
                     <FlaskConical size={14} style={{ verticalAlign: "middle" }} />
                   </button>
+                  {rowHasCreditCheck(r, templateCreditMap) ? (
+                    <button
+                      type="button"
+                      onClick={() => checkCredit(r.id)}
+                      disabled={creditBusyId === r.id}
+                      style={{ cursor: creditBusyId === r.id ? "wait" : "pointer", marginLeft: 6, opacity: creditBusyId === r.id ? 0.5 : 1 }}
+                      title="مانده اعتبار حساب"
+                    >
+                      <Wallet size={14} style={{ verticalAlign: "middle" }} />
+                    </button>
+                  ) : null}
                   <button type="button" onClick={() => remove(r.id)} style={{ cursor: "pointer", marginLeft: 6, color: "#f87171" }}>
                     <Trash2 size={14} />
                   </button>
@@ -474,6 +543,65 @@ export default function AiApiManagement() {
               onChange={(e) => setForm((f) => ({ ...f, extra_config_json: e.target.value }))}
               dir="ltr"
             />
+
+            <div style={{
+              marginBottom: 16,
+              padding: 14,
+              borderRadius: 8,
+              border: "1px solid #334155",
+              background: "rgba(15,23,42,0.6)",
+            }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={!!form.credit_enabled}
+                  onChange={(e) => setForm((f) => ({ ...f, credit_enabled: e.target.checked }))}
+                />
+                مانده اعتبار حساب (دکمه کیف پول در جدول)
+              </label>
+              <p style={{ fontSize: 12, opacity: 0.8, margin: "0 0 12px", lineHeight: 1.7 }}>
+                اگر سرویس هوش API مانده دارد، آدرس را از مستندات همان سرویس وارد کنید. با همان کلید API این ردیف خوانده می‌شود.
+                برای AvalAI: {`https://api.avalai.ir/user/v1/credit`} — فیلد مانده: remaining_unit
+              </p>
+              {form.credit_enabled ? (
+                <>
+                  <label style={{ display: "block", marginBottom: 6, fontSize: 12 }}>آدرس API مانده (URL کامل)</label>
+                  <input
+                    style={inp}
+                    value={form.credit_url}
+                    onChange={(e) => setForm((f) => ({ ...f, credit_url: e.target.value }))}
+                    placeholder="https://api.example.com/user/v1/credit"
+                    dir="ltr"
+                  />
+                  <label style={{ display: "block", marginBottom: 6, fontSize: 12 }}>نام فیلد مانده در پاسخ JSON (balance_json_path)</label>
+                  <input
+                    style={inp}
+                    value={form.credit_balance_path}
+                    onChange={(e) => setForm((f) => ({ ...f, credit_balance_path: e.target.value }))}
+                    placeholder="remaining_unit"
+                    dir="ltr"
+                  />
+                  <label style={{ display: "block", marginBottom: 6, fontSize: 12 }}>فیلد ثانویه اختیاری (مثلاً remaining_irt)</label>
+                  <input
+                    style={inp}
+                    value={form.credit_balance_path_secondary}
+                    onChange={(e) => setForm((f) => ({ ...f, credit_balance_path_secondary: e.target.value }))}
+                    placeholder="remaining_irt"
+                    dir="ltr"
+                  />
+                  <label style={{ display: "block", marginBottom: 6, fontSize: 12 }}>برچسب واحد (currency_label)</label>
+                  <input
+                    style={inp}
+                    value={form.credit_currency_label}
+                    onChange={(e) => setForm((f) => ({ ...f, credit_currency_label: e.target.value }))}
+                    placeholder="UNIT"
+                    dir="ltr"
+                  />
+                </>
+              ) : null}
+            </div>
+
             <label style={{ display: "block", marginBottom: 8 }}>نوع اعتبارنامه</label>
             <select style={inp} value={form.credential_mode} onChange={(e) => setForm((f) => ({ ...f, credential_mode: e.target.value }))}>
               <option value="env_ref">متغیر محیطی روی سرور (env_ref)</option>
@@ -520,10 +648,6 @@ export default function AiApiManagement() {
           </div>
         </div>
       ) : null}
-
-      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} title="راهنمای مدیریت API هوش مصنوعی" maxWidth={640}>
-        <AI_API_FORM_HELP />
-      </HelpModal>
-    </div>
+    </FormPageLayout>
   );
 }

@@ -28,6 +28,8 @@ import { listActiveActionsForForm } from "../services/aiFormActionService.js";
 import { executeFormAiAction } from "../services/aiFormRunOrchestrator.js";
 import { validateFormActionName, validateFormDataObject } from "../constants/aiFormActions.js";
 import newsAnalyticsRoutes from "./newsAnalytics.js";
+import newsReportRoutes from "./newsReportRoutes.js";
+import newsSmartAnalysisRoutes from "./newsSmartAnalysisRoutes.js";
 
 const router = express.Router();
 
@@ -37,6 +39,8 @@ const newsChief = requireRole("admin", "news_chief");
 const newsEntry = requireRole("admin", "news_monitor");
 
 router.use("/analytics", newsAnalyticsRoutes);
+router.use("/reports", newsReportRoutes);
+router.use(newsSmartAnalysisRoutes);
 
 // --- مسیرهای legacy (بدون auth — SmartAIProcessor / n8n) ---
 

@@ -5,6 +5,7 @@ import {
   buildDigest,
   faJalali,
 } from "./managementSummaryService.js";
+import { resolveNewsSmartAnalysisAssembly } from "./newsSmartAnalysisAiAssembly.js";
 
 /**
  * متغیرهای سروری ثبت‌شده برای هر اکشن (فقط اکشن‌های رجیستری).
@@ -12,6 +13,14 @@ import {
  */
 
 /** @typedef {{ name: string, label_fa: string, kind: 'server' }} PromptVarMeta */
+
+const SMART_ANALYSIS_SERVER_VARS = [
+  { name: "PERIOD_START", label_fa: "تاریخ شروع بازه (جلالی)", kind: "server" },
+  { name: "PERIOD_END", label_fa: "تاریخ پایان بازه (جلالی)", kind: "server" },
+  { name: "NEWS_COUNT", label_fa: "تعداد اخبار", kind: "server" },
+  { name: "FILTER_SUMMARY", label_fa: "خلاصه فیلترهای فعال", kind: "server" },
+  { name: "NEWS_DIGEST", label_fa: "فشرده اخبار بازه (از پایگاه)", kind: "server" },
+];
 
 /** @type {Record<string, { serverVarsMeta: PromptVarMeta[], resolveServer?: (formData: object) => Promise<Record<string, string>> }>} */
 const CATALOG = {
@@ -36,6 +45,10 @@ const CATALOG = {
   "news_monitor_manage|summarize_text": {
     serverVarsMeta: [],
   },
+  "news_smart_analysis|analyze_overview": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
+  "news_smart_analysis|analyze_thematic": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
+  "news_smart_analysis|analyze_trends": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
+  "news_smart_analysis|analyze_risk": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
 };
 
 export function catalogKey(formName, actionName) {
@@ -71,6 +84,10 @@ export async function resolveCatalogServerVars(formName, actionName, formData) {
   const key = catalogKey(formName, actionName);
   if (key === "field_management_summary_create|generate_summary") {
     const { vars } = await resolveManagementSummaryAssembly(formData);
+    return vars;
+  }
+  if (String(formName || "").trim() === "news_smart_analysis") {
+    const { vars } = await resolveNewsSmartAnalysisAssembly(formData);
     return vars;
   }
   return {};

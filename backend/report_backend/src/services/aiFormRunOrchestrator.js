@@ -4,10 +4,12 @@ import { getFormActionByFormAndAction } from "./aiFormActionService.js";
 import { buildFinalPromptText } from "./aiInputAssembly.js";
 import { invokeLlm } from "./llmInvoke.js";
 import { insertAiRunLog } from "./aiRunLogService.js";
+import { buildLlmChainErrorMessage } from "../utils/aiErrorDiagnostics.js";
 
 function defaultUsageKeyForForm(formName) {
   if (formName === "field_management_summary_create") return AI_USAGE_KEYS.FIELD_MANAGEMENT_SUMMARY;
   if (formName === "news_monitor_manage") return AI_USAGE_KEYS.NEWS_SUMMARIZE;
+  if (formName === "news_smart_analysis") return AI_USAGE_KEYS.NEWS_SMART_ANALYSIS;
   return null;
 }
 
@@ -130,6 +132,9 @@ export async function executeFormAiAction({ formName, actionName, formData, user
       ai_config_id_used: configId,
     };
   } catch (e) {
+    const logMessage = e.attempts?.length
+      ? buildLlmChainErrorMessage(e.diagnostic || { message_fa: e.message }, e.attempts)
+      : e.message;
     try {
       await insertAiRunLog({
         user_id: userId,
@@ -141,7 +146,7 @@ export async function executeFormAiAction({ formName, actionName, formData, user
         request_text: promptTextForModel,
         response_text: null,
         status: "llm_error",
-        error_message: e.message,
+        error_message: logMessage,
       });
     } catch {
       /* ignore */

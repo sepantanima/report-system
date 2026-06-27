@@ -8,7 +8,7 @@ function buildDarkUnitStyles() {
     borderRadius: "8px",
     padding: "10px",
     color: "#fff",
-    fontSize: "13px",
+    fontSize: "1em",
     outline: "none",
     boxSizing: "border-box",
   };
@@ -206,7 +206,7 @@ function buildDarkUnitStyles() {
       border: "none",
       color: "#fff",
       padding: "8px",
-      fontSize: "13px",
+      fontSize: "1em",
       outline: "none",
       width: "100%",
       fontFamily: "inherit",
@@ -245,7 +245,7 @@ function buildDarkUnitStyles() {
       padding: "12px",
       border: "1px solid #334155",
       color: "#94a3b8",
-      fontSize: "13px",
+      fontSize: "1em",
       textAlign: "center",
     },
     catRow: {
@@ -365,7 +365,7 @@ function buildLightUnitStyles(d) {
     borderRadius: "8px",
     padding: "10px",
     color: L.inputText,
-    fontSize: "13px",
+    fontSize: "1em",
     outline: "none",
     boxSizing: "border-box",
   };
@@ -462,7 +462,7 @@ function buildLightUnitStyles(d) {
       border: "none",
       color: L.inputText,
       padding: "8px",
-      fontSize: "13px",
+      fontSize: "1em",
       outline: "none",
       width: "100%",
       fontFamily: "inherit",
@@ -478,7 +478,7 @@ function buildLightUnitStyles(d) {
       padding: "12px",
       border: `1px solid ${L.border}`,
       color: "#64748b",
-      fontSize: "13px",
+      fontSize: "1em",
       textAlign: "center",
     },
     catRow: {

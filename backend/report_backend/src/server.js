@@ -11,7 +11,13 @@ import adminPromptsRoutes from "./routes/adminPrompts.js";
 import adminAiApiConfigsRoutes from "./routes/adminAiApiConfigs.js";
 import adminAiProviderTemplatesRoutes from "./routes/adminAiProviderTemplates.js";
 import adminAiFormActionsRoutes from "./routes/adminAiFormActions.js";
+import adminAiRunLogsRoutes from "./routes/adminAiRunLogs.js";
 import adminNewsCleanPatternsRoutes from "./routes/adminNewsCleanPatterns.js";
+import adminMessengerChannelConfigsRoutes from "./routes/adminMessengerChannelConfigs.js";
+import adminMessengerProviderTemplatesRoutes from "./routes/adminMessengerProviderTemplates.js";
+import adminNewsReportSettingsRoutes from "./routes/adminNewsReportSettings.js";
+import messengerRoutes from "./routes/messengerRoutes.js";
+import { getPdfEngineInfo } from "./services/newsReportPdf.js";
 
 const app = express();
 
@@ -48,6 +54,9 @@ app.use((req, res, next) => {
     if (req.url.includes("ai-api-configs") && safeBody.credential_secret_cipher) {
       safeBody.credential_secret_cipher = "******";
     }
+    if (req.url.includes("messenger-channel-configs") && safeBody.credential_secret_cipher) {
+      safeBody.credential_secret_cipher = "******";
+    }
     console.log(`   📦 Body:`, JSON.stringify(safeBody, null, 2));
   }
 
@@ -69,7 +78,12 @@ app.use("/api/admin/prompts", adminPromptsRoutes);
 app.use("/api/admin/ai-api-configs", adminAiApiConfigsRoutes);
 app.use("/api/admin/ai-provider-templates", adminAiProviderTemplatesRoutes);
 app.use("/api/admin/ai/form-actions", adminAiFormActionsRoutes);
+app.use("/api/admin/ai-run-logs", adminAiRunLogsRoutes);
 app.use("/api/admin/news-clean-patterns", adminNewsCleanPatternsRoutes);
+app.use("/api/admin/messenger-channel-configs", adminMessengerChannelConfigsRoutes);
+app.use("/api/admin/messenger-provider-templates", adminMessengerProviderTemplatesRoutes);
+app.use("/api/admin/news-report", adminNewsReportSettingsRoutes);
+app.use("/api/messenger", messengerRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Report API running" });
@@ -79,6 +93,10 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(">>> Environment loaded successfully <<<");
+  const pdf = getPdfEngineInfo();
+  console.log(
+    `[pdf] engine=${pdf.pdf_engine_env} gotenberg=${pdf.gotenberg_configured ? pdf.gotenberg_url : "NOT SET"} chrome=${pdf.chrome_available ? "ok" : "missing"}`,
+  );
 });
 server.timeout = 180000;
 server.keepAliveTimeout = 180000;

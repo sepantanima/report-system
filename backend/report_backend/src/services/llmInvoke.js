@@ -1,6 +1,11 @@
 import axios from "axios";
 import pool from "../db.js";
 import { resolveEngineAndMergedExtra } from "./aiProviderTemplateService.js";
+import {
+  classifyLlmFailure,
+  buildLlmChainErrorMessage,
+  createLlmChainError,
+} from "../utils/aiErrorDiagnostics.js";
 
 async function callGoogleGemini(apiKey, modelId, promptText, extra = {}) {
   const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -61,7 +66,7 @@ async function callOpenAiChat(apiKey, modelId, promptText, extra = {}) {
   return text;
 }
 
-function resolveApiKey(row) {
+export function resolveApiKey(row) {
   if (row.credential_mode === "env_ref") {
     const name = (row.credential_env_name || "").trim();
     if (!name) throw new Error("نام متغیر محیطی برای کلید API تنظیم نشده است");
@@ -125,21 +130,55 @@ export async function invokeLlm({ usageKey, promptText, preferredConfigId = null
   }
 
   if (!rows.length) {
-    throw new Error(`هیچ پیکربندی فعالی برای کاربرد «${usageKey}» یافت نشد`);
+    const diagnostic = classifyLlmFailure(
+      new Error(`هیچ پیکربندی فعالی برای کاربرد «${usageKey}» یافت نشد`),
+      null,
+    );
+    throw createLlmChainError(diagnostic.message_fa, [], diagnostic);
   }
 
-  let lastErr = null;
+  const attempts = [];
+  let lastDiagnostic = null;
+  const isRetriable = (status, code) => (
+    status === 401
+    || status === 403
+    || status === 404
+    || status === 429
+    || (status >= 500 && status < 600)
+    || code === "ECONNABORTED"
+  );
+
   for (const row of rows) {
     try {
       return await invokeOneRow(row, promptText);
     } catch (e) {
-      lastErr = e;
-      const status = e.response?.status;
-      if (status === 404 || status === 429 || (status >= 500 && status < 600) || e.code === "ECONNABORTED") {
-        continue;
+      const diagnostic = classifyLlmFailure(e, row);
+      lastDiagnostic = diagnostic;
+      const willRetry = isRetriable(e.response?.status, e.code);
+      attempts.push({
+        config_id: row.id,
+        provider_type: row.provider_type,
+        model_id: row.model_id,
+        category: diagnostic.category,
+        http_status: diagnostic.http_status,
+        provider_code: diagnostic.provider_code,
+        message_fa: diagnostic.message_fa,
+        retried: willRetry,
+      });
+      if (!willRetry) {
+        throw createLlmChainError(
+          buildLlmChainErrorMessage(diagnostic, attempts),
+          attempts,
+          diagnostic,
+        );
       }
-      throw e;
     }
   }
-  throw new Error(lastErr?.message || "همه تلاش‌ها برای فراخوانی مدل ناموفق بود");
+
+  const diagnostic = lastDiagnostic || classifyLlmFailure(new Error("همه تلاش‌ها ناموفق بود"), null);
+  throw createLlmChainError(
+    buildLlmChainErrorMessage(diagnostic, attempts),
+    attempts,
+    diagnostic,
+  );
 }

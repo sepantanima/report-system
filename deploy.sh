@@ -68,7 +68,7 @@ ssh "$SERVER" "
 "
 
 echo "---- Uploading files to server ----"
-rsync -avz --delete \
+rsync -avz --timeout=60 --delete \
   --exclude 'node_modules' \
   --exclude '.git' \
   --exclude '.gitignore' \
@@ -108,6 +108,25 @@ ssh "$SERVER" "
     exit 1
   fi
 
+  if grep -qE '^GOTENBERG_URL=' .env; then
+    echo 'PDF Gotenberg:'
+    grep -E '^GOTENBERG_URL=' .env || true
+    if grep -qE 'GOTENBERG_URL=http://gotenberg:' .env; then
+      echo '⚠️  Fixing docker hostname in GOTENBERG_URL → http://127.0.0.1:3001'
+      sed -i -E 's|^GOTENBERG_URL=http://gotenberg:[0-9]+|GOTENBERG_URL=http://127.0.0.1:3001|' .env
+    fi
+    if grep -qE 'GOTENBERG_URL=http://127.0.0.1:3000' .env; then
+      echo '⚠️  Fixing wrong publish port in GOTENBERG_URL → http://127.0.0.1:3001'
+      sed -i 's|^GOTENBERG_URL=http://127.0.0.1:3000|GOTENBERG_URL=http://127.0.0.1:3001|' .env
+    fi
+  else
+    echo '⚠️  GOTENBERG_URL not set — PDF will fail. Add: GOTENBERG_URL=http://127.0.0.1:3001'
+  fi
+
+  if grep -qE '^CHROME_EXECUTABLE_PATH=.*\\\\' .env 2>/dev/null || grep -q 'CHROME_EXECUTABLE_PATH=C:' .env 2>/dev/null; then
+    echo '⚠️  Windows CHROME_EXECUTABLE_PATH in server .env — remove or comment it; use GOTENBERG_URL instead'
+  fi
+
   echo '✅ Server .env looks safe'
 "
 
@@ -139,3 +158,6 @@ echo "Important:"
 echo "- Server backend DB must use 127.0.0.1:5432"
 echo "- Local backend with SSH tunnel can use 127.0.0.1:5433"
 echo "- Frontend production should use VITE_API_URL=/api, not localhost"
+echo "- PDF on server: set GOTENBERG_URL=http://127.0.0.1:PORT in server .env (not docker hostname gotenberg)"
+echo "  then: pm2 restart report-backend --update-env"
+echo "- Migrations: run manually on server when needed (see backend/report_backend/package.json scripts)"

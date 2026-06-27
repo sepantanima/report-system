@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import DatePicker from "react-multi-date-picker";
 import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
+import MultiSelect from "../components/MultiSelect.jsx";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { exportToExcel } from "../utils/excelExport";
@@ -175,6 +176,37 @@ const ChevronUpIconCustom = () => <svg xmlns="http://www.w3.org/2000/svg" width=
 const PrinterIconCustom = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
 const SettingsIconCustom = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
 
+const PRIORITY_OPTIONS = [
+  { value: "5", label: "🔴 فوری (آنی)" },
+  { value: "3", label: "🟡 مهم" },
+  { value: "1", label: "🟢 عادی" },
+];
+const QUALITY_OPTIONS = [
+  { value: "5", label: "⭐⭐⭐⭐⭐ ممتاز" },
+  { value: "4", label: "⭐⭐⭐⭐ عالی" },
+  { value: "3", label: "⭐⭐⭐ متوسط" },
+  { value: "2", label: "⭐⭐ ضعیف" },
+  { value: "1", label: "⭐ نامعتبر" },
+];
+const CLASSIFICATION_OPTIONS = [
+  { value: "1", label: "🟢 عمومی" },
+  { value: "2", label: "🔵 استانی" },
+  { value: "3", label: "🟠 واحد" },
+  { value: "4", label: "🔴 خاص" },
+];
+const STATUS_OPTIONS = [
+  { value: "pending", label: "⏳ بررسی نشده" },
+  { value: "verified", label: "✅ تایید شده" },
+  { value: "rejected", label: "❌ برگشت خورده" },
+];
+
+const faJoin = (items) => {
+  const arr = (items || []).filter(Boolean);
+  if (!arr.length) return "";
+  if (arr.length === 1) return arr[0];
+  return `${arr.slice(0, -1).join("، ")} و ${arr[arr.length - 1]}`;
+};
+
 export default function FieldReportDashboard() {
   const navigate = useNavigate();
   const { isDarkMode: darkMode, toggleDarkMode } = useAppTheme();
@@ -235,16 +267,20 @@ export default function FieldReportDashboard() {
   const [endDate, setEndDate] = useState(today);
   
   // تنظیم خودکار مقدار اولیه فیلترها بر اساس دسترسی کاربر جاری به جای فرضیات استاتیک
-  const [targetUnitCd, setTargetUnitCd] = useState(isAdminOrManager ? "" : user?.unitcd || "");
-  const [targetProvince, setTargetProvince] = useState(isAdminOrManager ? "" : user?.statename || "");
-  
-  const [targetPriority, setTargetPriority] = useState("");
-  const [targetQuality, setTargetQuality] = useState("");
-  const [targetClassification, setTargetClassification] = useState(""); // فیلتر دامنه‌ی انتشار
-  const [targetStatus, setTargetStatus] = useState(""); // مپ شده روی فیلد جدید state
+  const [targetProvinces, setTargetProvinces] = useState(
+    isAdminOrManager ? [] : (user?.statename ? [user.statename] : []),
+  );
+  const [targetUnitCds, setTargetUnitCds] = useState(
+    isAdminOrManager ? [] : (user?.unitcd ? [String(user.unitcd)] : []),
+  );
+
+  const [targetPriorities, setTargetPriorities] = useState([]);
+  const [targetQualities, setTargetQualities] = useState([]);
+  const [targetClassifications, setTargetClassifications] = useState([]);
+  const [targetStatuses, setTargetStatuses] = useState([]);
   const [showDeleted, setShowDeleted] = useState("false");
   const [dates, setDates] = useState([new Date(), new Date()]);
-  const [targetTopic, setTargetTopic] = useState("");
+  const [targetTopics, setTargetTopics] = useState([]);
 
   const [statsData, setStatsData] = useState([]);
   const [reports, setReports] = useState([]); // داده‌های زنده واکشی شده جهت تزریق به عنوان Props به جدول
@@ -277,16 +313,66 @@ export default function FieldReportDashboard() {
     move: moveWidget,
   } = useDashboardWidgets("field-reports-dashboard", FIELD_WIDGET_DEFS);
 
+  const multiSelectTheme = useMemo(() => ({ isDarkMode: darkMode }), [darkMode]);
+
+  const provinceOptions = useMemo(
+    () => [...new Set(units.map((u) => u.province || u.Province || u.StateName || u.statename).filter(Boolean))]
+      .sort()
+      .map((p) => ({ value: p, label: p })),
+    [units],
+  );
+
+  const unitFilterOptions = useMemo(
+    () => units
+      .filter((u) => {
+        const prov = u.province || u.Province || u.StateName || u.statename;
+        return !targetProvinces.length || targetProvinces.includes(prov);
+      })
+      .map((u) => ({ value: String(getUnitCode(u)), label: getUnitName(u) })),
+    [units, targetProvinces],
+  );
+
+  const topicOptions = useMemo(
+    () => (reportTypes || []).map((t) => ({ value: t.title_fa, label: t.title_fa })),
+    [reportTypes],
+  );
+
+  const buildApiFilterParams = useCallback(() => {
+    const unitList = isAdminOrManager
+      ? targetUnitCds.map((x) => parseInt(toEnDigit(x), 10)).filter(Number.isFinite)
+      : (user?.unitcd ? [parseInt(user.unitcd, 10)] : []);
+    const provinceList = isAdminOrManager
+      ? targetProvinces
+      : (user?.statename ? [user.statename] : []);
+
+    const params = {
+      startDate,
+      endDate,
+      showDeleted,
+    };
+    if (provinceList.length) params.provinces = provinceList.join(",");
+    if (unitList.length) params.unitcds = unitList.join(",");
+    if (targetTopics.length) params.topics = targetTopics.join(",");
+    if (targetPriorities.length) params.priorities = targetPriorities.join(",");
+    if (targetQualities.length) params.qualities = targetQualities.join(",");
+    if (targetClassifications.length) params.classifications = targetClassifications.join(",");
+    if (targetStatuses.length) params.states = targetStatuses.join(",");
+    return params;
+  }, [
+    startDate, endDate, showDeleted, isAdminOrManager, user?.unitcd, user?.statename,
+    targetProvinces, targetUnitCds, targetTopics, targetPriorities, targetQualities,
+    targetClassifications, targetStatuses,
+  ]);
+
   // ساخت عنوان هوشمند گزارش
   const reportTitle = useMemo(() => {
     const months = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
-    
-    // مبدل امن اعداد فارسی برای جلوگیری از بروز باگ NaN در عنوان هوشمند
+
     const e2p = (s) => {
       if (s === undefined || s === null || isNaN(s)) return "";
       return s.toString().replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
     };
-    
+
     const formatDate = (dateStr) => {
       if (!dateStr) return "";
       const cleanStr = toEnDigit(dateStr);
@@ -298,23 +384,31 @@ export default function FieldReportDashboard() {
       return `${e2p(parseInt(d, 10))} ${monthName} ${e2p(parseInt(y, 10))}`;
     };
 
-    let topicPart = targetTopic ? `گزارش "${targetTopic}"` : "گزارش کلی موضوعات";
-    
-    // رفع باگ نمایش نام واحد به جای کد در عنوان هوشمند بالای جدول
-    const activeUnitObj = units.find((u) => getUnitCode(u) == targetUnitCd);
-    const unitNameText = activeUnitObj ? getUnitName(activeUnitObj) : targetUnitCd;
-    let unitPart = targetUnitCd ? ` واحد ${unitNameText}` : "";
-    
-    let provincePart = targetProvince ? ` استان ${targetProvince}` : "";
-    let datePart = startDate === endDate ? ` در تاریخ ${formatDate(startDate)}` : ` از ${formatDate(startDate)} تا ${formatDate(endDate)}`;
+    const topicPart = targetTopics.length
+      ? `گزارش ${faJoin(targetTopics.map((t) => `"${t}"`))}`
+      : "گزارش کلی موضوعات";
+
+    const unitNames = targetUnitCds.map((cd) => {
+      const u = units.find((x) => String(getUnitCode(x)) === String(cd));
+      return u ? getUnitName(u) : cd;
+    });
+    const unitPart = unitNames.length ? ` واحد ${faJoin(unitNames)}` : "";
+
+    const provincePart = targetProvinces.length ? ` استان ${faJoin(targetProvinces)}` : "";
+    const datePart = startDate === endDate
+      ? ` در تاریخ ${formatDate(startDate)}`
+      : ` از ${formatDate(startDate)} تا ${formatDate(endDate)}`;
 
     return `${topicPart}${unitPart}${provincePart}${datePart}`;
-  }, [startDate, endDate, targetTopic, targetUnitCd, targetProvince, units]);
+  }, [startDate, endDate, targetTopics, targetUnitCds, targetProvinces, units]);
 
   const filterLabels = useMemo(() => buildFieldFilterLabels({
-    targetTopic, targetPriority, targetStatus, targetQuality,
-    targetClassification, targetProvince, targetUnitCd, units,
-  }), [targetTopic, targetPriority, targetStatus, targetQuality, targetClassification, targetProvince, targetUnitCd, units]);
+    targetTopics, targetPriorities, targetStatuses, targetQualities,
+    targetClassifications, targetProvinces, targetUnitCds, units,
+  }), [
+    targetTopics, targetPriorities, targetStatuses, targetQualities,
+    targetClassifications, targetProvinces, targetUnitCds, units,
+  ]);
 
   const dateRangeLabel = useMemo(
     () => formatJalaliRangeLabel(startDate, endDate),
@@ -343,31 +437,10 @@ export default function FieldReportDashboard() {
         const token = localStorage.getItem("token");
         const headers = { Authorization: `Bearer ${token}` };
         
-        // اگر کاربر عادی باشد، فیلترها همیشه با مشخصات خودش ارسال می‌شوند
-        const finalUnitCd = isAdminOrManager 
-          ? (targetUnitCd && targetUnitCd !== "" ? parseInt(toEnDigit(targetUnitCd), 10) : null)
-          : (user?.unitcd ? parseInt(user.unitcd, 10) : null);
+        const params = buildApiFilterParams();
 
-        const finalProvince = isAdminOrManager 
-          ? (targetProvince || null)
-          : (user?.statename || null);
-
-        const params = {
-          startDate,
-          endDate,
-          province: finalProvince,
-          unitcd: finalUnitCd, // ارسال به صورت عدد معتبر Integer
-          topic: targetTopic || null,
-          priority: targetPriority ? parseInt(targetPriority, 10) : null,
-          quality: targetQuality ? parseInt(targetQuality, 10) : null,
-          classification: targetClassification ? parseInt(targetClassification, 10) : null,
-          state: targetStatus || null, // مپ به ردیف state در دیتابیس
-          showDeleted: showDeleted,
-        };
-
-        // واکشی داده‌های معتبر فیلتر از اندپوینت صحیح /reports/admin/filters-data
         const [resFilters, resTypes, monitorRes, rankingsRes] = await Promise.all([
-          api.get("/reports/admin/filters-data", { params, headers }).catch(() => ({ data: { units: [] } })),
+          api.get("/reports/admin/filters-data", { params: { startDate, endDate }, headers }).catch(() => ({ data: { units: [] } })),
           api.get("/reports/types", { headers }).catch(() => ({ data: [] })),
           // فرستادن درخواست اصلی مانیتورینگ برای محاسبات زنده کلاینت
           api.get("/reports/admin/monitor", { params, headers }).catch(() => ({ data: [] })),
@@ -446,7 +519,7 @@ export default function FieldReportDashboard() {
       }
     };
     loadDashboardData();
-  }, [startDate, endDate, targetUnitCd, targetProvince, targetTopic, targetPriority, targetQuality, targetClassification, targetStatus, showDeleted, isAdminOrManager, user?.unitcd, user?.statename]);
+  }, [buildApiFilterParams, startDate, endDate]);
 
   // مپ کردن مستقیم رده‌بندی امتیازات پویا (۱۰ واحد اول برای رندر بهینه در نمودار رتبه‌بندی)
   const rankingsChartData = useMemo(() => {
@@ -504,7 +577,7 @@ export default function FieldReportDashboard() {
           >
             بازگشت
           </button>
-          <h2 style={styles.title}>داشبورد تحلیل گزارشات</h2>
+          <h2 style={styles.title}>داشبورد گزارشات میدانی</h2>
         </div>
         <div
           onClick={toggleDarkMode}
@@ -549,15 +622,15 @@ export default function FieldReportDashboard() {
 
             <button
               onClick={() => {
-                setTargetTopic("");
-                setTargetPriority("");
-                setTargetStatus("");
-                setTargetQuality("");
-                setTargetClassification("");
+                setTargetTopics([]);
+                setTargetPriorities([]);
+                setTargetStatuses([]);
+                setTargetQualities([]);
+                setTargetClassifications([]);
                 setShowDeleted("false");
                 if (isAdminOrManager) {
-                  setTargetUnitCd("");
-                  setTargetProvince("");
+                  setTargetUnitCds([]);
+                  setTargetProvinces([]);
                 }
               }}
               style={styles.resetBtn}
@@ -570,136 +643,91 @@ export default function FieldReportDashboard() {
         {showFilters && (
           <div style={styles.drawer}>
             <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>استان:</label>
-              <select
+              <label style={styles.labelWithIcon}>استان (چندانتخابی):</label>
+              <MultiSelect
+                options={isAdminOrManager ? provinceOptions : provinceOptions.filter((o) => targetProvinces.includes(o.value))}
+                values={targetProvinces}
+                onChange={(vals) => {
+                  setTargetProvinces(vals);
+                  if (vals.length) {
+                    setTargetUnitCds((prev) => prev.filter((cd) => {
+                      const u = units.find((x) => String(getUnitCode(x)) === String(cd));
+                      const prov = u?.province || u?.Province || u?.StateName || u?.statename;
+                      return vals.includes(prov);
+                    }));
+                  }
+                }}
+                placeholder="همه استان‌ها"
                 disabled={!isAdminOrManager}
-                value={targetProvince}
-                onChange={(e) => setTargetProvince(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                {isAdminOrManager ? (
-                  <>
-                    <option value="">همه استان‌ها</option>
-                    {[...new Set(units.map((u) => u.province || u.Province || u.StateName || u.statename))]
-                      .filter(Boolean)
-                      .sort()
-                      .map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                  </>
-                ) : (
-                  <option value={user?.statename}>{user?.statename}</option>
-                )}
-              </select>
+                theme={multiSelectTheme}
+              />
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>واحد:</label>
-              <select
-                disabled={!isAdminOrManager} // فیلتر واحد در لود اولیه روی واحد سازمانی کاربر غیرمدیر قفل و فیلتر می‌شود
-                value={targetUnitCd}
-                onChange={(e) => setTargetUnitCd(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                {isAdminOrManager ? (
-                  <>
-                    <option value="">همه واحدها</option>
-                    {units
-                      .filter((u) => {
-                        const prov = u.province || u.Province || u.StateName || u.statename;
-                        return !targetProvince || prov === targetProvince;
-                      })
-                      .map((u) => {
-                        const code = getUnitCode(u);
-                        const name = getUnitName(u);
-                        return (
-                          <option key={code} value={code}>{name}</option>
-                        );
-                      })}
-                  </>
-                ) : (
-                  <option value={user?.unitcd}>
-                    {(() => {
-                      const myUnit = units.find((u) => getUnitCode(u) == user?.unitcd);
-                      return myUnit ? getUnitName(myUnit) : `واحد ${user?.unitcd || "شما"}`;
-                    })()}
-                  </option>
-                )}
-              </select>
+              <label style={styles.labelWithIcon}>واحد (چندانتخابی):</label>
+              <MultiSelect
+                options={isAdminOrManager ? unitFilterOptions : unitFilterOptions.filter((o) => targetUnitCds.includes(o.value))}
+                values={targetUnitCds}
+                onChange={setTargetUnitCds}
+                placeholder="همه واحدها"
+                disabled={!isAdminOrManager}
+                theme={multiSelectTheme}
+              />
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>موضوع:</label>
-              <select
-                value={targetTopic}
-                onChange={(e) => setTargetTopic(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                <option value="">همه موضوعات</option>
-                {reportTypes.map((t) => (
-                  <option key={t.id} value={t.title_fa}>{t.title_fa}</option>
-                ))}
-              </select>
+              <label style={styles.labelWithIcon}>موضوع (چندانتخابی):</label>
+              <MultiSelect
+                options={topicOptions}
+                values={targetTopics}
+                onChange={setTargetTopics}
+                placeholder="همه موضوعات"
+                theme={multiSelectTheme}
+              />
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>اولویت:</label>
-              <select
-                value={targetPriority}
-                onChange={(e) => setTargetPriority(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                <option value="">همه اولویت‌ها</option>
-                <option value="5">🔴 فوری (آنی)</option>
-                <option value="3">🟡 مهم</option>
-                <option value="1">🟢 عادی</option>
-              </select>
-            </div>
-
-            {/* ارتقای فیلتر کیفیت به ۵ سطح در سایدبار اصلی داشبورد */}
-            <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>کیفیت گزارش:</label>
-              <select
-                value={targetQuality}
-                onChange={(e) => setTargetQuality(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                <option value="">همه کیفیت‌ها</option>
-                <option value="5">⭐⭐⭐⭐⭐ ممتاز</option>
-                <option value="4">⭐⭐⭐⭐ عالی</option>
-                <option value="3">⭐⭐⭐ متوسط</option>
-                <option value="2">⭐⭐ ضعیف</option>
-                <option value="1">⭐ نامعتبر (بسیار ضعیف)</option>
-              </select>
+              <label style={styles.labelWithIcon}>اولویت (چندانتخابی):</label>
+              <MultiSelect
+                options={PRIORITY_OPTIONS}
+                values={targetPriorities}
+                onChange={setTargetPriorities}
+                placeholder="همه اولویت‌ها"
+                theme={multiSelectTheme}
+              />
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>دامنه‌ی انتشار:</label>
-              <select
-                value={targetClassification}
-                onChange={(e) => setTargetClassification(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                <option value="">همه دامنه‌ها</option>
-                <option value="1">🟢 عمومی</option>
-                <option value="2">🔵 استانی</option>
-                <option value="3">🟠 واحد</option>
-                <option value="4">🔴 خاص</option>
-              </select>
+              <label style={styles.labelWithIcon}>کیفیت گزارش (چندانتخابی):</label>
+              <MultiSelect
+                options={QUALITY_OPTIONS}
+                values={targetQualities}
+                onChange={setTargetQualities}
+                placeholder="همه کیفیت‌ها"
+                theme={multiSelectTheme}
+              />
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.labelWithIcon}>وضعیت بررسی:</label>
-              <select
-                value={targetStatus}
-                onChange={(e) => setTargetStatus(e.target.value)}
-                style={{ ...styles.select, backgroundColor: theme.input, color: theme.text }}
-              >
-                <option value="">همه موارد</option>
-                <option value="pending">⏳ بررسی نشده</option>
-                <option value="verified">✅ تایید شده</option>
-                <option value="rejected">❌ برگشت خورده</option>
-              </select>
+              <label style={styles.labelWithIcon}>دامنه‌ی انتشار (چندانتخابی):</label>
+              <MultiSelect
+                options={CLASSIFICATION_OPTIONS}
+                values={targetClassifications}
+                onChange={setTargetClassifications}
+                placeholder="همه دامنه‌ها"
+                theme={multiSelectTheme}
+              />
+            </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.labelWithIcon}>وضعیت بررسی (چندانتخابی):</label>
+              <MultiSelect
+                options={STATUS_OPTIONS}
+                values={targetStatuses}
+                onChange={setTargetStatuses}
+                placeholder="همه موارد"
+                theme={multiSelectTheme}
+              />
             </div>
 
             <div style={styles.inputGroup}>
@@ -1617,7 +1645,7 @@ const styles = {
     background: "rgba(128,128,128,0.05)",
     borderRadius: "8px",
   },
-  inputGroup: { display: "flex", flexDirection: "column", gap: "4px" },
+  inputGroup: { display: "flex", flexDirection: "column", gap: "4px", minWidth: "200px", flex: "1 1 200px" },
   select: {
     padding: "6px",
     borderRadius: "6px",

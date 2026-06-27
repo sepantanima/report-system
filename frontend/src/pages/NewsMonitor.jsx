@@ -188,8 +188,11 @@ export default function NewsMonitor() {
       const updated = await newsMonitorService.update(id, patch);
       patchItemInList(updated);
       showToast("ذخیره شد");
-      if (advance && selectedIndex >= 0 && selectedIndex < items.length - 1) {
-        setSelectedId(items[selectedIndex + 1].id);
+      if (advance) {
+        const idx = items.findIndex((x) => x.id === id);
+        if (idx >= 0 && idx < items.length - 1) {
+          setSelectedId(items[idx + 1].id);
+        }
       }
       loadStats();
       return updated;
@@ -201,14 +204,21 @@ export default function NewsMonitor() {
     }
   };
 
+  const handleQuickVerdict = async (id, reviewState, statusNote) => {
+    const patch = { review_state: reviewState };
+    if (statusNote) patch.status_note = statusNote;
+    await handleSave(id, patch, true);
+  };
+
   const handleFinalize = async (id) => {
     setBusyId(id);
     try {
       const updated = await newsMonitorService.finalize(id);
       patchItemInList(updated);
       showToast("تأیید نهایی شد");
-      if (selectedIndex >= 0 && selectedIndex < items.length - 1) {
-        setSelectedId(items[selectedIndex + 1].id);
+      const idx = items.findIndex((x) => x.id === id);
+      if (idx >= 0 && idx < items.length - 1) {
+        setSelectedId(items[idx + 1].id);
       }
       loadStats();
     } catch (e) {
@@ -264,11 +274,27 @@ export default function NewsMonitor() {
     }
   };
 
+  const handleToggleImportant = async (id) => {
+    const item = items.find((x) => x.id === id);
+    const p = Number(item?.priority || 3);
+    const newPriority = (p === 1 || p === 2) ? 3 : 2;
+    setBusyId(id);
+    try {
+      const updated = await newsMonitorService.update(id, { priority: newPriority });
+      patchItemInList(updated);
+      showToast(newPriority === 2 ? "خبر مهم شد" : "اهمیت عادی شد");
+    } catch (e) {
+      showToast(e.response?.data?.error || "خطا در تغییر اهمیت");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const statBar = useMemo(() => [
     { key: "total", label: "کل بازه", value: stats.total, color: "#38bdf8" },
-    { key: "wf_pending", label: "در انتظار", value: stats.wf_pending, color: "#64748b" },
-    { key: "wf_reviewed", label: "بررسی‌شده", value: stats.wf_reviewed, color: "#eab308" },
-    { key: "wf_finalized", label: "نهایی", value: stats.wf_finalized, color: "#22c55e" },
+    { key: "wf_pending", label: "صف دبیر", value: stats.wf_pending, color: "#64748b" },
+    { key: "wf_reviewed", label: "ارسال به سردبیر", value: stats.wf_reviewed, color: "#eab308" },
+    { key: "wf_finalized", label: "آماده انتشار", value: stats.wf_finalized, color: "#22c55e" },
     { key: "duplicate", label: "تکراری", value: stats.duplicate, color: "#94a3b8" },
   ], [stats]);
 
@@ -283,6 +309,7 @@ export default function NewsMonitor() {
     onSave: handleSave,
     onFinalize: handleFinalize,
     onToggleDuplicate: handleToggleDuplicate,
+    onToggleImportant: handleToggleImportant,
     onDelete: handleDelete,
     saving: busyId === selectedId,
   };
@@ -311,7 +338,7 @@ export default function NewsMonitor() {
         {Object.entries(NEWS_WORKFLOW_STATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
       </select>
 
-      <label className="v3-filter-label">حکم دبیر</label>
+      <label className="v3-filter-label">نتیجه بررسی</label>
       <select className="v3-select-filter" value={filters.review_state} onChange={(e) => setFilters((f) => ({ ...f, review_state: e.target.value }))}>
         <option value="all">همه</option>
         {Object.entries(NEWS_REVIEW_STATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -349,7 +376,7 @@ export default function NewsMonitor() {
       onClick={() => setViewMode((m) => (m === "compact" ? "focus" : "compact"))}
     >
       {viewMode === "compact" ? <Focus /> : <LayoutList />}
-      {viewMode === "compact" ? "تمرکزی" : "فشرده"}
+      نمایش: {viewMode === "compact" ? "فشرده" : "کارت کامل"}
       {" "}({toPersianDigits(items.length)})
     </button>
   );
@@ -396,6 +423,11 @@ export default function NewsMonitor() {
                 viewMode={isMobile ? "card" : viewMode}
                 busyId={busyId}
                 listHeader={!isMobile ? viewToggle : null}
+                roles={roles}
+                onQuickVerdict={handleQuickVerdict}
+                onFinalize={handleFinalize}
+                onToggleDuplicate={handleToggleDuplicate}
+                onToggleImportant={handleToggleImportant}
               />
             )}
             centerPane={!isMobile ? (

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, Save } from "lucide-react";
+import { Plus, Save } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import api from "../api/api";
 import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 import { PROMPT_FIELD_LIMITS, validatePromptCreateClient } from "../constants/promptFieldLimits.js";
@@ -242,34 +243,25 @@ export default function PromptManagement() {
   }
 
   const L = PROMPT_FIELD_LIMITS;
-  const card = {
-    maxWidth: 1100,
-    margin: "0 auto",
-    padding: 20,
-    fontFamily: "inherit",
-  };
-
   return (
-    <div style={{ ...card, background: "#0f172a", minHeight: "100vh", color: "#e2e8f0" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-        <button type="button" onClick={() => navigate("/main")} style={btnGhost}>
-          <ArrowRight size={18} />
-          منو
-        </button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>مدیریت پرامپت‌ها</h1>
-        <button type="button" onClick={openCreate} style={{ ...btnPrimary, marginLeft: "auto" }}>
+    <FormPageLayout
+      title="مدیریت پرامپت‌ها"
+      documentTitle="مدیریت پرامپت‌ها"
+      toolbarExtra={(
+        <button type="button" onClick={openCreate} className="v3-add-fab" style={{ padding: "6px 12px", fontSize: "0.86em" }}>
           <Plus size={18} />
           پرامپت جدید
         </button>
-      </div>
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          محدودهٔ لیست:&nbsp;
+      )}
+      contentPadding="20px"
+    >
+      <div className="form-page-filter-row">
+        <label className="form-page-filter-field" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ whiteSpace: "nowrap" }}>محدودهٔ لیست:</span>
           <select
             value={prefix}
             onChange={(e) => setPrefix(e.target.value)}
-            style={{ ...inp, marginBottom: 0, minWidth: 260, cursor: "pointer" }}
+            style={{ ...inp, marginBottom: 0, width: "100%", maxWidth: 320, cursor: "pointer" }}
           >
             {PROMPT_LIST_PREFIX_CHOICES.map((o) => (
               <option key={o.value === "" ? "__all__" : o.value} value={o.value}>
@@ -278,9 +270,11 @@ export default function PromptManagement() {
             ))}
           </select>
         </label>
-        <button type="button" onClick={load} style={btnGhost}>
-          بروزرسانی لیست
-        </button>
+        <div className="form-page-filter-actions">
+          <button type="button" onClick={load} className="form-page-btn form-page-btn-secondary">
+            بروزرسانی لیست
+          </button>
+        </div>
       </div>
 
       <div
@@ -450,6 +444,6 @@ export default function PromptManagement() {
           </div>
         </div>
       ) : null}
-    </div>
+    </FormPageLayout>
   );
 }

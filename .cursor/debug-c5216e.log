@@ -1,9 +1,0 @@
-{"sessionId":"c5216e","location":"news.js:monitor/ai/run","message":"ai run start","data":{"action":"summarize_text","cleanedLen":951},"timestamp":1782043119222,"hypothesisId":"504-A","runId":"ai-fix"}
-{"sessionId":"c5216e","location":"news.js:monitor/ai/run","message":"ai run ok","data":{"elapsedMs":4463,"status":"ok"},"timestamp":1782043123685,"hypothesisId":"504-A","runId":"ai-fix"}
-{"sessionId":"c5216e","location":"news.js:monitor/ai/run","message":"ai run start","data":{"action":"summarize_text","cleanedLen":951},"timestamp":1782043209647,"hypothesisId":"504-A","runId":"ai-fix"}
-{"sessionId":"c5216e","location":"news.js:monitor/ai/run","message":"ai run ok","data":{"elapsedMs":5232,"status":"ok"},"timestamp":1782043214879,"hypothesisId":"504-A","runId":"ai-fix"}
-{"sessionId":"c5216e","location":"news.js:monitor/ai/run","message":"ai run start","data":{"action":"summarize_text","cleanedLen":951},"timestamp":1782043350036,"hypothesisId":"504-A","runId":"ai-fix"}
-{"sessionId":"c5216e","location":"news.js:monitor/ai/run","message":"ai run ok","data":{"elapsedMs":5444,"status":"ok"},"timestamp":1782043355480,"hypothesisId":"504-A","runId":"ai-fix"}
-{"sessionId":"c5216e","location":"newsMonitorService.js:deleteDraft","message":"frontend deleteDraft call","data":{"id":"42080"},"timestamp":1782043429124,"hypothesisId":"B","runId":"post-fix"}
-{"sessionId":"c5216e","location":"news.js:handleDraftDelete","message":"draft delete requested","data":{"id":"42080","method":"POST","userId":1},"timestamp":1782043429143,"hypothesisId":"A","runId":"post-fix"}
-{"sessionId":"c5216e","location":"news.js:handleDraftDelete","message":"draft delete result","data":{"id":"42080","result":{"id":42080,"deleted":true,"permanent":true}},"timestamp":1782043430840,"hypothesisId":"A","runId":"post-fix"}

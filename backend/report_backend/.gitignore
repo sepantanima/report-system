@@ -1,11 +1,17 @@
+# Env (secrets)
+.env
+.env.*
+!.env.example
+.env *
+
+# Uploads (generated at runtime)
+uploads/
+
 # Node
 node_modules/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
-
-# Env
-.env
 
 # Logs
 logs

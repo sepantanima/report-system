@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowRight, Sparkles, Save, X, Search, Loader2, ChevronDown, ChevronUp,
+  Sparkles, Save, X, Search, Loader2, ChevronDown, ChevronUp,
+  FileDown, Printer, ListOrdered,
 } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -123,6 +125,9 @@ export default function FieldManagementSummaryCreate() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiActionLabel, setAiActionLabel] = useState("تولید پیش‌نویس با هوش‌افزار");
   const [err, setErr] = useState("");
+  const [savedSummary, setSavedSummary] = useState(null);
+  const [withReports, setWithReports] = useState(true);
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     if (!allowed) return;
@@ -355,7 +360,7 @@ export default function FieldManagementSummaryCreate() {
     setBusy(true);
     setErr("");
     try {
-      await managementSummaryService.create({
+      const result = await managementSummaryService.create({
         ...payload,
         title: title.trim(),
         summary_body: summaryBody,
@@ -364,12 +369,75 @@ export default function FieldManagementSummaryCreate() {
         ai_usage_key_used: draftMeta?.ai_usage_key_used,
         ai_config_id_used: draftMeta?.ai_config_id_used,
       });
-      navigate("/field-management-summary");
+      setSavedSummary(result);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setErr(e.response?.data?.error || e.message);
     } finally {
       setBusy(false);
     }
+  };
+
+  const doExport = async (format) => {
+    if (!savedSummary?.id) return;
+    setExportBusy(true);
+    setErr("");
+    try {
+      await managementSummaryService.downloadExport(savedSummary.id, format, withReports);
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const doPrint = async () => {
+    if (!savedSummary?.id) return;
+    setExportBusy(true);
+    setErr("");
+    try {
+      const detail = await managementSummaryService.getById(savedSummary.id);
+      const s = detail.summary;
+      const refs = withReports ? detail.refs || [] : [];
+      const esc = (v) => String(v ?? "").replace(/</g, "&lt;");
+      const refsHtml = refs.length
+        ? `<h3>فهرست گزارش‌های مرجع</h3>
+           <table><thead><tr><th>ردیف</th><th>تاریخ</th><th>یگان</th><th>موضوع</th><th>عنوان</th><th>وضعیت</th></tr></thead>
+           <tbody>${refs
+             .map(
+               (r, i) =>
+                 `<tr><td>${toPersianDigits(i + 1)}</td><td>${faSlash(r.date)}</td><td>${esc(r.UnitName || r.UnitShortName)}</td><td>${esc(r.chat_title)}</td><td>${esc(r.title)}</td><td>${esc(STATE_FA[r.state] || r.state)}</td></tr>`,
+             )
+             .join("")}</tbody></table>`
+        : "";
+      const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>خلاصه مدیریتی</title>
+        <style>body{font-family:Tahoma,Arial,sans-serif;padding:18px;} table{width:100%;border-collapse:collapse;margin-top:8px;} th,td{border:1px solid #333;padding:6px;font-size:12px;} h2{margin-bottom:4px;} .meta{font-size:13px;margin:2px 0;} .body{margin-top:14px;line-height:1.9;}</style></head><body>
+        <h2>خلاصه مدیریتی گزارشات میدانی</h2>
+        <p class="meta"><b>عنوان:</b> ${esc(s.title)}</p>
+        <p class="meta"><b>بازه:</b> ${faSlash(s.period_start)} تا ${faSlash(s.period_end)} | <b>تعداد گزارشات:</b> ${toPersianDigits(s.report_count)}</p>
+        <div class="body">${s.summary_body || ""}</div>
+        ${refsHtml}
+        </body></html>`;
+      const w = window.open("", "_blank");
+      w.document.write(html);
+      w.document.close();
+      w.onload = () => w.print();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const startNewSummary = () => {
+    setSavedSummary(null);
+    setPreview(null);
+    setDraftMeta(null);
+    setExpandedReport(null);
+    setSummaryBody("");
+    setTitle("");
+    titleTouchedRef.current = false;
+    setWithReports(true);
   };
 
   if (!allowed) {
@@ -384,19 +452,62 @@ export default function FieldManagementSummaryCreate() {
   }
 
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", background: "#0f172a", color: "#e2e8f0", padding: 20 }}>
-      {/* هدر */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <button type="button" style={btnStyle()} onClick={() => navigate("/field-management-summary")}>
-          <ArrowRight size={18} />
-          بازگشت به لیست
+    <FormPageLayout
+      title="خلاصه مدیریتی گزارشات میدانی"
+      documentTitle="خلاصه مدیریتی میدانی"
+      contentPadding="20px"
+      toolbarExtra={(
+        <button type="button" style={btnStyle()} onClick={() => navigate("/field-management-summary/list")}>
+          <ListOrdered size={17} />
+          گزارشات قبلی
         </button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>ایجاد خلاصه مدیریتی جدید</h1>
-        <span />
-      </div>
+      )}
+    >
+      {savedSummary ? (
+        <div style={{
+          ...cardStyle,
+          borderColor: "rgba(34,197,94,0.45)",
+          background: "rgba(34,197,94,0.08)",
+        }}
+        >
+          <strong style={{ fontSize: 15, color: "#86efac" }}>خلاصه با موفقیت ثبت شد</strong>
+          <p style={{ margin: "8px 0", fontSize: 13, lineHeight: 1.8 }}>
+            شناسه {toPersianDigits(savedSummary.id)} — {savedSummary.title}
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14, fontSize: 13 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="radio" name="withReportsCreate" checked={withReports} onChange={() => setWithReports(true)} />
+              همراه با لیست گزارشات
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="radio" name="withReportsCreate" checked={!withReports} onChange={() => setWithReports(false)} />
+              فقط خلاصه (بدون لیست گزارشات)
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" style={btnStyle("primary")} disabled={exportBusy} onClick={() => doExport("pdf")}>
+              <FileDown size={15} />
+              PDF
+            </button>
+            <button type="button" style={btnStyle("primary")} disabled={exportBusy} onClick={() => doExport("docx")}>
+              <FileDown size={15} />
+              Word
+            </button>
+            <button type="button" style={btnStyle()} disabled={exportBusy} onClick={doPrint}>
+              <Printer size={15} />
+              چاپ
+            </button>
+            <button type="button" style={btnStyle()} onClick={startNewSummary}>
+              ایجاد خلاصه جدید
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {err ? <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div> : null}
 
+      {!savedSummary ? (
+      <>
       {/* انتخاب بازه */}
       <div style={cardStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 12 }}>
@@ -687,24 +798,28 @@ export default function FieldManagementSummaryCreate() {
           minHeight={240}
           placeholder="پس از مطالعه گزارشات، خلاصه مدیریتی را اینجا بنویسید..."
         />
-        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
           <button
             type="button"
             style={btnStyle("primary")}
-            disabled={busy || !stripHtml(summaryBody).trim()}
+            disabled={busy || !stripHtml(summaryBody).trim() || Boolean(savedSummary)}
             onClick={save}
           >
             <Save size={15} />
-            {busy ? "در حال ثبت..." : "ثبت"}
+            {busy ? "در حال ثبت..." : "ثبت خلاصه"}
           </button>
-          <button type="button" style={btnStyle()} onClick={() => navigate("/field-management-summary")}>
-            <X size={15} />
-            انصراف
-          </button>
+          {!savedSummary ? (
+            <button type="button" style={btnStyle()} onClick={() => navigate("/main")}>
+              <X size={15} />
+              انصراف
+            </button>
+          ) : null}
         </div>
       </div>
+      </>
+      ) : null}
 
       <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
-    </div>
+    </FormPageLayout>
   );
 }

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ChevronDown, ChevronUp, HelpCircle, Link2, RotateCcw, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Link2, RotateCcw, Search, X } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import { stripHtml } from "../components/analysis/RichTextEditor.jsx";
 import NewsHtmlPreview from "../components/news/NewsHtmlPreview.jsx";
 import newsMonitorService from "../services/newsMonitorService.js";
 import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
 import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
+import { formatNewsRefDateTime } from "../utils/newsDateDisplay.js";
 import { resolveNewsDisplayHtml } from "../utils/newsDisplayHtml.js";
 import { NEWS_REVIEW_STATES, NEWS_WORKFLOW_STATES } from "../constants/newsMonitorMeta.js";
 import { NEWS_DUPLICATES_HELP } from "../content/newsFormHelp.jsx";
@@ -91,7 +93,6 @@ export default function NewsDuplicatesManager() {
   const [parentResults, setParentResults] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState("");
-  const [showHelp, setShowHelp] = useState(false);
   const [expandedItems, setExpandedItems] = useState({});
 
   const showToast = (msg) => {
@@ -185,23 +186,11 @@ export default function NewsDuplicatesManager() {
   }
 
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", background: theme.bg, color: theme.text, padding: 16 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>مدیریت تکراری‌ها</h1>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setShowHelp(true)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.card, color: theme.text, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            <HelpCircle size={16} /> راهنما
-          </button>
-          <button type="button" onClick={() => navigate("/main")} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.card, color: theme.text, cursor: "pointer", fontFamily: "inherit" }}>
-            <ArrowRight size={16} /> بازگشت
-          </button>
-        </div>
-      </header>
-
+    <FormPageLayout
+      title="مدیریت تکراری‌ها"
+      onHelp={() => NEWS_DUPLICATES_HELP()}
+      helpTitle="راهنمای مدیریت تکراری‌ها"
+    >
       {toast ? (
         <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.35)", fontSize: 13 }}>
           {toast}
@@ -313,21 +302,6 @@ export default function NewsDuplicatesManager() {
           );
         })}
       </div>
-
-      {showHelp && (
-        <div className="v3-modal-overlay" onClick={() => setShowHelp(false)}>
-          <div className="v3-modal-box" style={{ background: theme.card, border: `1px solid ${theme.border}` }} onClick={(e) => e.stopPropagation()}>
-            <div className="v3-modal-header-new">
-              <button type="button" onClick={() => setShowHelp(false)} className="v3-icon-btn" style={{ color: "#f87171", border: "none" }}><X size={18} /></button>
-              <span>راهنمای مدیریت تکراری‌ها</span>
-            </div>
-            <div className="v3-modal-body">{NEWS_DUPLICATES_HELP()}</div>
-            <div className="v3-modal-footer-new">
-              <button type="button" className="v3-btn-footer v3-primary-solid" onClick={() => setShowHelp(false)}>متوجه شدم</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </FormPageLayout>
   );
 }

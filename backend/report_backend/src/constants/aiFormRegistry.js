@@ -12,6 +12,10 @@ export const REGISTERED_FORM_ACTION_KEYS = [
     actions: ["summarize_text"],
   },
   {
+    form_name: "news_smart_analysis",
+    actions: ["analyze_overview", "analyze_thematic", "analyze_trends", "analyze_risk"],
+  },
+  {
     form_name: "sample_form",
     actions: ["sample_summarize", "sample_secure"],
   },

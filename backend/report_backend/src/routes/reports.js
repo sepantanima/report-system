@@ -38,19 +38,28 @@ const parsePriority = (p) => {
   if (p === "عادی" || p === 1 || p === "1") return 1;
   if (p === "مهم" || p === 3 || p === "3") return 3;
   if (p === "فوری" || p === 5 || p === "5") return 5;
-  
-  const num = parseInt(p);
+
+  const num = parseInt(p, 10);
   if (num === 1 || num === 3 || num === 5) return num;
-  return 1; // مقدار پیش‌فرض در صورت بروز هرگونه خطا
+  return 1;
 };
 
 // تابع معکوس برای مپ کردن فیلد عددی دیتابیس به اولویت متنی استاندارد فرانت‌بند
 const mapPriorityToFa = (pNum) => {
-  const num = parseInt(pNum);
+  const num = parseInt(pNum, 10);
   if (num === 5) return "فوری";
   if (num === 3) return "مهم";
   return "عادی";
 };
+
+function parseCsv(value) {
+  if (!value) return [];
+  return String(value).split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function parseCsvInt(value) {
+  return parseCsv(value).map((x) => parseInt(x, 10)).filter(Number.isFinite);
+}
 
 // نرمال‌سازی دامنه‌ی انتشار به مقدار عددی استاندارد (1=عمومی، 2=استانی، 3=واحد، 4=خاص)
 const parseClassification = (c) => {
@@ -230,7 +239,7 @@ router.post("/", auth, async (req, res) => {
 router.put("/update/:hash_key", auth, async (req, res) => {
   const { hash_key } = req.params;
   const { title, text: userEditedText, chat_title, message_type, priority, classification } = req.body;
-  const fieldErr = validateUnitReportPayload({ title, text: userEditedText });
+  const fieldErr = validateUnitReportPayload({ title, text: userEditedText }, { edit: true });
   if (fieldErr) return res.status(400).json({ error: fieldErr });
   const { id } = req.user;
 
@@ -451,14 +460,21 @@ router.get("/admin/monitor", auth, async (req, res) => {
     endDate,
     search,
     topic,
-    province, // دریافت مقدار تک استان فیلتر جاری فرانت‌اند
-    provinces, // دریافت آرایه به صورت چند انتخابی قدیمی
-    unitcd, // دریافت پارامتر فیلتر واحد (کد یگان) به صورت Integer عددی
+    topics,
+    province,
+    provinces,
+    unitcd,
+    unitcds,
     priority,
+    priorities,
     state,
+    states,
     quality,
+    qualities,
     classification,
+    classifications,
     deleted,
+    showDeleted,
   } = req.query;
   try {
     let query = `SELECT e.*, u."UnitShortName", u."StateName" 
@@ -476,48 +492,65 @@ router.get("/admin/monitor", auth, async (req, res) => {
       params.push(`%${search}%`);
       query += ` AND (e.raw_text ILIKE $${params.length} OR e.cleaned_text ILIKE $${params.length} OR u."UnitShortName" ILIKE $${params.length})`;
     }
-    if (topic) {
-      params.push(topic);
-      query += ` AND e.chat_title = $${params.length}`;
-    }
-    if (priority) {
-      params.push(parsePriority(priority)); 
-      query += ` AND e.priority = $${params.length}`;
-    }
-    if (quality) {
-      params.push(parseInt(quality));
-      query += ` AND e.quality = $${params.length}`;
-    }
-    if (classification) {
-      params.push(parseClassification(classification));
-      query += ` AND e.classification = $${params.length}`;
-    }
-    if (state !== undefined && state !== "" && state !== "all") {
-      params.push(state);
-      query += ` AND e.state = $${params.length}`;
-    }
-    
-    // اعمال شرط فیلتر روی کد یگان (unitcd) در دیتابیس واقعه‌ها
-    if (unitcd) {
-      params.push(parseInt(unitcd));
-      query += ` AND e.unitcd = $${params.length}`;
+
+    const topicList = topics ? parseCsv(topics) : (topic ? [topic] : []);
+    if (topicList.length) {
+      params.push(topicList);
+      query += ` AND e.chat_title = ANY($${params.length}::text[])`;
     }
 
-    // اعمال فیلتر بر اساس تک استان منتخب در فیلتر جاری
-    if (province) {
-      params.push(province);
-      query += ` AND u."StateName" = $${params.length}`;
-    } else if (provinces) {
-      const pList = provinces.split(",").filter((x) => x);
-      if (pList.length) {
-        params.push(pList);
-        query += ` AND u."StateName" = ANY($${params.length}::text[])`;
-      }
+    const priorityList = priorities
+      ? parseCsv(priorities).map(parsePriority)
+      : (priority ? [parsePriority(priority)] : []);
+    if (priorityList.length) {
+      params.push(priorityList);
+      query += ` AND e.priority = ANY($${params.length}::int[])`;
     }
 
-    if (deleted === "true") {
+    const qualityList = qualities
+      ? parseCsvInt(qualities)
+      : (quality ? [parseInt(quality, 10)] : []);
+    if (qualityList.length) {
+      params.push(qualityList);
+      query += ` AND e.quality = ANY($${params.length}::int[])`;
+    }
+
+    const classificationList = classifications
+      ? parseCsv(classifications).map(parseClassification)
+      : (classification ? [parseClassification(classification)] : []);
+    if (classificationList.length) {
+      params.push(classificationList);
+      query += ` AND e.classification = ANY($${params.length}::int[])`;
+    }
+
+    const stateList = states
+      ? parseCsv(states)
+      : (state !== undefined && state !== "" && state !== "all" ? [state] : []);
+    if (stateList.length) {
+      params.push(stateList);
+      query += ` AND e.state = ANY($${params.length}::text[])`;
+    }
+
+    const unitList = unitcds
+      ? parseCsvInt(unitcds)
+      : (unitcd ? [parseInt(unitcd, 10)] : []);
+    if (unitList.length) {
+      params.push(unitList);
+      query += ` AND e.unitcd = ANY($${params.length}::int[])`;
+    }
+
+    const provinceList = provinces
+      ? parseCsv(provinces)
+      : (province ? [province] : []);
+    if (provinceList.length) {
+      params.push(provinceList);
+      query += ` AND u."StateName" = ANY($${params.length}::text[])`;
+    }
+
+    const deletedFlag = deleted ?? showDeleted;
+    if (deletedFlag === "true") {
       query += ` AND e.is_deleted = true`;
-    } else {
+    } else if (deletedFlag !== "all") {
       query += ` AND (e.is_deleted = false OR e.is_deleted IS NULL)`;
     }
 

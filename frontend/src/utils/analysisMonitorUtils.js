@@ -9,7 +9,9 @@ export const toPersianDigits = (val) => {
 
 export const toEnDigit = (s) => {
   if (!s) return "";
-  return String(s).replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+  return String(s)
+    .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
+    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
 };
 
 export const cleanDateString = (dateStr) => {

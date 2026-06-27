@@ -26,10 +26,12 @@ export function validateMonitorVerifyPayload(body = {}) {
   );
 }
 
-export function validateUnitReportPayload(body = {}) {
+export function validateUnitReportPayload(body = {}, { edit = false } = {}) {
   const L = FIELD_FIELD_LIMITS;
+  const titleMax = edit ? L.unitShort : L.unitTitle;
+  const textMax = edit ? L.unitLong : L.unitContent;
   return (
-    validateLength(body.title, L.unitTitle, "عنوان") ||
-    validateLength(body.text, L.unitContent, "متن گزارش")
+    validateLength(body.title, titleMax, "عنوان") ||
+    validateLength(body.text, textMax, "متن گزارش")
   );
 }

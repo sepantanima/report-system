@@ -45,7 +45,7 @@ export const ROLE_PERMISSIONS = {
     "news_finalize", "news_duplicates", "ai_process",
     "search_reports", "sys_settings", "analytics",
     "analysis_manage", "analysis_topic_approve", "analysis_missions", "analysis_propose", "analysis_review",
-    "manage_prompts", "manage_ai_api", "field_mgmt_summary",
+    "manage_prompts", "manage_ai_api", "manage_messenger", "manage_news_reports", "field_mgmt_summary", "news_report",
   ],
   analysis_manager: [
     "manage_users", "analysis_manage", "analysis_topic_approve", "analysis_propose", "analysis_review", "sys_settings",
@@ -55,8 +55,8 @@ export const ROLE_PERMISSIONS = {
   topic_proposer: ["analysis_propose", "sys_settings"],
   topic_approver: ["analysis_topic_approve", "sys_settings"],
   news_monitor: ["news_entry", "analytics", "sys_settings"],
-  news_editor: ["news_review", "ai_process", "analytics", "sys_settings"],
-  news_chief: ["news_review", "news_finalize", "news_duplicates", "ai_process", "analytics", "sys_settings"],
+  news_editor: ["news_review", "ai_process", "analytics", "sys_settings", "news_report"],
+  news_chief: ["news_review", "news_finalize", "news_duplicates", "ai_process", "analytics", "sys_settings", "news_report"],
   Field_admin: [
     "manage_users", "create_report", "monitor_reports", "analytics", "sys_settings", "analysis_topic_approve",
     "field_mgmt_summary",

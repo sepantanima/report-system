@@ -35,10 +35,17 @@ export default function AnalyticsFilterBar({
   onApply,
   onReset,
   filterSummary,
+  showDateRange = true,
+  showApplyButton = true,
+  priorityQualityMultiSelect = false,
+  statusMultiSelect = false,
+  unitMultiSelect = false,
 }) {
   const categoryOptions = (meta?.categories || []).map((c) => ({ value: String(c.id), label: c.title_fa }));
   const sourceOptions = (meta?.sources || []).map((s) => ({ value: s, label: s }));
   const unitOptions = (meta?.units || []).map((u) => ({ value: String(u.unit_cd), label: u.unit_name }));
+  const priorityOptions = (meta?.priorityOptions || []).map((o) => ({ value: String(o.value), label: o.label }));
+  const qualityOptions = (meta?.qualityOptions || []).map((o) => ({ value: String(o.value), label: o.label }));
 
   const roleUsers = filters.role === "editor"
     ? meta?.usersByRole?.editor
@@ -61,20 +68,22 @@ export default function AnalyticsFilterBar({
   return (
     <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${theme.border}`, marginBottom: 12, backgroundColor: theme.card }}>
       <div style={{ display: "flex", alignItems: "center", gap: 15, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", background: "rgba(59, 130, 246, 0.08)", padding: "4px 10px", borderRadius: 8 }}>
-          <CalendarIcon />
-          <ThemedDatePicker
-            isDarkMode={isDarkMode}
-            value={dateRange}
-            onChange={onDateRangeChange}
-            range
-            calendar={persian}
-            locale={persian_fa}
-            format="YYYY/MM/DD"
-            calendarPosition="bottom-right"
-            placeholder="انتخاب بازه زمانی"
-          />
-        </div>
+        {showDateRange ? (
+          <div style={{ display: "flex", alignItems: "center", background: "rgba(59, 130, 246, 0.08)", padding: "4px 10px", borderRadius: 8 }}>
+            <CalendarIcon />
+            <ThemedDatePicker
+              isDarkMode={isDarkMode}
+              value={dateRange}
+              onChange={onDateRangeChange}
+              range
+              calendar={persian}
+              locale={persian_fa}
+              format="YYYY/MM/DD"
+              calendarPosition="bottom-right"
+              placeholder="انتخاب بازه زمانی"
+            />
+          </div>
+        ) : null}
 
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -101,16 +110,18 @@ export default function AnalyticsFilterBar({
             <RotateIcon /> ریست فیلتر
           </button>
 
-          <button
-            type="button"
-            onClick={onApply}
-            style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6,
-              background: "#0ea5e9", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontFamily: "inherit",
-            }}
-          >
-            اعمال فیلتر
-          </button>
+          {showApplyButton && onApply ? (
+            <button
+              type="button"
+              onClick={onApply}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6,
+                background: "#0ea5e9", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontFamily: "inherit",
+              }}
+            >
+              اعمال فیلتر
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -119,32 +130,59 @@ export default function AnalyticsFilterBar({
           display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12, padding: 12,
           background: "rgba(128,128,128,0.05)", borderRadius: 8,
         }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: statusMultiSelect ? 180 : undefined }}>
             <label style={{ fontSize: 11, fontWeight: 500 }}>وضعیت خبر</label>
-            <select value={filters.status || ""} onChange={(e) => setFilter("status", e.target.value)} style={sel}>
-              <option value="">همه</option>
-              {(meta?.statusOptions || []).map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            {statusMultiSelect ? (
+              <MultiSelect
+                options={(meta?.statusOptions || []).map((o) => ({ value: o.value, label: o.label }))}
+                values={filters.statuses || []}
+                onChange={(v) => setFilter("statuses", v)}
+                theme={theme}
+              />
+            ) : (
+              <select value={filters.status || ""} onChange={(e) => setFilter("status", e.target.value)} style={sel}>
+                <option value="">همه</option>
+                {(meta?.statusOptions || []).map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: priorityQualityMultiSelect ? 180 : undefined }}>
             <label style={{ fontSize: 11, fontWeight: 500 }}>اولویت / اهمیت</label>
-            <select value={filters.priority || ""} onChange={(e) => setFilter("priority", e.target.value)} style={sel}>
-              <option value="">همه</option>
-              {(meta?.priorityOptions || []).map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            {priorityQualityMultiSelect ? (
+              <MultiSelect
+                options={priorityOptions}
+                values={filters.priorities || []}
+                onChange={(v) => setFilter("priorities", v)}
+                theme={theme}
+              />
+            ) : (
+              <select value={filters.priority || ""} onChange={(e) => setFilter("priority", e.target.value)} style={sel}>
+                <option value="">همه</option>
+                {(meta?.priorityOptions || []).map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: priorityQualityMultiSelect ? 180 : undefined }}>
             <label style={{ fontSize: 11, fontWeight: 500 }}>کیفیت</label>
-            <select value={filters.quality || ""} onChange={(e) => setFilter("quality", e.target.value)} style={sel}>
-              <option value="">همه</option>
-              {(meta?.qualityOptions || []).map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            {priorityQualityMultiSelect ? (
+              <MultiSelect
+                options={qualityOptions}
+                values={filters.qualities || []}
+                onChange={(v) => setFilter("qualities", v)}
+                theme={theme}
+              />
+            ) : (
+              <select value={filters.quality || ""} onChange={(e) => setFilter("quality", e.target.value)} style={sel}>
+                <option value="">همه</option>
+                {(meta?.qualityOptions || []).map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
             <label style={{ fontSize: 11, fontWeight: 500 }}>دسته‌بندی</label>
@@ -154,12 +192,21 @@ export default function AnalyticsFilterBar({
             <label style={{ fontSize: 11, fontWeight: 500 }}>منبع</label>
             <MultiSelect options={sourceOptions} values={filters.sources || []} onChange={(v) => setFilter("sources", v)} theme={theme} />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: unitMultiSelect ? 180 : undefined }}>
             <label style={{ fontSize: 11, fontWeight: 500 }}>واحد</label>
-            <select value={filters.unit_cd || ""} onChange={(e) => setFilter("unit_cd", e.target.value)} style={sel}>
-              <option value="">همه</option>
-              {unitOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            {unitMultiSelect ? (
+              <MultiSelect
+                options={unitOptions}
+                values={filters.units || []}
+                onChange={(v) => setFilter("units", v)}
+                theme={theme}
+              />
+            ) : (
+              <select value={filters.unit_cd || ""} onChange={(e) => setFilter("unit_cd", e.target.value)} style={sel}>
+                <option value="">همه</option>
+                {unitOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label style={{ fontSize: 11, fontWeight: 500 }}>نقش کاربر</label>

@@ -3,9 +3,19 @@ import apiClient from "../api/api";
 import { useNavigate } from "react-router-dom";
 import { useAppTheme } from "../context/ThemeContext";
 import { getUnitReportFormStyles } from "../theme/unitReportFormStyles";
-import { FIELD_FIELD_LIMITS } from "../constants/fieldFieldLimits.js";
+import { FIELD_FIELD_LIMITS, validateUnitReportPayload } from "../constants/fieldFieldLimits.js";
 import { clampText } from "../utils/limitInput.js";
-import { UNIT_REPORT_HELP } from "../content/fieldFormHelp.jsx";
+import { UNIT_REPORT_HELP, UNIT_REPORT_OUTPUT_HELP } from "../content/fieldFormHelp.jsx";
+import StandardFormHeader from "../components/common/StandardFormHeader.jsx";
+import HelpModal from "../components/common/HelpModal.jsx";
+import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
+import { DateObject } from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
+import { usePageFontSize } from "../utils/pageFontSize.js";
+import { ANALYSIS_MONITOR_CSS } from "../theme/analysisMonitorStyles.js";
+import { FORM_PAGE_CSS } from "../theme/formPageStyles.js";
+import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
 
 // ۶. دیکودر JWT بومی سبک برای استخراج توکن بدون نیاز به jwt-decode
 const decodeToken = (token) => {
@@ -46,8 +56,6 @@ const convertToPersianDate = (gregorianDate) => {
 const ClipboardIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
 const AlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
-const HelpIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
-const ShieldIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>;
 const XIcon = ({ onClick, style }) => (
   <svg onClick={onClick} style={{ cursor: "pointer", ...style }} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 );
@@ -63,14 +71,13 @@ const CLASSIFICATION_OPTIONS = [
 export default function UnitReportForm() {
   const navigate = useNavigate();
   const { isDarkMode } = useAppTheme();
+  const { fontSizePx } = usePageFontSize();
   const {
     containerStyle,
     cardStyle,
     dateTopBar,
     rejectedAlertStyle,
     goToTargetBtn,
-    slimHeader,
-    miniBackBtn,
     unitBadge,
     formContent,
     inputWrapper,
@@ -119,8 +126,8 @@ export default function UnitReportForm() {
   const historyPanelRef = useRef(null);
   
   // --- وضعیت‌های اصلی فرم ثبت گزارش ---
-  const [title, setTitle] = useState(""); // عنوان گزارش جدید (محدودیت ۲۰۰ کاراکتر)
-  const [text, setText] = useState(""); // شرح گزارش جدید (محدودیت ۲۰۰۰ کاراکتر)
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
   const [reportTypes, setReportTypes] = useState([]); // موضوعات مجاز از سرور
   const [selectedType, setSelectedType] = useState(""); // موضوع انتخاب شده
   const [loading, setLoading] = useState(false); // وضعیت لودینگ ارسال
@@ -130,9 +137,11 @@ export default function UnitReportForm() {
 
   // --- وضعیت‌های اطلاعات کاربر و پنل‌ها ---
   const [userMeta, setUserMeta] = useState({ name: "...", unitcd: "---", statename: "نامشخص" });
-  const [showReportsPanel, setShowReportsPanel] = useState(false); // نمایش پنل لیست خروجی
-  const [showHelpModal, setShowHelpModal] = useState(false); // نمایش مودال راهنما
-  const [reportDate, setReportDate] = useState(new Date()); // شیء تاریخ انتخابی خروجی
+  const [showReportsPanel, setShowReportsPanel] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showOutputHelp, setShowOutputHelp] = useState(false);
+  const [reportDate, setReportDate] = useState(new Date());
+  const [reportPickerDate, setReportPickerDate] = useState(() => new DateObject({ calendar: persian }));
   const [dailyReports, setDailyReports] = useState({}); // گزارش‌های دسته‌بندی شده
   const [searchTerm, setSearchTerm] = useState(""); // فیلتر جستجوی زنده جدول
 
@@ -237,6 +246,15 @@ export default function UnitReportForm() {
     return new Intl.DateTimeFormat("fa-IR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
   };
 
+  const newReportFieldError = useMemo(
+    () => validateUnitReportPayload({ title, text }),
+    [title, text],
+  );
+  const editFieldError = useMemo(
+    () => validateUnitReportPayload({ title: editTitle, text: editText }, { edit: true }),
+    [editTitle, editText],
+  );
+
   // دریافت گزارش‌های روزانه بر اساس تاریخ انتخابی
   const fetchDailyReports = async (date) => {
     const d = date instanceof Date ? date : new Date(date);
@@ -260,9 +278,9 @@ export default function UnitReportForm() {
   // ارسال گزارش جدید به سرور
   const handleSend = async () => {
     if (!title.trim() || !text.trim()) return alert("لطفاً فیلدها را پر کنید");
-    if (title.length > 200) return alert("خطا: عنوان نمی‌تواند بیشتر از ۲۰۰ کاراکتر باشد.");
-    if (text.length > 2000) return alert("خطا: شرح گزارش نمی‌تواند بیشتر از ۲۰۰۰ کاراکتر باشد.");
-    
+    const fieldErr = validateUnitReportPayload({ title: title.trim(), text: text.trim() });
+    if (fieldErr) return alert(`خطا: ${fieldErr}`);
+
     setLoading(true);
     const currentTypeObj = reportTypes.find((t) => t.title_fa === selectedType);
     const message_type = currentTypeObj ? currentTypeObj.type_code : "DEFAULT";
@@ -285,7 +303,7 @@ export default function UnitReportForm() {
       fetchHistory();
       alert("✅ گزارش با موفقیت ثبت شد");
     } catch (err) {
-      alert("❌ خطا در ثبت گزارش");
+      alert(err.response?.data?.error ? `❌ ${err.response.data.error}` : "❌ خطا در ثبت گزارش");
     } finally {
       setLoading(false);
     }
@@ -294,8 +312,11 @@ export default function UnitReportForm() {
   // ثبت ویرایش نهایی روی گزارش عادی
   const submitEdit = async () => {
     if (!editTitle.trim() || !editText.trim()) return alert("فیلدها نباید خالی باشند");
-    if (editTitle.length > 200) return alert("خطا: عنوان حداکثر باید ۲۰۰ کاراکتر باشد.");
-    if (editText.length > 2000) return alert("خطا: شرح گزارش حداکثر باید ۲۰۰۰ کاراکتر باشد.");
+    const fieldErr = validateUnitReportPayload(
+      { title: editTitle.trim(), text: editText.trim() },
+      { edit: true },
+    );
+    if (fieldErr) return alert(`خطا: ${fieldErr}`);
 
     try {
       const currentTypeObj = reportTypes.find((t) => t.title_fa === editingReport.category);
@@ -314,15 +335,18 @@ export default function UnitReportForm() {
       fetchDailyReports(reportDate);
       fetchRejectedCount();
     } catch (err) {
-      alert("❌ خطا در ویرایش گزارش");
+      alert(err.response?.data?.error ? `❌ ${err.response.data.error}` : "❌ خطا در ویرایش گزارش");
     }
   };
 
   // ثبت اصلاحیه روی گزارش برگشت‌خورده و ارسال مجدد به مرکز
   const submitRejectedEdit = async () => {
     if (!editTitle.trim() || !editText.trim()) return alert("فیلدها نباید خالی باشند");
-    if (editTitle.length > 200) return alert("خطا: عنوان حداکثر باید ۲۰۰ کاراکتر باشد.");
-    if (editText.length > 2000) return alert("خطا: شرح گزارش حداکثر باید ۲۰۰۰ کاراکتر باشد.");
+    const fieldErr = validateUnitReportPayload(
+      { title: editTitle.trim(), text: editText.trim() },
+      { edit: true },
+    );
+    if (fieldErr) return alert(`خطا: ${fieldErr}`);
 
     try {
       const currentTypeObj = reportTypes.find((t) => t.title_fa === editingRejectedReport.category);
@@ -346,7 +370,7 @@ export default function UnitReportForm() {
         fetchDailyReports(reportDate);
       }
     } catch (err) {
-      alert("❌ خطا در ویرایش و ارسال مجدد گزارش برگشتی");
+      alert(err.response?.data?.error ? `❌ ${err.response.data.error}` : "❌ خطا در ویرایش و ارسال مجدد گزارش برگشتی");
     }
   };
 
@@ -365,18 +389,43 @@ export default function UnitReportForm() {
     }
   };
 
-  // کنترل تغییر فیزیکی فیلد تاریخ از طریق تاریخ بومی
-  const handleNativeDateChange = (e) => {
-    const val = e.target.value;
-    if (val) {
-      const d = new Date(val);
-      setReportDate(d);
-      fetchDailyReports(d);
-    }
+  const openReportsPanel = () => {
+    const today = new Date();
+    const picker = new DateObject({ calendar: persian });
+    setSearchTerm("");
+    setReportDate(today);
+    setReportPickerDate(picker);
+    fetchDailyReports(today);
+    setShowReportsPanel(true);
   };
 
+  const handleReportDatePickerChange = (d) => {
+    if (!d) return;
+    setReportPickerDate(d);
+    const jsDate = d.toDate?.() ? d.toDate() : new Date(d);
+    setReportDate(jsDate);
+    // #region agent log
+    fetch("http://127.0.0.1:7469/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e3d023" }, body: JSON.stringify({ sessionId: "e3d023", location: "UnitReportForm.jsx:handleReportDatePickerChange", message: "report date changed", data: { picker: String(d?.format?.("YYYY-MM-DD") || ""), persianApi: convertToPersianDate(jsDate) }, timestamp: Date.now(), hypothesisId: "date-picker" }) }).catch(() => {});
+    // #endregion
+    fetchDailyReports(jsDate);
+  };
+
+  const reportDateSubtitle = useMemo(
+    () => `تاریخ: ${toPersianDigits(convertToPersianDate(reportDate).replace(/-/g, "/"))}`,
+    [reportDate],
+  );
+
   return (
-    <div style={containerStyle}>
+    <div
+      className="page-font-root"
+      style={{
+        ...containerStyle,
+        fontSize: fontSizePx,
+        ["--page-font-size"]: fontSizePx,
+      }}
+    >
+      <style>{ANALYSIS_MONITOR_CSS}</style>
+      <style>{FORM_PAGE_CSS}</style>
       {/* پنل اصلی ثبت گزارش */}
       <div
         style={{ ...cardStyle, display: showReportsPanel ? "none" : "block" }}
@@ -405,26 +454,17 @@ export default function UnitReportForm() {
           </div>
         )}
 
-        <div style={slimHeader}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => navigate("/main")} style={miniBackBtn}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 19 12 12 5"></polyline></svg>
-            </button>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <ClipboardIcon />
-              <span style={{ fontWeight: "bold", color: headingOnCard }}>
-                گزارش میدانی یگان
-              </span>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button type="button" onClick={() => setShowHelpModal(true)} style={{ ...miniBackBtn, fontSize: 11 }} title="راهنما">؟</button>
-            <span style={{ fontSize: "11px", color: subMuted }}>
-              {userMeta.name}
-            </span>
-            <div style={unitBadge}>{userMeta.unitcd}</div>
-          </div>
-        </div>
+        <StandardFormHeader
+          variant="embedded"
+          title="گزارش میدانی یگان"
+          onHelp={() => setShowHelpModal(true)}
+          headerEnd={(
+            <>
+              <span style={{ fontSize: "0.79em", color: subMuted }}>{userMeta.name}</span>
+              <div style={unitBadge}>{userMeta.unitcd}</div>
+            </>
+          )}
+        />
 
         <div style={formContent}>
           <div style={inputWrapper} ref={historyPanelRef}>
@@ -470,14 +510,14 @@ export default function UnitReportForm() {
           <div style={inputWrapper}>
             <div style={labelRow}>
               <label style={labelStyle}>عنوان گزارش</label>
-              <span style={{ fontSize: "10px", color: title.length > 200 ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
-                {title.length} / ۲۰۰
+              <span style={{ fontSize: "10px", color: title.length > FIELD_FIELD_LIMITS.unitTitle ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
+                {title.length} / {FIELD_FIELD_LIMITS.unitTitle}
               </span>
             </div>
             <input
               style={{
                 ...inputStyle,
-                borderColor: title.length > 200 ? "#ef4444" : "#334155"
+                borderColor: title.length > FIELD_FIELD_LIMITS.unitTitle ? "#ef4444" : "#334155"
               }}
               value={title}
               onChange={(e) => setTitle(clampText(e.target.value, FIELD_FIELD_LIMITS.unitTitle))}
@@ -490,8 +530,8 @@ export default function UnitReportForm() {
             <div style={labelRow}>
               <label style={labelStyle}>شرح واقعه گزارش</label>
               <div style={{ display: "flex", gap: "10px" }}>
-                <span style={{ fontSize: "10px", color: text.length > 2000 ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
-                  {text.length} / ۲۰۰۰
+                <span style={{ fontSize: "10px", color: text.length > FIELD_FIELD_LIMITS.unitContent ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
+                  {text.length} / {FIELD_FIELD_LIMITS.unitContent}
                 </span>
                 {(title || text) && (
                   <button onClick={() => { setTitle(""); setText(""); }} style={clearLink}>
@@ -503,7 +543,7 @@ export default function UnitReportForm() {
             <textarea
               style={{
                 ...textareaStyle,
-                borderColor: text.length > 2000 ? "#ef4444" : "#334155"
+                borderColor: text.length > FIELD_FIELD_LIMITS.unitContent ? "#ef4444" : "#334155"
               }}
               value={text}
               onChange={(e) => setText(clampText(e.target.value, FIELD_FIELD_LIMITS.unitContent))}
@@ -565,90 +605,37 @@ export default function UnitReportForm() {
           </div>
 
           <div style={btnRow}>
-            <button onClick={handleSend} disabled={loading} style={sendBtn}>
+            <button
+              onClick={handleSend}
+              disabled={loading || !title.trim() || !text.trim() || !!newReportFieldError}
+              style={{
+                ...sendBtn,
+                opacity: loading || !title.trim() || !text.trim() || newReportFieldError ? 0.55 : 1,
+                cursor: loading || newReportFieldError ? "not-allowed" : "pointer",
+              }}
+            >
               {loading ? "در حال ارسال..." : "ارسال نهایی گزارش به مرکز"}
             </button>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+          <div style={{ marginTop: "12px" }}>
             <button
-              onClick={() => {
-                setSearchTerm(""); 
-                setReportDate(new Date());
-                fetchDailyReports(new Date());
-                setShowReportsPanel(true);
-              }}
-              style={{ ...showListBtn, flex: 3 }}
+              onClick={openReportsPanel}
+              style={{ ...showListBtn, width: "100%" }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg> مشاهده خروجی امروز یگان
-            </button>
-            <button onClick={() => setShowHelpModal(true)} style={{ ...showListBtn, flex: 2, color: "#38bdf8", borderColor: "#38bdf8" }}>
-              <HelpIcon /> راهنمای گام‌به‌گام
             </button>
           </div>
         </div>
       </div>
 
-      {/* مودال جدید راهنمای گام‌به‌گام جامع (مجهز به هشدارهای شدید حفاظتی و امنیتی) */}
-      {showHelpModal && (
-        <div style={modalOverlay}>
-          <div style={{ ...modalContent, maxWidth: "600px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${helpHeadingBorder}`, paddingBottom: "12px", marginBottom: "15px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <ShieldIcon />
-                <span style={{ fontWeight: "bold", color: "#f87171", fontSize: "16px" }}>دستورالعمل نگارش و هشدارهای حفاظتی</span>
-              </div>
-              <XIcon onClick={() => setShowHelpModal(false)} />
-            </div>
+      <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} title="راهنمای ثبت گزارش میدانی" maxWidth={560}>
+        <UNIT_REPORT_HELP />
+      </HelpModal>
 
-            <div style={{ maxHeight: "65vh", overflowY: "auto", paddingLeft: "5px" }}>
-              {/* بخش هشدارهای شدید امنیتی */}
-              <div style={redWarningBox}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: "bold", marginBottom: "6px" }}>
-                  <ShieldIcon />
-                  <span>ملاحظات بسیار مهم حفاظتی و امنیتی (رعایت الزامی)</span>
-                </div>
-                <ul style={{ paddingRight: "18px", margin: 0, fontSize: "12px", lineHeight: "1.9" }}>
-                  <li>از به کار بردن هرگونه نام واقعی، عناوین طبقه‌بندی شده، مشخصات مستقیم پرسنل و شماره تماس‌های حفاظتی در متن گزارش‌ها جداً خودداری فرمایید.</li>
-                  <li>اسناد دارای رده یا طبقه‌بندی حفاظتی (خیلی محرمانه، سری و بالاتر) نباید به هیچ عنوان در این سامانه ثبت یا پیوست شوند.</li>
-                  <li>اطلاعات مربوط به جابه‌جایی ناوگان، کدهای سازمانی حساس و موقعیت یگان‌های امنیتی را کدگذاری کرده یا صرفاً کلیات بدون حساسیت را گزارش نمایید.</li>
-                </ul>
-              </div>
-
-              {/* گام‌های آموزشی نگارش */}
-              <div style={{ fontSize: "13px", color: helpBodyText, lineHeight: "2.1", textAlign: "right" }}>
-                <h4 style={{ color: "#38bdf8", margin: "15px 0 8px 0", borderBottom: `1px dashed ${helpHeadingBorder}`, paddingBottom: "4px" }}>💡 راهنمای نگارش گام‌به‌گام:</h4>
-                
-                <b>۱. انتخاب دقیق موضوع:</b> موضوع گزارش را متناسب با واقعیت انتخاب کنید. دسته‌بندی اشتباه فرآیند رسیدگی و ارجاع در مرکز را طولانی می‌کند.
-                <br />
-                <b>۲. عنوان کوتاه و دقیق (حداکثر ۲۰۰ کاراکتر):</b> عنوان باید شامل خلاصه موضوع و مکان باشد تا مدیر بدون نیاز به خواندن کل متن، موضوع اصلی را متوجه شود.
-                <br />
-                <b>۳. رعایت فرمول ۵W در شرح (حداکثر ۲۰۰۰ کاراکتر):</b> در شرح متن مشخص کنید واقعه در <b>چه تاریخی</b>، <b>چه ساعتی</b>، در <b>کدام نقطه جغرافیایی دقیق</b>، با دخالت <b>چه جریان یا عاملی</b> رخ داده و <b>علت اولیه</b> چه بوده است.
-                <br />
-                <b>۴. تنظیم سطح فوریت:</b>
-                <ul style={{ paddingRight: "20px", marginTop: "4px" }}>
-                  <li><span style={{ color: "#3b82f6" }}>عادی:</span> اخبار روزمره، وقایع روتین و بدون پالس منفی.</li>
-                  <li><span style={{ color: "#f59e0b" }}>مهم:</span> تجمعات محدود، حوادث غیرمترقبه یگانی یا چالش‌های نیازمند پیگیری کارشناسی فوری.</li>
-                  <li><span style={{ color: "#ef4444" }}>فوری:</span> حوادث حاد امنیتی، رخدادهای دارای پیامد بالا، تهدید مستقیم و وقایع آنی مخل امنیت یگان.</li>
-                </ul>
-                <b>۵. سیستم پیشنهاد سوابق:</b> اگر موضوع مشابهی قبلاً فرستاده‌اید، از دکمه سوابق برای بازخوانی قالب کلمات کمک بگیرید تا در زمان صرفه‌جویی شود.
-                <br />
-                {/* 🌟 افزودن راهنمای دامنه کیفیت ۵ ستاره جدید */}
-                <b>۶. تعیین شاخص کیفیت (مختص بررسی مدیریت):</b> گزارش‌ها در مرکز مانیتورینگ بر اساس کیفیت مستندسازی به ۵ سطح کیفی درجه‌بندی می‌شوند:
-                <ul style={{ paddingRight: "20px", marginTop: "4px" }}>
-                  <li>⭐⭐⭐⭐⭐ ممتاز (شامل تمامی ابعاد ۵W، بی‌نقص و ویراستاری‌شده)</li>
-                  <li>⭐⭐⭐⭐ عالی (دارای جزییات دقیق، مستند و فاقد ابهام)</li>
-                  <li>⭐⭐⭐ متوسط (اطلاعات کلی، نیازمند ویراستاری جزئی)</li>
-                  <li>⭐⭐ ضعیف (ناقص، نیازمند یادداشت یا اصلاحات فرعی)</li>
-                  <li>⭐ نامعتبر (دارای مغایرت، نیازمند مرجوع سریع به یگان)</li>
-                </ul>
-              </div>
-            </div>
-
-            <button onClick={() => setShowHelpModal(false)} style={closeModalBtn}>مطالب حفاظتی را مطالعه کردم و متعهد می‌شوم</button>
-          </div>
-        </div>
-      )}
+      <HelpModal open={showOutputHelp} onClose={() => setShowOutputHelp(false)} title="راهنمای مشاهده خروجی یگان" maxWidth={560}>
+        <UNIT_REPORT_OUTPUT_HELP />
+      </HelpModal>
 
       {/* مودال ویرایش گزارش‌های عادی کاربر */}
       {editingReport && (
@@ -732,7 +719,15 @@ export default function UnitReportForm() {
             </div>
 
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={submitEdit} style={sendBtn}>
+              <button
+                onClick={submitEdit}
+                disabled={!editTitle.trim() || !editText.trim() || !!editFieldError}
+                style={{
+                  ...sendBtn,
+                  opacity: !editTitle.trim() || !editText.trim() || editFieldError ? 0.55 : 1,
+                  cursor: editFieldError ? "not-allowed" : "pointer",
+                }}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> ذخیره تغییرات
               </button>
               <button onClick={() => setEditingReport(null)} style={backBtn}>انصراف</button>
@@ -820,7 +815,7 @@ export default function UnitReportForm() {
             )}
 
             <div style={{ marginBottom: "10px" }}>
-              <label style={labelStyle}>عنوان اصلاح‌شده (حداکثر ۲۰۰ کاراکتر)</label>
+              <label style={labelStyle}>عنوان اصلاح‌شده (حداکثر {FIELD_FIELD_LIMITS.unitShort} کاراکتر)</label>
               <input
                 style={inputStyle}
                 value={editTitle}
@@ -830,7 +825,7 @@ export default function UnitReportForm() {
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={labelStyle}>متن اصلاح‌شده گزارش (حداکثر ۲۰۰۰ کاراکتر)</label>
+              <label style={labelStyle}>متن اصلاح‌شده گزارش (حداکثر {FIELD_FIELD_LIMITS.unitLong} کاراکتر)</label>
               <textarea
                 style={{ ...textareaStyle, height: "150px" }}
                 value={editText}
@@ -892,7 +887,16 @@ export default function UnitReportForm() {
             </div>
 
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={submitRejectedEdit} style={{ ...sendBtn, background: "#f59e0b" }}>
+              <button
+                onClick={submitRejectedEdit}
+                disabled={!editTitle.trim() || !editText.trim() || !!editFieldError}
+                style={{
+                  ...sendBtn,
+                  background: "#f59e0b",
+                  opacity: !editTitle.trim() || !editText.trim() || editFieldError ? 0.55 : 1,
+                  cursor: editFieldError ? "not-allowed" : "pointer",
+                }}
+              >
                 <svg style={{ marginLeft: "4px" }} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> اصلاح و ارسال مجدد
               </button>
               <button onClick={() => setEditingRejectedReport(null)} style={backBtn}>انصراف</button>
@@ -903,41 +907,53 @@ export default function UnitReportForm() {
 
       {/* پنل خروجی و چاپ گزارشات امروز یگان */}
       {showReportsPanel && (
-        <div style={reportListContainer}>
-          <div style={panelTopBar} className="no-print">
-            <button onClick={() => setShowReportsPanel(false)} style={closeBtn}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-            <div style={searchWrapper}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <div style={{ ...reportListContainer, minHeight: "100vh", maxWidth: "100%", padding: 0, borderRadius: 0 }}>
+          <StandardFormHeader
+            title="مشاهده خروجی یگان"
+            subtitle={reportDateSubtitle}
+            onBack={() => setShowReportsPanel(false)}
+            onHelp={() => setShowOutputHelp(true)}
+          />
+
+          <div style={{ padding: "12px 16px 24px", maxWidth: 1100, margin: "0 auto" }}>
+          <div className="form-page-panel-bar no-print">
+            <div className="form-page-search" style={{ ...searchWrapper, flex: 1 }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px", flexShrink: 0 }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               <input
-                style={searchInput}
+                style={{ ...searchInput, flex: 1, minWidth: 0 }}
                 placeholder="جستجو در متن یا عنوان گزارش..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-              {searchTerm && (
-                <button 
-                  onClick={() => setSearchTerm("")} 
-                  style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "11px" }}
+              {searchTerm ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "0.86em", flexShrink: 0 }}
                 >
                   حذف فیلتر
                 </button>
-              )}
+              ) : null}
             </div>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              <input 
-                type="date" 
-                className="date-input" 
-                onChange={handleNativeDateChange}
+            <div className="form-page-date">
+              <ThemedDatePicker
+                isDarkMode={isDarkMode}
+                value={reportPickerDate}
+                onChange={handleReportDatePickerChange}
+                calendar={persian}
+                locale={persian_fa}
+                format="YYYY/MM/DD"
+                calendarPosition="bottom-right"
+                placeholder="انتخاب تاریخ شمسی"
               />
-              <button onClick={() => window.print()} style={printActionBtn}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> چاپ فیزیکی لیست
-              </button>
             </div>
+            <button type="button" onClick={() => window.print()} style={printActionBtn} className="no-print">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              چاپ فیزیکی لیست
+            </button>
           </div>
 
-          <div className="print-area">
+          <div className="form-page-table-wrap print-area">
             <div style={{ marginBottom: "20px" }}>
               <h2 style={{ textAlign: "center", color: headingOnCard }} className="print-black-text">گزارش روزانه میدانی یگان</h2>
               <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "10px", color: headingOnCard }} className="print-border-black">
@@ -951,15 +967,15 @@ export default function UnitReportForm() {
               </table>
             </div>
 
-            <table style={finalTable} className="print-border-black">
+            <table style={finalTable} className="print-border-black form-page-table">
               <thead>
                 <tr style={{ background: "#1e293b" }}>
-                  <th style={{ ...thStyle, width: "12%" }}>تاریخ ثبت</th>
-                  <th style={{ ...thStyle, width: "10%" }}>ساعت</th>
-                  <th style={{ ...thStyle, width: "12%" }}>اولویت</th>
-                  <th style={{ ...thStyle, width: "18%" }}>عنوان</th>
-                  <th style={{ ...thStyle, width: "38%" }}>شرح کامل گزارش واقعه</th>
-                  <th style={{ ...thStyle, width: "10%" }} className="no-print">عملیات</th>
+                  <th style={thStyle} className="col-short">تاریخ ثبت</th>
+                  <th style={thStyle} className="col-short">ساعت</th>
+                  <th style={thStyle} className="col-short">اولویت</th>
+                  <th style={thStyle} className="col-title">عنوان</th>
+                  <th style={thStyle} className="col-wide">شرح کامل گزارش واقعه</th>
+                  <th style={thStyle} className="col-actions no-print">عملیات</th>
                 </tr>
               </thead>
               <tbody>
@@ -1023,6 +1039,7 @@ export default function UnitReportForm() {
               </tbody>
             </table>
           </div>
+          </div>
         </div>
       )}
 
@@ -1036,7 +1053,7 @@ export default function UnitReportForm() {
         }
         .v3-form-body { ${isDarkMode ? "background: #0f172a; color: #f1f5f9;" : "background: #ffffff; color: #0f172a; border: 1px solid #e2e8f0;"} padding: 24px; border-radius: 16px; max-width: 600px; margin: 20px auto; direction: rtl; }
         .v3-form-body label, .v3-form-body .form-label { color: ${isDarkMode ? "#cbd5e1" : "#475569"} !important; font-size: 13px; font-weight: 500; display: block; margin-bottom: 8px; margin-top: 16px; }
-        .v3-form-body input[type="text"], .v3-form-body select, .v3-form-body textarea { width: 100% !important; ${isDarkMode ? "background-color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: #ffffff !important;" : "background-color: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important;"} padding: 10px 14px !important; border-radius: 10px !important; font-family: inherit !important; font-size: 13px !important; outline: none !important; box-sizing: border-box; transition: border-color 0.2s; }
+        .v3-form-body input[type="text"], .v3-form-body select, .v3-form-body textarea { width: 100% !important; ${isDarkMode ? "background-color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: #ffffff !important;" : "background-color: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important;"} padding: 10px 14px !important; border-radius: 10px !important; font-family: inherit !important; font-size: inherit !important; outline: none !important; box-sizing: border-box; transition: border-color 0.2s; }
         .v3-form-body input:focus, .v3-form-body select:focus, .v3-form-body textarea:focus { border-color: #38bdf8 !important; }
         .v3-priority-row { display: flex; gap: 8px; width: 100%; }
         .v3-priority-btn { flex: 1; height: 40px; ${isDarkMode ? "background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1); color: #94a3b8;" : "background: #f1f5f9; border: 1px solid #cbd5e1; color: #64748b;"} border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; transition: all 0.2s; }

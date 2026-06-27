@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, Save, Trash2, FlaskConical } from "lucide-react";
+import { Plus, Save, Trash2, FlaskConical } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import api from "../api/api";
 import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 
@@ -171,19 +172,18 @@ export default function NewsCleanPatternManagement() {
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 960, margin: "0 auto", color: "#e2e8f0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button type="button" style={btnGhost} onClick={() => navigate(-1)}>
-          <ArrowRight size={18} />
-          بازگشت
-        </button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>الگوهای پاکسازی خبر</h1>
-        <button type="button" style={{ ...btnPrimary, marginRight: "auto" }} onClick={openCreate}>
+    <FormPageLayout
+      title="الگوهای پاکسازی خبر"
+      documentTitle="الگوهای پاکسازی خبر"
+      onBack={() => navigate(-1)}
+      maxWidth="960px"
+      toolbarExtra={(
+        <button type="button" className="v3-add-fab" style={{ padding: "6px 12px", fontSize: "0.86em" }} onClick={openCreate}>
           <Plus size={16} />
           افزودن عبارت
         </button>
-      </div>
-
+      )}
+    >
       {err && <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div>}
 
       <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 10, padding: 16, marginBottom: 20 }}>
@@ -222,32 +222,33 @@ export default function NewsCleanPatternManagement() {
       {loading ? (
         <div>در حال بارگذاری...</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div className="form-page-table-wrap">
+        <table className="form-page-table">
           <thead>
             <tr style={{ borderBottom: "1px solid #334155", textAlign: "right" }}>
-              <th style={{ padding: 8 }}>عبارت</th>
-              <th style={{ padding: 8 }}>عنوان</th>
-              <th style={{ padding: 8 }}>حذف</th>
-              <th style={{ padding: 8 }}>Regex</th>
-              <th style={{ padding: 8 }}>فعال</th>
-              <th style={{ padding: 8 }}>عملیات</th>
+              <th className="col-wide">عبارت</th>
+              <th className="col-title">عنوان</th>
+              <th className="col-text">حذف</th>
+              <th className="col-short">Regex</th>
+              <th className="col-short">فعال</th>
+              <th className="col-actions">عملیات</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} style={{ borderBottom: "1px solid #1e293b" }}>
-                <td style={{ padding: 8 }}>{row.phrase}</td>
-                <td style={{ padding: 8, opacity: 0.85 }}>{row.title_fa || "—"}</td>
-                <td style={{ padding: 8, opacity: 0.75 }}>{REMOVE_MODE_LABELS[row.remove_mode] || REMOVE_MODE_LABELS.phrase}</td>
-                <td style={{ padding: 8 }}>{row.is_regex ? "بله" : "—"}</td>
-                <td style={{ padding: 8 }}>
+                <td className="col-wide">{row.phrase}</td>
+                <td className="col-title" style={{ opacity: 0.85 }}>{row.title_fa || "—"}</td>
+                <td className="col-text" style={{ opacity: 0.75 }}>{REMOVE_MODE_LABELS[row.remove_mode] || REMOVE_MODE_LABELS.phrase}</td>
+                <td className="col-short">{row.is_regex ? "بله" : "—"}</td>
+                <td className="col-short">
                   <input
                     type="checkbox"
                     checked={!!row.is_enabled}
                     onChange={() => toggleEnabled(row)}
                   />
                 </td>
-                <td style={{ padding: 8, display: "flex", gap: 8 }}>
+                <td className="col-actions" style={{ display: "flex", gap: 8 }}>
                   <button type="button" style={btnGhost} onClick={() => openEdit(row)}>ویرایش</button>
                   {!row.is_builtin && (
                     <button type="button" style={{ ...btnGhost, color: "#f87171" }} onClick={() => removeRow(row)}>
@@ -259,6 +260,7 @@ export default function NewsCleanPatternManagement() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {modal === "form" && (
@@ -336,6 +338,6 @@ export default function NewsCleanPatternManagement() {
           </div>
         </div>
       )}
-    </div>
+    </FormPageLayout>
   );
 }
