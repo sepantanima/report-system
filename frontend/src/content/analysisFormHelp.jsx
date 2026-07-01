@@ -1,4 +1,5 @@
 import React from "react";
+import { ANALYSIS_TERMS } from "../constants/analysisTerminology.js";
 
 const helpSection = (title, items) => (
   <div style={{ marginBottom: 16 }}>
@@ -23,17 +24,17 @@ const statusBlock = (items) => (
 export const MANAGER_PANEL_HELP = () => (
   <div style={{ fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
     {helpSection("هدف این صفحه", [
-      "مدیریت کل چرخه موضوع → تایید → ارجاع → مأموریت → گزارش.",
+      "مدیریت کل چرخه محور → تصویب → ارجاع → مأموریت → گزارش.",
       "هر تب یک مرحله جدا دارد؛ با بازگشت از جزئیات، همان تب و فیلترها حفظ می‌شوند.",
     ])}
-    {helpSection("تب «بررسی موضوعات»", [
-      "کارت موضوعات ثبت‌شده / برگشت‌خورده را نشان می‌دهد.",
-      "کلیک روی کارت → صفحه تایید/رد/برگشت. دکمه «ثبت تصمیم» وضعیت را تغییر می‌دهد.",
-      "وضعیت Submitted = منتظر بررسی؛ UnderReview = برگشت برای اصلاح پیشنهاددهنده.",
+    {helpSection(`تب «${ANALYSIS_TERMS.ratifyTab}»`, [
+      "کارت محورهای ثبت‌شده / برگشت‌خورده را نشان می‌دهد.",
+      "کلیک روی کارت → صفحه تصویب/رد/برگشت. دکمه «ثبت تصمیم» وضعیت را تغییر می‌دهد.",
+      "Submitted = منتظر تصویب؛ UnderReview = برگشت برای اصلاح پیشنهاددهنده.",
     ])}
-    {helpSection("تب «ارجاع موضوعات»", [
-      "فقط موضوعات Approved/Assigned. badge روی کارت: تعداد ارجاع، در جریان، تمام.",
-      "کلیک → جدول ارجاع‌ها + «ارجاع جدید». لغوشده‌ها پیش‌فرض پنهان؛ از فیلتر «نمایش لغو/بایگانی» ببینید.",
+    {helpSection(`تب «${ANALYSIS_TERMS.assignTab}»`, [
+      "فقط محورهای تصویب‌شده (Approved/Assigned). badge روی کارت: تعداد ارجاع، در جریان، تمام.",
+      "کلیک → جدول مأموریت‌ها + «ارجاع جدید». لغوشده‌ها پیش‌فرض پنهان؛ از فیلتر «نمایش لغو/بایگانی» ببینید.",
     ])}
     {helpSection("تب «مأموریت‌ها»", [
       "پایش همه assignmentها. «مدیریت» → تغییر مهلت/دستورالعمل. workflow تحلیل از مسیر جداگانه.",
@@ -43,8 +44,8 @@ export const MANAGER_PANEL_HELP = () => (
       "Excel روی هر ویجت رتبه‌بندی.",
     ])}
     {statusBlock([
-      ["Submitted", "موضوع ثبت شده، منتظر تایید"],
-      ["Approved", "تایید شده، آماده ارجاع"],
+      ["Submitted", "محور ثبت شده، منتظر تصویب"],
+      ["Approved", "تصویب شده، آماده ارجاع"],
       ["Assigned / InProgress", "مأموریت فعال"],
       ["NeedsRevision", "تحلیل برگشت خورده"],
       ["FinalApproved", "تحلیل تایید نهایی"],
@@ -57,7 +58,7 @@ export const MISSION_DETAIL_HELP = () => (
   <div style={{ fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
     {helpSection("محتوای تحلیل", [
       "تحلیل‌گر فقط در Draft/ReturnedForRevision ویرایش می‌کند. پس از «ارسال» متن قفل می‌شود.",
-      "دکمه تمام‌صفحه روی ویرایشگر → فضای بیشتر برای نوشتن. حداکثر ۲۰۰۰ کاراکتر (متن خالص).",
+      "دکمه تمام‌صفحه روی ویرایشگر → فضای بیشتر برای نوشتن. حداکثر ۴۰۰۰ کاراکتر (متن خالص).",
       "«ذخیره» = پیش‌نویس؛ «ارسال» = ورود به صف بازبینی.",
     ])}
     {helpSection("بازخورد", [
@@ -79,10 +80,11 @@ export const MISSION_DETAIL_HELP = () => (
 
 export const TOPIC_FORM_HELP = () => (
   <div style={{ fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
-    {helpSection("ثبت موضوع", [
-      "عنوان/حوزه/کلیدواژه: حداکثر ۸۰ کاراکتر.",
+    {helpSection("ثبت محور", [
+      `${ANALYSIS_TERMS.axis}/حوزه/کلیدواژه: حداکثر ۸۰ کاراکتر.`,
       "شرح و دلیل اهمیت: حداکثر ۱۵۰ کاراکتر (متن خالص). از toolbar برای بولد/زیرخط استفاده کنید.",
-      "مهلت پیشنهادی موضوع ≠ مهلت انجام تحلیل (بعد از ارجاع تعیین می‌شود).",
+      `${ANALYSIS_TERMS.suggestedDeadline}: ${ANALYSIS_TERMS.suggestedDeadlineHint}.`,
+      `${ANALYSIS_TERMS.suggestedDeadline} ≠ ${ANALYSIS_TERMS.missionDeadline} (بعد از ارجاع تعیین می‌شود).`,
     ])}
     {helpSection("پس از ارسال", [
       "UnderReview = برگشت برای اصلاح — متن برگشت روی کارت نمایش داده می‌شود.",
@@ -95,7 +97,7 @@ export const ASSIGN_DETAIL_HELP = () => (
   <div style={{ fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
     {helpSection("ارجاع", [
       "تحلیل‌گر و راهنما از لیست جستجوپذیر. دستورالعمل حداکثر ۱۵۰ کاراکتر.",
-      "«مهلت انجام تحلیل» مهلت واقعی analyst است؛ مهلت پیشنهادی موضوع فقط مرجع.",
+      `${ANALYSIS_TERMS.missionDeadline} مهلت واقعی analyst است؛ ${ANALYSIS_TERMS.suggestedDeadline} فقط مرجع.`,
       "لغو فقط وقتی status=Assigned و تحلیل شروع نشده.",
     ])}
   </div>
@@ -119,19 +121,19 @@ export const MENTOR_REVIEW_HELP = () => (
 
 export const APPROVAL_DETAIL_HELP = () => (
   <div style={{ fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
-    {helpSection("بررسی موضوع", [
-      "محتوای موضوع را بخوانید؛ در صورت نیاز «ویرایش محتوای موضوع» را بزنید.",
-      "تصمیم: تایید / رد / برگشت برای اصلاح / بستن. توضیح حداکثر ۱۵۰ کاراکتر.",
-      "«ثبت تصمیم» وضعیت را تغییر می‌دهد و به لیست بررسی برمی‌گردید.",
+    {helpSection("تصویب محور", [
+      "محتوای محور را بخوانید؛ در صورت نیاز «ویرایش محتوای محور» را بزنید.",
+      `تصمیم: ${ANALYSIS_TERMS.ratify} / رد / برگشت برای اصلاح / بستن. توضیح حداکثر ۱۵۰ کاراکتر.`,
+      "«ثبت تصمیم» وضعیت را تغییر می‌دهد و به لیست تصویب برمی‌گردید.",
     ])}
     {helpSection("تصمیم‌ها", [
-      "تایید → موضوع آماده ارجاع در تب «ارجاع موضوعات».",
+      `${ANALYSIS_TERMS.ratify} → محور آماده ارجاع در تب «${ANALYSIS_TERMS.assignTab}».`,
       "برگشت برای اصلاح → پیشنهاددهنده باید اصلاح و ارسال مجدد کند.",
-      "رد → موضوع رد نهایی. بستن → بایگانی بدون ارجاع.",
+      "رد → محور رد نهایی. بستن → بایگانی بدون ارجاع.",
     ])}
     {statusBlock([
-      ["Submitted", "منتظر بررسی مدیر"],
-      ["Approved", "تایید — آماده ارجاع"],
+      ["Submitted", "منتظر تصویب"],
+      ["Approved", "تصویب — آماده ارجاع"],
       ["UnderReview", "برگشت برای اصلاح پیشنهاددهنده"],
       ["Rejected", "رد نهایی"],
     ])}
@@ -141,7 +143,7 @@ export const APPROVAL_DETAIL_HELP = () => (
 export const MISSION_MANAGE_HELP = () => (
   <div style={{ fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
     {helpSection("مدیریت مأموریت", [
-      "تغییر مهلت انجام تحلیل (شمسی)، اولویت و دستورالعمل (حداکثر ۱۵۰ کاراکتر).",
+      `تغییر ${ANALYSIS_TERMS.missionDeadline} (شمسی)، اولویت و دستورالعمل (حداکثر ۱۵۰ کاراکتر).`,
       "«ذخیره تغییرات» فقط metadata را به‌روز می‌کند؛ متن تحلیل اینجا ویرایش نمی‌شود.",
       "«لغو ارجاع» فقط وقتی status=Assigned و تحلیل شروع نشده.",
       "«ورود به workflow تحلیل» → صفحه نوشتن/بازبینی تحلیل.",
@@ -150,7 +152,7 @@ export const MISSION_MANAGE_HELP = () => (
       ["Assigned", "ارجاع شده — تحلیل‌گر هنوز شروع نکرده"],
       ["InProgress", "تحلیل در جریان"],
       ["Cancelled", "لغو شده"],
-      ["Completed", "تکمیل شده"],
+      ["FinalApproved", "تکمیل شده — تایید نهایی"],
     ])}
   </div>
 );

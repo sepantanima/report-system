@@ -122,19 +122,28 @@ export const PRIORITY_META = {
   low: { label: "عادی", color: "#64748b" },
 };
 
-export {
+import {
   TOPIC_FIELD_LIMITS,
   MISSION_FIELD_LIMITS,
   ANALYSIS_FIELD_LIMITS,
   stripHtml,
   plainTextLength,
 } from "../constants/analysisFieldLimits.js";
+import { ANALYSIS_TERMS } from "../constants/analysisTerminology.js";
+
+export {
+  TOPIC_FIELD_LIMITS,
+  MISSION_FIELD_LIMITS,
+  ANALYSIS_FIELD_LIMITS,
+  stripHtml,
+  plainTextLength,
+};
 
 export const TOPIC_STATUS_META = {
   Draft: { label: "پیش‌نویس", color: "#64748b" },
   Submitted: { label: "ثبت‌شده", color: "#38bdf8" },
   UnderReview: { label: "برگشت برای اصلاح", color: "#f59e0b" },
-  Approved: { label: "تایید شده", color: "#22c55e" },
+  Approved: { label: "تصویب شده", color: "#22c55e" },
   Rejected: { label: "رد شده", color: "#ef4444" },
   Assigned: { label: "ارجاع شده", color: "#8b5cf6" },
   Closed: { label: "بسته", color: "#94a3b8" },
@@ -199,22 +208,38 @@ export const EMPTY_TOPIC_FORM = {
   priority: "medium", importance_reason: "", suggested_deadline: "",
 };
 
+export function validateSuggestedDeadline(value) {
+  if (!value) return null;
+  const gregorian = persianDateToGregorian(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(gregorian)) {
+    return ANALYSIS_TERMS.suggestedDeadlineInvalid;
+  }
+  const dl = new Date(`${gregorian}T12:00:00`);
+  if (Number.isNaN(dl.getTime())) {
+    return ANALYSIS_TERMS.suggestedDeadlineInvalid;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dl.setHours(0, 0, 0, 0);
+  if (dl < today) {
+    return ANALYSIS_TERMS.suggestedDeadlinePast;
+  }
+  return null;
+}
+
 export function validateTopicForm(form = {}) {
   const L = TOPIC_FIELD_LIMITS;
-  if (!form.title?.trim()) return "عنوان موضوع الزامی است";
-  if ((form.title || "").length > L.title) return `عنوان حداکثر ${L.title} کاراکتر باشد`;
-  if (!form.description?.trim()) return "شرح موضوع الزامی است";
-  if ((form.description || "").length > L.description) return `شرح موضوع حداکثر ${L.description} کاراکتر باشد`;
+  if (!form.title?.trim()) return ANALYSIS_TERMS.axisRequired;
+  if ((form.title || "").length > L.title) return ANALYSIS_TERMS.axisMaxLength(L.title);
+  const descLen = plainTextLength(form.description);
+  if (!descLen) return ANALYSIS_TERMS.descriptionRequired;
+  if (descLen > L.description) return ANALYSIS_TERMS.descriptionMaxLength(L.description);
   if ((form.domain || "").length > L.domain) return `حوزه حداکثر ${L.domain} کاراکتر باشد`;
   if ((form.keywords || "").length > L.keywords) return `کلیدواژه‌ها حداکثر ${L.keywords} کاراکتر باشد`;
-  if ((form.importance_reason || "").length > L.importance_reason) return `دلیل اهمیت حداکثر ${L.importance_reason} کاراکتر باشد`;
-  if (form.suggested_deadline) {
-    const dl = new Date(String(form.suggested_deadline).slice(0, 10));
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    dl.setHours(0, 0, 0, 0);
-    if (Number.isNaN(dl.getTime())) return "تاریخ مهلت نامعتبر است";
-    if (dl < today) return "مهلت پیشنهادی نمی‌تواند قبل از امروز باشد";
+  if (plainTextLength(form.importance_reason) > L.importance_reason) {
+    return `دلیل اهمیت حداکثر ${L.importance_reason} کاراکتر باشد`;
   }
+  const deadlineErr = validateSuggestedDeadline(form.suggested_deadline);
+  if (deadlineErr) return deadlineErr;
   return null;
 }

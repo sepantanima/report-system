@@ -12,6 +12,7 @@ import { stripHtml } from "../constants/analysisFieldLimits.js";
 import { MISSION_DETAIL_HELP } from "../content/analysisFormHelp.jsx";
 import analysisService from "../services/analysisService";
 import { getCurrentUser, parseUserRoles, canManageAnalysis } from "../utils/analysisAuth.js";
+import { ANALYSIS_TERMS } from "../constants/analysisTerminology.js";
 import { formatPersianDateShort, toPersianDigits } from "../utils/analysisMonitorUtils.js";
 
 const STATUS_LABELS = {
@@ -212,10 +213,10 @@ export default function AnalysisMissionDetail() {
   }
 
   return (
-    <AnalysisPageShell title={assignment?.topic_title || "مأموریت"} subtitle={STATUS_LABELS[assignment?.status] || assignment?.status} backTo={backPath} onHelp={MISSION_DETAIL_HELP} helpTitle="راهنمای مأموریت">
+    <AnalysisPageShell title={`${ANALYSIS_TERMS.axisLabelPrefix} ${assignment?.topic_title || "—"}`} subtitle={STATUS_LABELS[assignment?.status] || assignment?.status} backTo={backPath} onHelp={MISSION_DETAIL_HELP} helpTitle="راهنمای مأموریت">
       <div style={{ fontSize: "11px", color: S.subMuted, marginBottom: "16px", lineHeight: 1.7, padding: 12, borderRadius: 10, background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc", border: `1px solid ${S.inputBorder}` }}>
-        <div>مهلت انجام تحلیل: {formatPersianDateShort(assignment?.deadline)}</div>
-        <div>مهلت پیشنهادی موضوع: {formatPersianDateShort(assignment?.topic_suggested_deadline)}</div>
+        <div>{ANALYSIS_TERMS.missionDeadline}: {formatPersianDateShort(assignment?.deadline)}</div>
+        <div>{ANALYSIS_TERMS.suggestedDeadline}: {formatPersianDateShort(assignment?.topic_suggested_deadline)}</div>
         <div>اولویت: {assignment?.priority}</div>
         {assignment?.guidelines && <p style={{ marginTop: "8px" }}>{assignment.guidelines}</p>}
         {!assignment?.mentor_id && isManager && (

@@ -1,9 +1,11 @@
 import { stripHtml } from "../services/newsTextUtils.js";
 
 /** محدودیت کاراکتر فرم‌های اخبار — هم‌راستا با frontend/src/constants/newsFieldLimits.js */
+export const DEFAULT_DAILY_SUBMISSION_LIMIT = 10;
+
 export const NEWS_FIELD_LIMITS = {
   cleanedText: 700,
-  rawText: 1200,
+  rawText: 2000,
   summary: 500,
   statusNote: 200,
   source: 80,

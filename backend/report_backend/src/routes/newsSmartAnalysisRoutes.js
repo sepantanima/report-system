@@ -15,6 +15,14 @@ import {
   exportSmartAnalysisTxt,
   publishSmartAnalysis,
 } from "../services/newsSmartAnalysisService.js";
+import {
+  createAnalysisPack,
+  getPackById,
+  listPacks,
+  upsertPackAnalysis,
+  getPackFrozenNews,
+  deletePack,
+} from "../services/newsSmartAnalysisPackService.js";
 
 const router = Router();
 const smartAnalysisRoles = requireRole("admin", "news_editor", "news_chief");
@@ -46,6 +54,11 @@ router.post("/smart-analysis/ai/run", auth, smartAnalysisRoles, async (req, res)
     const fe = validateFormDataObject(form_data);
     if (fe) return res.status(400).json({ error: fe });
 
+    const packId = form_data?.pack_id != null ? parseInt(form_data.pack_id, 10) : null;
+    if (!Number.isFinite(packId) && !form_data?.query_payload) {
+      return res.status(400).json({ error: "pack_id یا query_payload الزامی است" });
+    }
+
     const data = await runSmartAnalysisAiWithFallback({
       actionName: an,
       formData: form_data,
@@ -54,6 +67,77 @@ router.post("/smart-analysis/ai/run", auth, smartAnalysisRoles, async (req, res)
     });
 
     res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post("/smart-analysis/packs", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    const { query_payload, selected_ids, title } = req.body || {};
+    if (!query_payload || typeof query_payload !== "object") {
+      return res.status(400).json({ error: "query_payload الزامی است" });
+    }
+    const pack = await createAnalysisPack({
+      queryPayload: query_payload,
+      selectedIds: Array.isArray(selected_ids) ? selected_ids : [],
+      title,
+      userId: req.user?.id ?? null,
+      userRole: req.user?.role,
+    });
+    res.status(201).json(pack);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get("/smart-analysis/packs", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    res.json(await listPacks(req.query));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get("/smart-analysis/packs/:id", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    const pack = await getPackById(parseInt(req.params.id, 10));
+    if (!pack) return res.status(404).json({ error: "پک یافت نشد" });
+    res.json(pack);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get("/smart-analysis/packs/:id/news", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    const data = await getPackFrozenNews(parseInt(req.params.id, 10), {
+      userId: req.user?.id ?? null,
+      role: req.user?.role,
+    });
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put("/smart-analysis/packs/:id/analyses/:type", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    const row = await upsertPackAnalysis(
+      parseInt(req.params.id, 10),
+      req.params.type,
+      req.body || {},
+      req.user?.id ?? null,
+    );
+    res.json(row);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete("/smart-analysis/packs/:id", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    res.json(await deletePack(parseInt(req.params.id, 10)));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

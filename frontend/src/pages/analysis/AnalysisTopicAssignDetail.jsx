@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ThemedDatePicker from "../../components/analysis/ThemedDatePicker.jsx";
-import RichTextEditor from "../../components/analysis/RichTextEditor.jsx";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { Plus, X, Calendar, ExternalLink, Ban } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../../theme/unitReportFormStyles";
 import AnalysisPageShell from "../../components/analysis/AnalysisPageShell.jsx";
-import SearchableUserSelect from "../../components/analysis/SearchableUserSelect.jsx";
-import { MISSION_FIELD_LIMITS } from "../../constants/analysisFieldLimits.js";
+import AnalysisWorkflowStepper from "../../components/analysis/AnalysisWorkflowStepper.jsx";
+import TopicContextPanel from "../../components/analysis/TopicContextPanel.jsx";
+import MissionAssignForm from "../../components/analysis/MissionAssignForm.jsx";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { ASSIGN_DETAIL_HELP } from "../../content/analysisFormHelp.jsx";
 import analysisService from "../../services/analysisService";
 import { useManagementBackUrl } from "../../hooks/useManagementBackUrl.js";
@@ -29,8 +30,8 @@ export default function AnalysisTopicAssignDetail() {
   const backTo = useManagementBackUrl("assign");
   const { isDarkMode } = useAppTheme();
   const S = getUnitReportFormStyles(isDarkMode);
+  const theme = { card: isDarkMode ? "#1e293b" : "#fff", border: isDarkMode ? "#334155" : "#e2e8f0", text: isDarkMode ? "#f1f5f9" : "#1e293b" };
   const deadlinePickerRef = useRef(null);
-  const newFormPickerRef = useRef(null);
 
   const [topic, setTopic] = useState(null);
   const [assignments, setAssignments] = useState([]);
@@ -88,15 +89,13 @@ export default function AnalysisTopicAssignDetail() {
 
   useEffect(() => {
     const closeOnOutside = (e) => {
-      [deadlinePickerRef, newFormPickerRef].forEach((ref) => {
-        const picker = ref.current;
-        if (!picker) return;
-        const inCalendar = e.target.closest?.(".rmdp-wrapper");
-        const inInput = e.target.closest?.(".assign-date-picker");
-        if (!inCalendar && !inInput && typeof picker.closeCalendar === "function") {
-          picker.closeCalendar();
-        }
-      });
+      const picker = deadlinePickerRef.current;
+      if (!picker) return;
+      const inCalendar = e.target.closest?.(".rmdp-wrapper");
+      const inInput = e.target.closest?.(".assign-date-picker");
+      if (!inCalendar && !inInput && typeof picker.closeCalendar === "function") {
+        picker.closeCalendar();
+      }
     };
     document.addEventListener("mousedown", closeOnOutside);
     return () => document.removeEventListener("mousedown", closeOnOutside);
@@ -145,7 +144,7 @@ export default function AnalysisTopicAssignDetail() {
 
   if (loading || !topic) {
     return (
-      <AnalysisPageShell title="ارجاع موضوع" backTo={backTo}>
+      <AnalysisPageShell title={ANALYSIS_TERMS.assignPageTitle} backTo={backTo}>
         <p style={{ color: S.subMuted, fontSize: 12 }}>در حال بارگذاری...</p>
       </AnalysisPageShell>
     );
@@ -153,24 +152,20 @@ export default function AnalysisTopicAssignDetail() {
 
   if (!["Approved", "Assigned"].includes(topic.status)) {
     return (
-      <AnalysisPageShell title="ارجاع موضوع" backTo={backTo}>
-        <p style={{ color: "#f59e0b", fontSize: 12 }}>فقط موضوعات تایید‌شده قابل ارجاع هستند.</p>
+      <AnalysisPageShell title={ANALYSIS_TERMS.assignPageTitle} backTo={backTo}>
+        <p style={{ color: "#f59e0b", fontSize: 12 }}>{ANALYSIS_TERMS.assignGateMessage}</p>
       </AnalysisPageShell>
     );
   }
 
   return (
-    <AnalysisPageShell title="مدیریت ارجاع موضوع" subtitle={topic.topic_code} backTo={backTo} onHelp={ASSIGN_DETAIL_HELP} helpTitle="راهنمای ارجاع">
-      <div style={{ marginBottom: 16 }}>
-        <h3 style={{ color: S.headingOnCard, fontSize: 14, margin: "0 0 8px" }}>{topic.title}</h3>
-        <p style={{ color: S.subMuted, fontSize: 12, lineHeight: 1.7, margin: 0 }}>{topic.description}</p>
-        <p style={{ color: S.subMuted, fontSize: 11, margin: "8px 0 0" }}>
-          مهلت پیشنهادی موضوع: {formatPersianDateShort(topic.suggested_deadline)}
-        </p>
-      </div>
+    <AnalysisPageShell title={ANALYSIS_TERMS.assignPageTitle} subtitle={topic.topic_code} backTo={backTo} onHelp={ASSIGN_DETAIL_HELP} helpTitle="راهنمای ارجاع">
+      <AnalysisWorkflowStepper currentStep="assign" topicStatus={topic.status} />
+
+      <TopicContextPanel topic={topic} variant="compact" theme={theme} isDarkMode={isDarkMode} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
-        <h4 style={{ color: S.headingOnCard, fontSize: 13, margin: 0 }}>ارجاع‌های فعال ({assignments.length})</h4>
+        <h4 style={{ color: S.headingOnCard, fontSize: 13, margin: 0 }}>مأموریت‌های موجود ({assignments.length})</h4>
         {!showNewForm && (
           <button type="button" style={{ ...S.sendBtn, padding: "8px 14px", fontSize: 12, background: "#10b981", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowNewForm(true)}>
             <Plus size={14} /> ارجاع جدید
@@ -179,145 +174,77 @@ export default function AnalysisTopicAssignDetail() {
       </div>
 
       {assignments.length === 0 ? (
-        <p style={{ fontSize: 12, color: S.subMuted, marginBottom: 16, textAlign: "center", padding: "24px 0" }}>هنوز ارجاع فعالی ثبت نشده</p>
+        <p style={{ fontSize: 12, color: S.subMuted, marginBottom: 16, textAlign: "center", padding: "24px 0" }}>هنوز مأموریتی ثبت نشده</p>
       ) : (
-        <>
-          <div className="analysis-assign-table-wrap" style={{ marginBottom: 20, border: `1px solid ${tableBorder}`, borderRadius: 10 }}>
-            <table className="analysis-assign-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc" }}>
-                  <th style={thStyle}>تحلیل‌گر</th>
-                  <th style={thStyle}>وضعیت</th>
-                  <th style={thStyle}>مهلت انجام</th>
-                  <th style={thStyle}>اولویت</th>
-                  <th style={thStyle}>راهنما</th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>اقدامات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assignments.map((a) => {
-                  const st = MISSION_STATUS_META[a.status] || { label: a.status, color: "#94a3b8" };
-                  const pr = PRIORITY_META[a.priority] || PRIORITY_META.medium;
-                  return (
-                    <tr key={a.id}>
-                      <td style={tdStyle} data-label="تحلیل‌گر"><strong>{a.analyst_realname || "—"}</strong></td>
-                      <td style={tdStyle} data-label="وضعیت">
-                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: `${st.color}22`, color: st.color }}>{st.label}</span>
-                      </td>
-                      <td style={tdStyle} data-label="مهلت انجام">{formatPersianDateShort(a.deadline)}</td>
-                      <td style={tdStyle} data-label="اولویت">
-                        <span style={{ fontSize: 10, color: pr.color }}>{pr.label}</span>
-                      </td>
-                      <td style={{ ...tdStyle, fontSize: 11, color: S.subMuted }} data-label="راهنما">{a.mentor_name || "—"}</td>
-                      <td style={{ ...tdStyle, textAlign: "center" }} data-label="اقدامات">
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
-                          <button type="button" style={actionBtn} onClick={() => openDeadlineModal(a)}>
-                            <Calendar size={12} /> تغییر مهلت
+        <div className="analysis-assign-table-wrap" style={{ marginBottom: 20, border: `1px solid ${tableBorder}`, borderRadius: 10 }}>
+          <table className="analysis-assign-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc" }}>
+                <th style={thStyle}>تحلیل‌گر</th>
+                <th style={thStyle}>وضعیت</th>
+                <th style={thStyle}>{ANALYSIS_TERMS.missionDeadline}</th>
+                <th style={thStyle}>اولویت</th>
+                <th style={thStyle}>راهنما</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>اقدامات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assignments.map((a) => {
+                const st = MISSION_STATUS_META[a.status] || { label: a.status, color: "#94a3b8" };
+                const pr = PRIORITY_META[a.priority] || PRIORITY_META.medium;
+                return (
+                  <tr key={a.id}>
+                    <td style={tdStyle} data-label="تحلیل‌گر"><strong>{a.analyst_realname || "—"}</strong></td>
+                    <td style={tdStyle} data-label="وضعیت">
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: `${st.color}22`, color: st.color }}>{st.label}</span>
+                    </td>
+                    <td style={tdStyle} data-label="مهلت">{formatPersianDateShort(a.deadline)}</td>
+                    <td style={tdStyle} data-label="اولویت">
+                      <span style={{ fontSize: 10, color: pr.color }}>{pr.label}</span>
+                    </td>
+                    <td style={{ ...tdStyle, fontSize: 11, color: S.subMuted }} data-label="راهنما">{a.mentor_name || "—"}</td>
+                    <td style={{ ...tdStyle, textAlign: "center" }} data-label="اقدامات">
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+                        <button type="button" style={actionBtn} onClick={() => openDeadlineModal(a)}>
+                          <Calendar size={12} /> تغییر مهلت
+                        </button>
+                        <button type="button" style={{ ...actionBtn, color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)" }} onClick={() => navigate(`/analysis/management/mission/${a.id}?fromTab=assign`)}>
+                          <ExternalLink size={12} /> مدیریت
+                        </button>
+                        {a.status === "Assigned" && (
+                          <button type="button" style={{ ...actionBtn, color: "#ef4444", borderColor: "rgba(239,68,68,0.4)" }} onClick={() => handleCancel(a.id)}>
+                            <Ban size={12} /> لغو
                           </button>
-                          <button type="button" style={{ ...actionBtn, color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)" }} onClick={() => navigate(`/analysis/management/mission/${a.id}?fromTab=assign`)}>
-                            <ExternalLink size={12} /> مدیریت
-                          </button>
-                          {a.status === "Assigned" && (
-                            <button type="button" style={{ ...actionBtn, color: "#ef4444", borderColor: "rgba(239,68,68,0.4)" }} onClick={() => handleCancel(a.id)}>
-                              <Ban size={12} /> لغو
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showNewForm && (
-        <div style={{ border: `1px solid ${tableBorder}`, borderRadius: 12, padding: 16, background: isDarkMode ? "rgba(0,0,0,0.15)" : "#f8fafc" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <h4 style={{ color: S.headingOnCard, fontSize: 13, margin: 0 }}>ارجاع جدید</h4>
-            <button type="button" onClick={() => setShowNewForm(false)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer" }}><X size={18} /></button>
-          </div>
-
-          {loadingUsers ? (
-            <p style={{ fontSize: 12, color: S.subMuted }}>در حال بارگذاری کاربران...</p>
-          ) : (
-            <>
-              <div style={S.inputWrapper}>
-                <SearchableUserSelect
-                  label="تحلیل‌گر"
-                  required
-                  users={analysts}
-                  value={assign.analyst_id}
-                  onChange={(v) => setAssign({ ...assign, analyst_id: v })}
-                  emptyMessage="کاربری با نقش تحلیل‌گر در سامانه یافت نشد"
-                  inputStyle={S.selectStyle}
-                  labelStyle={S.labelStyle}
-                />
-              </div>
-              <div style={S.inputWrapper}>
-                <SearchableUserSelect
-                  label="راهنما"
-                  users={mentors}
-                  value={assign.mentor_id}
-                  onChange={(v) => setAssign({ ...assign, mentor_id: v })}
-                  placeholder="اختیاری"
-                  emptyMessage="کاربری با نقش راهنما در سامانه یافت نشد"
-                  inputStyle={S.selectStyle}
-                  labelStyle={S.labelStyle}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-                <div style={S.inputWrapper}>
-                  <label style={S.labelStyle}>اولویت</label>
-                  <select style={S.selectStyle} value={assign.priority} onChange={(e) => setAssign({ ...assign, priority: e.target.value })}>
-                    <option value="high">فوری</option>
-                    <option value="medium">متوسط</option>
-                    <option value="low">عادی</option>
-                  </select>
-                </div>
-                <div style={S.inputWrapper}>
-                  <label style={S.labelStyle}>مهلت انجام تحلیل (شمسی)</label>
-                  <div className="assign-date-picker" style={{ ...S.inputStyle, padding: "6px 10px" }}>
-                    <ThemedDatePicker
-                      ref={newFormPickerRef}
-                      isDarkMode={isDarkMode}
-                      value={gregorianToPersianPicker(assign.deadline)}
-                      onChange={(d) => setAssign({ ...assign, deadline: d ? persianDateToGregorian(d) : "" })}
-                      calendar={persian}
-                      locale={persian_fa}
-                      calendarPosition="bottom-right"
-                      placeholder="انتخاب تاریخ"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div style={S.inputWrapper}>
-                <label style={S.labelStyle}>دستورالعمل</label>
-                <RichTextEditor
-                  value={assign.guidelines}
-                  onChange={(html) => setAssign({ ...assign, guidelines: html })}
-                  isDarkMode={isDarkMode}
-                  minHeight={80}
-                  maxLength={MISSION_FIELD_LIMITS.guidelines}
-                  placeholder="دستورالعمل..."
-                />
-              </div>
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button type="button" style={S.backBtn} onClick={() => setShowNewForm(false)}>انصراف</button>
-                <button type="button" style={{ ...S.sendBtn, background: "#10b981" }} onClick={handleAssign}>ایجاد مأموریت</button>
-              </div>
-            </>
-          )}
-        </div>
+        <MissionAssignForm
+          assign={assign}
+          onChange={setAssign}
+          analysts={analysts}
+          mentors={mentors}
+          loadingUsers={loadingUsers}
+          onSubmit={handleAssign}
+          onCancel={() => setShowNewForm(false)}
+          isDarkMode={isDarkMode}
+          styles={S}
+        />
       )}
 
       {deadlineModalId && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setDeadlineModalId(null)}>
           <div style={{ background: isDarkMode ? "#1e293b" : "#fff", borderRadius: 12, border: `1px solid ${tableBorder}`, width: "100%", maxWidth: "min(640px, 94vw)", padding: 16 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <strong style={{ fontSize: 13 }}>تغییر مهلت انجام تحلیل</strong>
+              <strong style={{ fontSize: 13 }}>تغییر {ANALYSIS_TERMS.missionDeadline}</strong>
               <button type="button" onClick={() => setDeadlineModalId(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer" }}><X size={18} /></button>
             </div>
             <div className="assign-date-picker" style={{ ...S.inputStyle, padding: "6px 10px", marginBottom: 14 }}>

@@ -3,13 +3,15 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../../theme/unitReportFormStyles";
 import AnalysisPageShell from "../../components/analysis/AnalysisPageShell.jsx";
+import AnalysisWorkflowStepper from "../../components/analysis/AnalysisWorkflowStepper.jsx";
+import TopicContextPanel from "../../components/analysis/TopicContextPanel.jsx";
+import ApprovalDecisionPanel from "../../components/analysis/ApprovalDecisionPanel.jsx";
 import TopicFormModal from "../../components/analysis/TopicFormModal.jsx";
-import { ANALYSIS_FIELD_LIMITS } from "../../constants/analysisFieldLimits.js";
-import { clampText } from "../../utils/limitInput.js";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { APPROVAL_DETAIL_HELP } from "../../content/analysisFormHelp.jsx";
 import analysisService from "../../services/analysisService";
 import { useManagementBackUrl } from "../../hooks/useManagementBackUrl.js";
-import { TOPIC_STATUS_META, EMPTY_TOPIC_FORM, formatPersianDateShort } from "../../utils/analysisMonitorUtils.js";
+import { EMPTY_TOPIC_FORM } from "../../utils/analysisMonitorUtils.js";
 
 export default function AnalysisTopicApprovalDetail() {
   const { id } = useParams();
@@ -26,7 +28,7 @@ export default function AnalysisTopicApprovalDetail() {
   const [form, setForm] = useState(EMPTY_TOPIC_FORM);
 
   const loadTopic = () => {
-    analysisService.getTopic(id).then(setTopic).catch(() => alert("موضوع یافت نشد"));
+    analysisService.getTopic(id).then(setTopic).catch(() => alert("محور یافت نشد"));
   };
 
   useEffect(() => { loadTopic(); }, [id]);
@@ -66,29 +68,24 @@ export default function AnalysisTopicApprovalDetail() {
 
   if (!topic) {
     return (
-      <AnalysisPageShell title="بررسی موضوع" backTo={backTo}>
+      <AnalysisPageShell title={ANALYSIS_TERMS.ratifyPageTitle} backTo={backTo}>
         <p style={{ color: S.subMuted, fontSize: "12px" }}>در حال بارگذاری...</p>
       </AnalysisPageShell>
     );
   }
 
-  const statusMeta = TOPIC_STATUS_META[topic.status] || { label: topic.status, color: "#94a3b8" };
-
   return (
     <>
-      <AnalysisPageShell title="بررسی و تایید موضوع" subtitle={topic.topic_code} backTo={backTo} onHelp={APPROVAL_DETAIL_HELP} helpTitle="راهنمای بررسی موضوع">
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-            <h3 style={{ color: S.headingOnCard, fontSize: 14, margin: 0 }}>{topic.title}</h3>
-            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: `${statusMeta.color}22`, color: statusMeta.color }}>{statusMeta.label}</span>
-          </div>
-          <p style={{ color: S.subMuted, fontSize: 12, lineHeight: 1.8, margin: "0 0 8px" }}>{topic.description}</p>
-          <div style={{ fontSize: 11, color: S.subMuted, display: "flex", flexWrap: "wrap", gap: 12 }}>
-            <span>حوزه: {topic.domain || "—"}</span>
-            <span>مهلت پیشنهادی موضوع: {formatPersianDateShort(topic.suggested_deadline)}</span>
-            <span>پیشنهاددهنده: {topic.creator_name}</span>
-          </div>
-        </div>
+      <AnalysisPageShell
+        title={ANALYSIS_TERMS.ratifyPageTitle}
+        subtitle={topic.topic_code}
+        backTo={backTo}
+        onHelp={APPROVAL_DETAIL_HELP}
+        helpTitle={ANALYSIS_TERMS.ratifyHelpTitle}
+      >
+        <AnalysisWorkflowStepper currentStep="ratify" topicStatus={topic.status} />
+
+        <TopicContextPanel topic={topic} variant="full" theme={theme} isDarkMode={isDarkMode} />
 
         {topic.history?.length > 0 && (
           <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc", border: `1px solid ${S.inputBorder}` }}>
@@ -101,22 +98,19 @@ export default function AnalysisTopicApprovalDetail() {
           </div>
         )}
 
-        <button type="button" style={{ ...S.backBtn, width: "100%", marginBottom: 16 }} onClick={openEdit}>ویرایش محتوای موضوع</button>
+        <button type="button" style={{ ...S.backBtn, width: "100%", marginBottom: 16 }} onClick={openEdit}>
+          {ANALYSIS_TERMS.editAxisContent}
+        </button>
 
-        <div style={S.inputWrapper}>
-          <label style={S.labelStyle}>تصمیم بررسی</label>
-          <select style={S.selectStyle} value={decision} onChange={(e) => setDecision(e.target.value)}>
-            <option value="approve">تایید</option>
-            <option value="reject">رد</option>
-            <option value="needs_info">برگشت برای اصلاح</option>
-            <option value="close">بستن</option>
-          </select>
-        </div>
-        <div style={S.inputWrapper}>
-          <label style={S.labelStyle}>توضیح</label>
-          <textarea style={{ ...S.textareaStyle, height: 80 }} value={comment} maxLength={ANALYSIS_FIELD_LIMITS.description} onChange={(e) => setComment(clampText(e.target.value, ANALYSIS_FIELD_LIMITS.description))} />
-        </div>
-        <button type="button" style={{ ...S.sendBtn, width: "100%" }} onClick={handleReview}>ثبت تصمیم</button>
+        <ApprovalDecisionPanel
+          decision={decision}
+          onDecisionChange={setDecision}
+          comment={comment}
+          onCommentChange={setComment}
+          onSubmit={handleReview}
+          styles={S}
+          isDarkMode={isDarkMode}
+        />
       </AnalysisPageShell>
 
       <TopicFormModal

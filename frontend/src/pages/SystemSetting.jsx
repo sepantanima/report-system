@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   ArrowRight,
   User,
@@ -11,7 +11,9 @@ import {
   Eye,
   EyeOff,
   Bell,
-  KeyRound
+  KeyRound,
+  FileText,
+  Activity,
 } from "lucide-react";
 
 // =========================================================================
@@ -20,6 +22,12 @@ import {
 //
 import api from "../api/api";
 import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
+import {
+  MessagingTabContent,
+  FieldReportSettingsPanel,
+  NewsEntrySettingsPanel,
+} from "../components/settings/AdminSettingsPanels.jsx";
 // =========================================================================
 
 // // شبیه‌ساز هوشمند وب‌سرویس‌ها جهت جلوگیری از خطای بیلد در پیش‌نمایش کانوس
@@ -83,8 +91,55 @@ const getParsedRoles = () => {
 
 export default function SystemSetting() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = location.state?.returnTo || "/main";
+  const returnState = location.state?.returnState;
+
+  const goBack = () => navigate(returnTo, { state: returnState });
   const { isDarkMode, setIsDarkMode } = useAppTheme();
-  const [activeTab, setActiveTab] = useState("appearance"); // appearance | security | future
+  const roles = getSessionRoles();
+
+  const settingsTheme = useMemo(() => ({
+    card: isDarkMode ? "rgba(30,41,59,0.6)" : "rgba(248,250,252,0.9)",
+    border: isDarkMode ? "rgba(255,255,255,0.1)" : "#e2e8f0",
+    text: isDarkMode ? "#f1f5f9" : "#1e293b",
+    input: isDarkMode ? "#0f172a" : "#f8fafc",
+  }), [isDarkMode]);
+
+  const visibleTabs = useMemo(() => {
+    const all = [
+      { id: "appearance", label: "پوسته و پروفایل", icon: Sun, show: true },
+      { id: "security", label: "امنیت", icon: Lock, show: true },
+      {
+        id: "messaging",
+        label: "پیام و ابلاغ",
+        icon: Bell,
+        show: hasPermission(roles, "messages")
+          || hasPermission(roles, "manage_message_settings")
+          || hasPermission(roles, "manage_announcements"),
+      },
+      {
+        id: "field_limits",
+        label: "سقف میدانی",
+        icon: Activity,
+        show: hasPermission(roles, "manage_field_entry_limits"),
+      },
+      {
+        id: "news_limits",
+        label: "سقف خبر",
+        icon: FileText,
+        show: hasPermission(roles, "manage_news_entry_limits"),
+      },
+    ];
+    return all.filter((t) => t.show);
+  }, [roles]);
+
+  const tabFromUrl = searchParams.get("tab");
+  const defaultTab = visibleTabs[0]?.id || "appearance";
+  const [activeTab, setActiveTab] = useState(
+    visibleTabs.some((t) => t.id === tabFromUrl) ? tabFromUrl : defaultTab,
+  );
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState({ 
     username: "User_Spnta", 
@@ -107,6 +162,20 @@ export default function SystemSetting() {
   const [showCurrentPass, setShowCurrentPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
+
+  useEffect(() => {
+    if (tabFromUrl && visibleTabs.some((t) => t.id === tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    } else if (!visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab(defaultTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabFromUrl, visibleTabs, defaultTab]);
+
+  const selectTab = (id) => {
+    setActiveTab(id);
+    setSearchParams({ tab: id }, { replace: true });
+  };
 
   // بارگذاری داده‌های اولیه کاربر از توکن معتبر به همراه نقش‌های دقیق چندگانه
   useEffect(() => {
@@ -283,6 +352,8 @@ export default function SystemSetting() {
         .loginCardWrap {
           position: relative;
           z-index: 10;
+          width: 100%;
+          max-width: min(96vw, 960px);
         }
         .loginCard {
           background: var(--bg-card);
@@ -299,15 +370,28 @@ export default function SystemSetting() {
           border: none;
           border-bottom: 2px solid transparent;
           color: var(--text-sub);
-          padding: 16px 12px;
-          font-size: 13px;
+          padding: 14px 10px;
+          font-size: 12.5px;
           font-weight: bold;
           cursor: pointer;
           transition: all 0.2s ease-in-out;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 6px;
+          white-space: nowrap;
+          flex: 1 1 0;
+          min-width: 0;
+        }
+        .settings-tabs-row {
+          display: flex;
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          background: rgba(0,0,0,0.12);
+          border-bottom: 1px solid var(--border-color);
+          -webkit-overflow-scrolling: touch;
+        }
+        .settings-tab-btn:focus-visible {
           outline: none;
         }
         .settings-tab-btn:hover:not(.active) {
@@ -409,12 +493,12 @@ export default function SystemSetting() {
       <div className="blob blob1"></div>
       <div className="blob blob2"></div>
 
-      <div className="loginCardWrap" style={{ maxWidth: "580px", width: "100%" }}>
+      <div className="loginCardWrap">
         
         {/* هدر بالایی تنظیمات */}
         <div style={{ display: "flex", gap: "12px", marginBottom: "25px", alignItems: "center" }}>
           <button
-            onClick={() => navigate("/main")}
+            onClick={goBack}
             className="submitBtn"
             style={{ width: "45px", height: "45px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "10px", border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text-main)", marginTop: 0 }}
             title="بازگشت به منوی اصلی"
@@ -427,7 +511,7 @@ export default function SystemSetting() {
         </div>
 
         {/* کارت بدنه چند تبِ پورتال تنظیمات */}
-        <div className="loginCard" style={{ borderRadius: "24px", direction: "rtl", overflow: "hidden" }}>
+        <div className="loginCard" style={{ borderRadius: "24px", direction: "rtl", overflow: "visible" }}>
           
           {/* 🌟 بخش هویتی جدید بالای تب‌ها به عنوان هدر سراسری با همگام‌سازی کامل نقش‌ها */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", background: "rgba(0,0,0,0.15)", padding: "20px", borderBottom: "1px solid var(--border-color)" }}>
@@ -451,25 +535,17 @@ export default function SystemSetting() {
           </div>
 
           {/* تب یاب لایه‌ای افقی */}
-          <div style={{ display: "flex", background: "rgba(0,0,0,0.12)", borderBottom: "1px solid var(--border-color)" }}>
-            <button
-              onClick={() => setActiveTab("appearance")}
-              className={`settings-tab-btn flex-1 py-4 text-center ${activeTab === "appearance" ? "active" : ""}`}
-            >
-              <Sun size={15} /> تنظیمات پوسته
-            </button>
-            <button
-              onClick={() => setActiveTab("security")}
-              className={`settings-tab-btn flex-1 py-4 text-center ${activeTab === "security" ? "active" : ""}`}
-            >
-              <Lock size={15} /> امنیت و رمز عبور
-            </button>
-            <button
-              onClick={() => setActiveTab("future")}
-              className={`settings-tab-btn flex-1 py-4 text-center ${activeTab === "future" ? "active" : ""}`}
-            >
-              <Bell size={15} /> اعلانات سیستم
-            </button>
+          <div className="settings-tabs-row">
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => selectTab(id)}
+                className={`settings-tab-btn text-center ${activeTab === id ? "active" : ""}`}
+              >
+                <Icon size={15} /> {label}
+              </button>
+            ))}
           </div>
 
           <div style={{ padding: "30px" }}>
@@ -526,7 +602,7 @@ export default function SystemSetting() {
                     <button type="submit" disabled={loading} className="submitBtn" style={{ flex: 2, height: "48px", background: "linear-gradient(45deg, #6c5ce7, #0984e3)", color: "#fff", fontWeight: "bold", border: "none", borderRadius: "10px", marginTop: 0 }}>
                       {loading ? "درحال ذخیره..." : "ثبت تغییرات"}
                     </button>
-                    <button type="button" onClick={() => navigate("/main")} className="cancel-btn-classic" style={{ flex: 1 }}>
+                    <button type="button" onClick={goBack} className="cancel-btn-classic" style={{ flex: 1 }}>
                       انصراف
                     </button>
                   </div>
@@ -625,7 +701,7 @@ export default function SystemSetting() {
                     <KeyRound size={16} />
                     {loading ? "درحال تغییر رمز..." : "ثبت تغییرات"}
                   </button>
-                  <button type="button" onClick={() => navigate("/main")} className="cancel-btn-classic" style={{ flex: 1 }}>
+                  <button type="button" onClick={goBack} className="cancel-btn-classic" style={{ flex: 1 }}>
                     انصراف
                   </button>
                 </div>
@@ -633,24 +709,16 @@ export default function SystemSetting() {
             )}
 
             {/* بدنه تب سوم: بخش رزرو شده و نمایشی برای اعلانات آینده */}
-            {activeTab === "future" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "20px", textAlign: "center", padding: "20px 0" }}>
-                <div style={{ display: "inline-flex", padding: "15px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", alignSelf: "center" }}>
-                  <Bell size={36} color="#38bdf8" />
-                </div>
-                <h3 style={{ fontSize: "14px", fontWeight: "bold", margin: 0, color: "var(--text-main)" }}>تنظیمات اعلانات پورتال (در فاز ارتقای آتی)</h3>
-                <p style={{ fontSize: "12px", color: "var(--text-sub)", lineHeight: "1.8", margin: 0 }}>
-                  این تب در فاز ارتقای پورتال سپنتا به شما اجازه می‌دهد تا هشدارهای مانیتورینگ آنلاین، اعلان‌های ثبت گزارش جدید از یگان‌های تابعه و پیام‌های رفت و برگشت وقایع را به صورت نوتیفیکیشن‌های زنده سیستمی فعال یا غیرفعال سازید.
-                </p>
-                <div style={{ padding: "10px", border: "1px dashed var(--input-border)", borderRadius: "10px", fontSize: "11px", color: "var(--text-sub)" }}>
-                  ⚙️ قابلیت پیکربندی با وب‌هوک‌های امنیتی و روبات‌های پیام‌رسان بومی یگان
-                </div>
-                
-                {/* 🌟 دکمه انصراف بومی برای تب اعلانات آینده */}
-                <button type="button" onClick={() => navigate("/main")} className="cancel-btn-classic" style={{ width: "100%" }}>
-                  بازگشت به پنل اصلی
-                </button>
-              </div>
+            {activeTab === "messaging" && (
+              <MessagingTabContent theme={settingsTheme} navigate={navigate} />
+            )}
+
+            {activeTab === "field_limits" && (
+              <FieldReportSettingsPanel theme={settingsTheme} />
+            )}
+
+            {activeTab === "news_limits" && (
+              <NewsEntrySettingsPanel theme={settingsTheme} />
             )}
 
           </div>

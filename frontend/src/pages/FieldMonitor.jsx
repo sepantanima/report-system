@@ -18,6 +18,9 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
 import { FIELD_FIELD_LIMITS } from "../constants/fieldFieldLimits.js";
 import { clampText } from "../utils/limitInput.js";
+import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
+import EntityMessageComposeModal from "../components/messaging/EntityMessageComposeModal.jsx";
+import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 // =========================================================================
 
 // 🌟 تعریف متغیرهای پشتیبان جهت جلوگیری از خطای esbuild در زمان بیلد کانوس
@@ -130,6 +133,9 @@ export default function FieldMonitor() {
 
   // وضعیت ویرایش گزارش مانیتورینگ
   const [editingReport, setEditingReport] = useState(null);
+  const [entityMsgCompose, setEntityMsgCompose] = useState(false);
+  const [entityMsgRefresh, setEntityMsgRefresh] = useState(0);
+  const canManageMessages = hasRole(getSessionRoles(), "admin", "Field_admin", "news_chief");
   const [editForm, setEditForm] = useState({
     title: "", // قابلیت ویرایش عنوان توسط مدیر
     chat_title: "", // قابلیت ویرایش موضوع توسط مدیر
@@ -775,6 +781,17 @@ export default function FieldMonitor() {
                   </div>
                 </div>
               </div>
+
+              {editingReport?.hash_key ? (
+                <EntityMessagesPanel
+                  key={`${editingReport.hash_key}-${entityMsgRefresh}`}
+                  entityType="field_report"
+                  entityId={editingReport.hash_key}
+                  theme={theme}
+                  canCompose={canManageMessages}
+                  onCompose={() => setEntityMsgCompose(true)}
+                />
+              ) : null}
             </div>
 
             {/* دکمه‌های کامپکت و سازمان‌یافته با ترتیب جدید برای مهار عرض کم و جلوگیری از به هم ریختگی */}
@@ -806,6 +823,15 @@ export default function FieldMonitor() {
           </div>
         </div>
       )}
+
+      <EntityMessageComposeModal
+        open={entityMsgCompose && !!editingReport?.hash_key}
+        onClose={() => setEntityMsgCompose(false)}
+        entityType="field_report"
+        entityId={editingReport?.hash_key}
+        theme={theme}
+        onSent={() => setEntityMsgRefresh((k) => k + 1)}
+      />
 
       <style>{`
         .v3-modal-box { width: 95%; max-width: 680px; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }

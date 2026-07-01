@@ -26,6 +26,7 @@ import {
   normalizeSourceUrl,
 } from "./newsTextUtils.js";
 import { buildCleanedFromRaw } from "./newsIngest/newsIngestPipeline.js";
+import { assertNewsSubmissionAllowed } from "./newsEntrySettingsService.js";
 import {
   exportCleanedText,
   resolveDisplayHtml,
@@ -380,7 +381,8 @@ async function getUserObserverFields(userId) {
   };
 }
 
-export async function createNewsByMonitor(body = {}, userId = null) {
+export async function createNewsByMonitor(body = {}, user = null) {
+  const userId = user?.id ?? null;
   const fieldErr = validateNewsEntryPayload(body);
   if (fieldErr) throw new Error(fieldErr);
 
@@ -404,6 +406,9 @@ export async function createNewsByMonitor(body = {}, userId = null) {
   const { relay_ts_utc, relay_ts_tehran } = nowRelayTimestamps();
   const observer = await getUserObserverFields(userId);
   const submitNow = !!body.submit;
+  if (submitNow && user) {
+    await assertNewsSubmissionAllowed(user, relayDate);
+  }
   let sourceUrl = null;
   if (body.source_url != null && String(body.source_url).trim()) {
     sourceUrl = normalizeSourceUrl(body.source_url);
@@ -476,7 +481,8 @@ export async function createNewsByMonitor(body = {}, userId = null) {
   }
 }
 
-export async function submitNewsForReview(id, userId = null) {
+export async function submitNewsForReview(id, user = null) {
+  const userId = user?.id ?? null;
   const newsId = parseInt(id, 10);
   if (!Number.isFinite(newsId)) throw new Error("شناسه خبر نامعتبر است");
 
@@ -484,6 +490,11 @@ export async function submitNewsForReview(id, userId = null) {
   if (!before) return null;
   if (before.workflow_status !== "new") {
     throw new Error("فقط اخبار جدید قابل ارسال برای بررسی هستند");
+  }
+
+  const relayDate = before.relay_date_jalali || nowJalaliDate();
+  if (user) {
+    await assertNewsSubmissionAllowed(user, relayDate);
   }
 
   const client = await pool.connect();

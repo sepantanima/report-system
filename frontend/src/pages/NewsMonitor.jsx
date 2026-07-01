@@ -12,7 +12,7 @@ import NewsReviewPane from "../components/news/NewsReviewPane.jsx";
 import NewsDetailDrawer from "../components/news/NewsDetailDrawer.jsx";
 import { NewsEditorFormProvider } from "../components/news/NewsEditorFormContext.jsx";
 import newsMonitorService from "../services/newsMonitorService.js";
-import { getSessionRoles, getNewsRoleLevel, hasPermission } from "../utils/userRoles.js";
+import { getSessionRoles, getNewsRoleLevel, hasPermission, hasRole } from "../utils/userRoles.js";
 import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
 import {
   NEWS_PRIORITIES, NEWS_QUALITY, NEWS_REVIEW_STATES, NEWS_WORKFLOW_STATES,
@@ -20,6 +20,8 @@ import {
 } from "../constants/newsMonitorMeta.js";
 import { NEWS_MONITOR_HELP } from "../content/newsFormHelp.jsx";
 import { useAppTheme } from "../context/ThemeContext.jsx";
+import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
+import EntityMessageComposeModal from "../components/messaging/EntityMessageComposeModal.jsx";
 
 const cleanDateString = (str) => String(str ?? "").replace(/[\/]/g, "-").trim();
 
@@ -85,6 +87,9 @@ export default function NewsMonitor() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState("");
+  const [entityMsgCompose, setEntityMsgCompose] = useState(false);
+  const [entityMsgRefresh, setEntityMsgRefresh] = useState(0);
+  const canManageMessages = hasRole(roles, "admin", "Field_admin", "news_chief");
 
   const dateParams = useMemo(() => {
     if (!dates?.[0]) return {};
@@ -450,7 +455,27 @@ export default function NewsMonitor() {
               />
             )}
           />
+          {selectedItem?.id && !isMobile ? (
+            <div style={{ flexShrink: 0, padding: "0 4px 8px" }}>
+              <EntityMessagesPanel
+                key={`${selectedItem.id}-${entityMsgRefresh}`}
+                entityType="news"
+                entityId={selectedItem.id}
+                theme={theme}
+                canCompose={canManageMessages}
+                onCompose={() => setEntityMsgCompose(true)}
+              />
+            </div>
+          ) : null}
         </NewsEditorFormProvider>
+        <EntityMessageComposeModal
+          open={entityMsgCompose && !!selectedItem?.id}
+          onClose={() => setEntityMsgCompose(false)}
+          entityType="news"
+          entityId={selectedItem?.id}
+          theme={theme}
+          onSent={() => setEntityMsgRefresh((k) => k + 1)}
+        />
         </div>
       </AnalysisMonitorLayout>
     </>

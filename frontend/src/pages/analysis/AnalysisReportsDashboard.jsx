@@ -32,7 +32,7 @@ const UNIT_COLUMNS = {
 };
 
 const COMPLETED_COLUMNS = {
-  topic_title: "موضوع",
+  topic_title: "محور",
   title: "عنوان تحلیل",
   analyst_name: "تحلیل‌گر",
   total_score: "امتیاز",
@@ -242,7 +242,7 @@ export default function AnalysisReportsDashboard({ theme, isDarkMode, dateRange,
         )}
       >
         <RankTable theme={theme} rows={data.completedAnalyses} columns={[
-          { key: "topic_title", label: "موضوع" },
+          { key: "topic_title", label: "محور" },
           { key: "title", label: "عنوان تحلیل", render: (r) => r.title || "—" },
           { key: "analyst_name", label: "تحلیل‌گر", render: (r) => r.analyst_name || "—" },
           { key: "total_score", label: "امتیاز", render: (r) => r.total_score != null ? toPersianDigits(r.total_score) : "—" },

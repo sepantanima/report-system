@@ -232,7 +232,7 @@ router.get("/topics/:id", async (req, res) => {
 
 router.post("/topics", requireRole("admin", "analysis_manager", "Field_admin", "topic_proposer"), async (req, res) => {
   const { title, description, domain, keywords, priority, importance_reason, suggested_deadline } = req.body;
-  if (!title?.trim()) return res.status(400).json({ error: "عنوان موضوع الزامی است" });
+  if (!title?.trim()) return res.status(400).json({ error: "محور الزامی است" });
   const fieldErr = validateTopicPayload(req.body);
   if (fieldErr) return res.status(400).json({ error: fieldErr });
   const deadlineGregorian = toGregorianDate(suggested_deadline);
@@ -597,7 +597,7 @@ router.post("/assignments", requireRole(...MANAGER_ROLES), async (req, res) => {
     res.status(201).json(row);
   } catch (err) {
     if (err.message === "TOPIC_NOT_FOUND") return res.status(404).json({ error: "موضوع یافت نشد" });
-    if (err.message === "TOPIC_NOT_APPROVED") return res.status(400).json({ error: "فقط موضوع تاییدشده قابل ارجاع است" });
+    if (err.message === "TOPIC_NOT_APPROVED") return res.status(400).json({ error: "فقط محورهای تصویب‌شده قابل ارجاع هستند" });
     res.status(500).json({ error: err.message });
   }
 });

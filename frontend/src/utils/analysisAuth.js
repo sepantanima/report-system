@@ -52,7 +52,7 @@ export const toPersianDigits = (val) => {
 
 export const TOPIC_STATUS = {
 
-  Draft: "پیش‌نویس", Submitted: "ثبت‌شده", UnderReview: "برگشت برای اصلاح", Approved: "تایید شده",
+  Draft: "پیش‌نویس", Submitted: "ثبت‌شده", UnderReview: "برگشت برای اصلاح", Approved: "تصویب شده",
 
   Rejected: "رد شده", Assigned: "ارجاع شده", Closed: "بسته",
 

@@ -1,6 +1,9 @@
 /**
  * محدودیت کاراکتر فرم‌های گزارش میدانی — برای تغییر فقط این فایل را ویرایش کنید.
+ * (جدا از newsFieldLimits.js که مخصوص ماژول اخبار است.)
  */
+export const DEFAULT_DAILY_SUBMISSION_LIMIT = 10;
+
 export const FIELD_FIELD_LIMITS = {
   short: 80,
   monitorTitle: 110,
@@ -8,7 +11,7 @@ export const FIELD_FIELD_LIMITS = {
   adminNote: 150,
   managerComment: 150,
   unitTitle: 210,
-  unitContent: 2050,
+  unitContent: 1000,
   unitShort: 200,
   unitLong: 2000,
 };

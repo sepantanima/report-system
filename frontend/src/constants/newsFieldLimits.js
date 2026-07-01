@@ -1,9 +1,11 @@
-/** محدودیت کاراکتر فرم‌های اخبار — برای تغییر فقط این فایل را ویرایش کنید. */
+/** محدودیت کاراکتر فرم‌های اخبار — هم‌راستا با backend/report_backend/src/constants/newsFieldLimits.js */
 import { plainTextLength } from "./analysisFieldLimits.js";
+
+export const DEFAULT_DAILY_SUBMISSION_LIMIT = 10;
 
 export const NEWS_FIELD_LIMITS = {
   cleanedText: 700,
-  rawText: 1200,
+  rawText: 1000,
   summary: 500,
   statusNote: 200,
   source: 80,

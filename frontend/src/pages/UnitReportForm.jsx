@@ -3,6 +3,7 @@ import apiClient from "../api/api";
 import { useNavigate } from "react-router-dom";
 import { useAppTheme } from "../context/ThemeContext";
 import { getUnitReportFormStyles } from "../theme/unitReportFormStyles";
+import CharCounter from "../components/news/CharCounter.jsx";
 import { FIELD_FIELD_LIMITS, validateUnitReportPayload } from "../constants/fieldFieldLimits.js";
 import { clampText } from "../utils/limitInput.js";
 import { UNIT_REPORT_HELP, UNIT_REPORT_OUTPUT_HELP } from "../content/fieldFormHelp.jsx";
@@ -16,6 +17,8 @@ import { usePageFontSize } from "../utils/pageFontSize.js";
 import { ANALYSIS_MONITOR_CSS } from "../theme/analysisMonitorStyles.js";
 import { FORM_PAGE_CSS } from "../theme/formPageStyles.js";
 import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
+import DailyQuotaBanner, { isQuotaExhausted } from "../components/common/DailyQuotaBanner.jsx";
+import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
 
 // ۶. دیکودر JWT بومی سبک برای استخراج توکن بدون نیاز به jwt-decode
 const decodeToken = (token) => {
@@ -123,6 +126,12 @@ export default function UnitReportForm() {
     rejectedInnerTextColor,
     emptyStateColor,
   } = useMemo(() => getUnitReportFormStyles(isDarkMode), [isDarkMode]);
+
+  const entityMsgTheme = useMemo(() => ({
+    card: isDarkMode ? "#1e293b" : "#ffffff",
+    border: isDarkMode ? "#334155" : "#e2e8f0",
+    text: isDarkMode ? "#f1f5f9" : "#0f172a",
+  }), [isDarkMode]);
   const historyPanelRef = useRef(null);
   
   // --- وضعیت‌های اصلی فرم ثبت گزارش ---
@@ -159,6 +168,7 @@ export default function UnitReportForm() {
   const [showRejectedModal, setShowRejectedModal] = useState(false); 
   const [editingRejectedReport, setEditingRejectedReport] = useState(null); 
   const [topicHistory, setTopicHistory] = useState([]);
+  const [dailyQuota, setDailyQuota] = useState(null);
 
   // بستن منوی سوابق با کلیک روی محیط بیرون
   useEffect(() => {
@@ -232,15 +242,26 @@ export default function UnitReportForm() {
     fetchHistory();
   }, [selectedType]);
 
+  const getTodayFa = () => convertToPersianDate(new Date());
+
+  const fetchDailyQuota = async () => {
+    try {
+      const res = await apiClient.get(`/reports/daily-quota?date=${getTodayFa()}`);
+      setDailyQuota(res.data);
+    } catch {
+      setDailyQuota(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchDailyQuota();
+  }, []);
+
   // توابع کمکی برای فیلتر و تبدیل اعداد
   const cleanStr = (str) =>
     String(str || "")
       .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
       .replace(/[^0-9]/g, "");
-
-  const getTodayFa = () => {
-    return convertToPersianDate(new Date());
-  };
 
   const getFullTodayText = () => {
     return new Intl.DateTimeFormat("fa-IR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
@@ -301,6 +322,7 @@ export default function UnitReportForm() {
       setPriority("عادی");
       setClassification("عمومی");
       fetchHistory();
+      fetchDailyQuota();
       alert("✅ گزارش با موفقیت ثبت شد");
     } catch (err) {
       alert(err.response?.data?.error ? `❌ ${err.response.data.error}` : "❌ خطا در ثبت گزارش");
@@ -404,9 +426,6 @@ export default function UnitReportForm() {
     setReportPickerDate(d);
     const jsDate = d.toDate?.() ? d.toDate() : new Date(d);
     setReportDate(jsDate);
-    // #region agent log
-    fetch("http://127.0.0.1:7469/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e3d023" }, body: JSON.stringify({ sessionId: "e3d023", location: "UnitReportForm.jsx:handleReportDatePickerChange", message: "report date changed", data: { picker: String(d?.format?.("YYYY-MM-DD") || ""), persianApi: convertToPersianDate(jsDate) }, timestamp: Date.now(), hypothesisId: "date-picker" }) }).catch(() => {});
-    // #endregion
     fetchDailyReports(jsDate);
   };
 
@@ -434,6 +453,8 @@ export default function UnitReportForm() {
         <div style={dateTopBar}>
           📅 امروز: {getFullTodayText()}
         </div>
+
+        <DailyQuotaBanner quota={dailyQuota} itemLabel="گزارش" isDarkMode={isDarkMode} />
 
         {/* هشدار گزارشات برگشت‌خورده */}
         {rejectedReportsCount > 0 && (
@@ -510,9 +531,11 @@ export default function UnitReportForm() {
           <div style={inputWrapper}>
             <div style={labelRow}>
               <label style={labelStyle}>عنوان گزارش</label>
-              <span style={{ fontSize: "10px", color: title.length > FIELD_FIELD_LIMITS.unitTitle ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
-                {title.length} / {FIELD_FIELD_LIMITS.unitTitle}
-              </span>
+              <CharCounter
+                current={title.length}
+                max={FIELD_FIELD_LIMITS.unitTitle}
+                style={{ fontWeight: "bold", color: title.length > FIELD_FIELD_LIMITS.unitTitle ? "#ef4444" : "#64748b" }}
+              />
             </div>
             <input
               style={{
@@ -530,9 +553,11 @@ export default function UnitReportForm() {
             <div style={labelRow}>
               <label style={labelStyle}>شرح واقعه گزارش</label>
               <div style={{ display: "flex", gap: "10px" }}>
-                <span style={{ fontSize: "10px", color: text.length > FIELD_FIELD_LIMITS.unitContent ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
-                  {text.length} / {FIELD_FIELD_LIMITS.unitContent}
-                </span>
+                <CharCounter
+                  current={text.length}
+                  max={FIELD_FIELD_LIMITS.unitContent}
+                  style={{ fontWeight: "bold", color: text.length > FIELD_FIELD_LIMITS.unitContent ? "#ef4444" : "#64748b" }}
+                />
                 {(title || text) && (
                   <button onClick={() => { setTitle(""); setText(""); }} style={clearLink}>
                     <TrashIcon /> پاکسازی فرم
@@ -607,11 +632,11 @@ export default function UnitReportForm() {
           <div style={btnRow}>
             <button
               onClick={handleSend}
-              disabled={loading || !title.trim() || !text.trim() || !!newReportFieldError}
+              disabled={loading || !title.trim() || !text.trim() || !!newReportFieldError || isQuotaExhausted(dailyQuota)}
               style={{
                 ...sendBtn,
-                opacity: loading || !title.trim() || !text.trim() || newReportFieldError ? 0.55 : 1,
-                cursor: loading || newReportFieldError ? "not-allowed" : "pointer",
+                opacity: loading || !title.trim() || !text.trim() || newReportFieldError || isQuotaExhausted(dailyQuota) ? 0.55 : 1,
+                cursor: loading || newReportFieldError || isQuotaExhausted(dailyQuota) ? "not-allowed" : "pointer",
               }}
             >
               {loading ? "در حال ارسال..." : "ارسال نهایی گزارش به مرکز"}
@@ -718,6 +743,14 @@ export default function UnitReportForm() {
               </div>
             </div>
 
+            {editingReport?.hash_key ? (
+              <EntityMessagesPanel
+                entityType="field_report"
+                entityId={editingReport.hash_key}
+                theme={entityMsgTheme}
+              />
+            ) : null}
+
             <div style={{ display: "flex", gap: "10px" }}>
               <button
                 onClick={submitEdit}
@@ -815,7 +848,7 @@ export default function UnitReportForm() {
             )}
 
             <div style={{ marginBottom: "10px" }}>
-              <label style={labelStyle}>عنوان اصلاح‌شده (حداکثر {FIELD_FIELD_LIMITS.unitShort} کاراکتر)</label>
+              <label style={labelStyle}>عنوان اصلاح‌شده (حداکثر {toPersianDigits(FIELD_FIELD_LIMITS.unitShort)} کاراکتر)</label>
               <input
                 style={inputStyle}
                 value={editTitle}
@@ -825,7 +858,7 @@ export default function UnitReportForm() {
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={labelStyle}>متن اصلاح‌شده گزارش (حداکثر {FIELD_FIELD_LIMITS.unitLong} کاراکتر)</label>
+              <label style={labelStyle}>متن اصلاح‌شده گزارش (حداکثر {toPersianDigits(FIELD_FIELD_LIMITS.unitLong)} کاراکتر)</label>
               <textarea
                 style={{ ...textareaStyle, height: "150px" }}
                 value={editText}
@@ -885,6 +918,14 @@ export default function UnitReportForm() {
                 })}
               </div>
             </div>
+
+            {editingRejectedReport?.hash_key ? (
+              <EntityMessagesPanel
+                entityType="field_report"
+                entityId={editingRejectedReport.hash_key}
+                theme={entityMsgTheme}
+              />
+            ) : null}
 
             <div style={{ display: "flex", gap: "10px" }}>
               <button

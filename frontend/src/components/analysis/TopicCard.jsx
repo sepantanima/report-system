@@ -1,5 +1,6 @@
 import React from "react";
 import { MapPin, Clock, Users, Edit3, Send, Archive, AlertCircle, History, RotateCcw } from "lucide-react";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import {
   PRIORITY_META, TOPIC_STATUS_META, getDeadlineMeta, formatPersianDateShort, toPersianDigits,
 } from "../../utils/analysisMonitorUtils.js";
@@ -67,7 +68,7 @@ export default function TopicCard({
           <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: "rgba(99,102,241,0.12)", color: "#818cf8" }}>{topic.domain}</span>
         )}
         <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: `${deadline.color}18`, color: deadline.color, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <Clock size={10} /> مهلت پیشنهادی: {deadline.label}
+          <Clock size={10} /> {ANALYSIS_TERMS.suggestedDeadline}: {deadline.label}
         </span>
         {showAssignStats ? (
           <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: "rgba(16,185,129,0.12)", color: "#10b981", display: "inline-flex", alignItems: "center", gap: 4 }}>

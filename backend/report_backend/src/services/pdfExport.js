@@ -100,8 +100,8 @@ export function generateAnalysisPdf({
 
   const appendixRows = [
     [rtlCell("عنوان تحلیل", { bold: true }), rtlCell(version?.title || "—")],
-    [rtlCell("موضوع", { bold: true }), rtlCell(topic?.title || assignment?.title || "—")],
-    [rtlCell("کد موضوع", { bold: true }), rtlCell(topic?.topic_code || "—")],
+    [rtlCell("محور", { bold: true }), rtlCell(topic?.title || assignment?.title || "—")],
+    [rtlCell("کد محور", { bold: true }), rtlCell(topic?.topic_code || "—")],
     [rtlCell("نسخه", { bold: true }), rtlCell(String(version?.version_number ?? "—"))],
     [rtlCell("وضعیت", { bold: true }), rtlCell(STATUS_FA[version?.status] || version?.status || "—")],
     [rtlCell("تاریخ ارسال", { bold: true }), rtlCell(formatJalali(version?.submitted_at || version?.created_at))],

@@ -30,6 +30,8 @@ import { validateFormActionName, validateFormDataObject } from "../constants/aiF
 import newsAnalyticsRoutes from "./newsAnalytics.js";
 import newsReportRoutes from "./newsReportRoutes.js";
 import newsSmartAnalysisRoutes from "./newsSmartAnalysisRoutes.js";
+import { getNewsDailyQuotaForUser } from "../services/newsEntrySettingsService.js";
+import { nowJalaliDate } from "../services/newsTextUtils.js";
 
 const router = express.Router();
 
@@ -117,6 +119,15 @@ router.get("/monitor", auth, newsMonitor, async (req, res) => {
   }
 });
 
+router.get("/monitor/daily-quota", auth, newsEntry, async (req, res) => {
+  try {
+    const date = req.query.date || nowJalaliDate();
+    res.json(await getNewsDailyQuotaForUser(req.user, date));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/monitor/my-drafts", auth, newsEntry, async (req, res) => {
   try {
     const rows = await listNewsMonitor({ ...req.query, my_drafts: "1" }, req.user?.id ?? null);
@@ -196,7 +207,7 @@ router.get("/monitor/:id/audit", auth, newsEditor, async (req, res) => {
 
 router.post("/monitor/create", auth, newsEntry, async (req, res) => {
   try {
-    const row = await createNewsByMonitor(req.body, req.user?.id ?? null);
+    const row = await createNewsByMonitor(req.body, req.user ?? null);
     res.status(201).json(row);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -205,7 +216,7 @@ router.post("/monitor/create", auth, newsEntry, async (req, res) => {
 
 router.post("/monitor/:id/submit", auth, newsEntry, async (req, res) => {
   try {
-    const row = await submitNewsForReview(req.params.id, req.user?.id ?? null);
+    const row = await submitNewsForReview(req.params.id, req.user ?? null);
     if (!row) return res.status(404).json({ error: "خبر یافت نشد" });
     res.json(row);
   } catch (err) {

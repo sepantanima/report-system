@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { stripHtml } from "./newsTextUtils.js";
 import { resolveReportPeriod, periodToQueryFilters } from "./newsReportPeriod.js";
 import { fetchNewsReportRows, fetchNewsByIds } from "./newsReportQuery.js";
+import pool from "../db.js";
 import { analysisTypeLabelFa } from "../constants/newsSmartAnalysisMeta.js";
 
 const MAX_NEWS_ITEMS = 150;
@@ -71,11 +72,63 @@ export function computeQuerySignature(queryPayload = {}) {
   return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }
 
+async function loadPackForAssembly(packId) {
+  const r = await pool.query(
+    `SELECT * FROM tbl_news_smart_analysis_packs WHERE id = $1`,
+    [packId],
+  );
+  return r.rows[0] || null;
+}
+
 /**
  * @param {Record<string, unknown>} formData
  * @param {{ userId?: number|null, role?: string|string[] }} [scope]
  */
 export async function resolveNewsSmartAnalysisAssembly(formData, scope = {}) {
+  const packId = formData?.pack_id != null ? parseInt(formData.pack_id, 10) : null;
+
+  if (Number.isFinite(packId)) {
+    const packRow = await loadPackForAssembly(packId);
+    if (!packRow) throw new Error("پک تحلیل یافت نشد");
+
+    const ids = Array.isArray(packRow.news_ids)
+      ? packRow.news_ids.map((x) => parseInt(x, 10)).filter((n) => Number.isFinite(n))
+      : [];
+    if (!ids.length) throw new Error("پک فاقد اخبار فریزشده است");
+
+    const rows = await fetchNewsByIds(ids, scope);
+    const digest = buildNewsDigest(rows);
+    const queryPayload = packRow.query_payload || {};
+    const period = {
+      from_date: packRow.period_from,
+      to_date: packRow.period_to,
+      report_date: packRow.period_from,
+    };
+    const filters = queryPayload.filters || {};
+
+    const vars = {
+      PERIOD_START: faJalali(packRow.period_from),
+      PERIOD_END: faJalali(packRow.period_to || packRow.period_from),
+      NEWS_COUNT: String(rows.length),
+      FILTER_SUMMARY: buildFilterSummary(filters),
+      NEWS_DIGEST: digest,
+    };
+
+    return {
+      rows,
+      digest,
+      period,
+      periodFrom: packRow.period_from || "",
+      periodTo: packRow.period_to || packRow.period_from || "",
+      filters,
+      selectedIds: packRow.selection_mode === "subset" ? ids : [],
+      newsCount: rows.length,
+      vars,
+      filterSignature: packRow.filter_signature,
+      packId,
+    };
+  }
+
   const queryPayload = formData?.query_payload || formData?.queryPayload || {};
   if (!queryPayload || typeof queryPayload !== "object") {
     throw new Error("query_payload الزامی است");

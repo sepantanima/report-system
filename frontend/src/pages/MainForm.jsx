@@ -18,6 +18,9 @@ import {
   KeyRound,
   Copy,
   Send,
+  Bell,
+  Megaphone,
+  CheckCircle,
 } from "lucide-react";
 import {
   decodeToken,
@@ -26,6 +29,8 @@ import {
   hasPermission,
   persistSessionRoles,
 } from "../utils/userRoles.js";
+import NotificationBell from "../components/messaging/NotificationBell.jsx";
+import GlobalAnnouncementBanner from "../components/messaging/GlobalAnnouncementBanner.jsx";
 
 // 🌟 انتقال آرایه ساختاری منوها به خارج از کامپوننت جهت حل خطای کامپایلر ری‌اکت
 // متغیرهای استاتیک نباید در هر رندر درون بدنه کامپوننت بازسازی شوند
@@ -37,14 +42,57 @@ const ACTION_CATEGORIES = [
   { id: "system", title: "مدیریت و گزارشات", color: "#f59e0b" },
 ];
 
+function hexToRgb(hex) {
+  const h = String(hex || "").replace("#", "");
+  if (h.length !== 6) return [100, 116, 139];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function rgbaHex(hex, alpha) {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** پالت هر دسته: زمینه بخش + چند پرده از همان رنگ برای دکمه‌ها */
+const CATEGORY_THEMES = {
+  field: {
+    base: "#06b6d4",
+    accents: ["#0e7490", "#0891b2", "#06b6d4", "#22d3ee", "#155e75", "#67e8f9"],
+  },
+  analysis: {
+    base: "#10b981",
+    accents: ["#047857", "#059669", "#10b981", "#34d399", "#14b8a6", "#6ee7b7"],
+  },
+  news: {
+    base: "#a855f7",
+    accents: ["#7e22ce", "#9333ea", "#a855f7", "#c084fc", "#8b5cf6", "#d8b4fe"],
+  },
+  system: {
+    base: "#f59e0b",
+    accents: ["#b45309", "#d97706", "#f59e0b", "#fbbf24", "#ea580c", "#fcd34d"],
+  },
+};
+
+function getCategoryTheme(categoryId) {
+  return CATEGORY_THEMES[categoryId] || CATEGORY_THEMES.system;
+}
+
+function getActionButtonStyle(categoryId, index) {
+  const theme = getCategoryTheme(categoryId);
+  const accent = theme.accents[index % theme.accents.length];
+  return {
+    background: rgbaHex(accent, 0.14),
+    borderColor: rgbaHex(accent, 0.38),
+    accentColor: accent,
+    hoverShadow: rgbaHex(accent, 0.28),
+  };
+}
+
 const allActions = [
   {
     id: 1,
     title: "ثبت گزارش میدانی",
     icon: <FilePlus size={24} />,
-    color: "rgba(99, 102, 241, 0.08)",
-    borderColor: "rgba(99, 102, 241, 0.25)",
-    accentColor: "#6366f1",
     path: "/report",
     permission: "create_report",
     category: "field",
@@ -53,9 +101,6 @@ const allActions = [
     id: 2,
     title: "مدیریت کاربران",
     icon: <Users size={24} />,
-    color: "rgba(16, 185, 129, 0.08)",
-    borderColor: "rgba(16, 185, 129, 0.25)",
-    accentColor: "#10b981",
     path: "/users",
     permission: "manage_users",
     category: "system",
@@ -64,9 +109,6 @@ const allActions = [
     id: 3,
     title: "پایش گزارشات میدانی",
     icon: <Activity size={24} />,
-    color: "rgba(6, 182, 212, 0.08)",
-    borderColor: "rgba(6, 182, 212, 0.25)",
-    accentColor: "#06b6d4",
     path: "/field-monitor",
     permission: "monitor_reports",
     category: "field",
@@ -75,9 +117,6 @@ const allActions = [
     id: 51,
     title: "مدیریت اخبار",
     icon: <LayoutDashboard size={24} />,
-    color: "rgba(59, 130, 246, 0.08)",
-    borderColor: "rgba(59, 130, 246, 0.25)",
-    accentColor: "#3b82f6",
     path: "/news-manager",
     permission: "news_review",
     category: "news",
@@ -86,9 +125,6 @@ const allActions = [
     id: 5,
     title: "ورود خبر (پایشگر)",
     icon: <FilePlus size={24} />,
-    color: "rgba(56, 189, 248, 0.08)",
-    borderColor: "rgba(56, 189, 248, 0.25)",
-    accentColor: "#38bdf8",
     path: "/news-entry",
     permission: "news_entry",
     category: "news",
@@ -97,9 +133,6 @@ const allActions = [
     id: 52,
     title: "مدیریت تکراری‌ها",
     icon: <Copy size={24} />,
-    color: "rgba(148, 163, 184, 0.08)",
-    borderColor: "rgba(148, 163, 184, 0.25)",
-    accentColor: "#94a3b8",
     path: "/news-duplicates",
     permission: "news_duplicates",
     category: "news",
@@ -108,9 +141,6 @@ const allActions = [
     id: 53,
     title: "داشبورد اخبار",
     icon: <Activity size={24} />,
-    color: "rgba(14, 165, 233, 0.08)",
-    borderColor: "rgba(14, 165, 233, 0.25)",
-    accentColor: "#0ea5e9",
     path: "/news-analytics",
     permission: "analytics",
     category: "news",
@@ -119,9 +149,6 @@ const allActions = [
     id: 54,
     title: "گزارش و انتشار اخبار",
     icon: <Send size={24} />,
-    color: "rgba(34, 197, 94, 0.08)",
-    borderColor: "rgba(34, 197, 94, 0.25)",
-    accentColor: "#22c55e",
     path: "/news-reports",
     permission: "news_report",
     category: "news",
@@ -130,9 +157,6 @@ const allActions = [
     id: 55,
     title: "کانال‌های پیام‌رسان",
     icon: <Send size={24} />,
-    color: "rgba(56, 189, 248, 0.08)",
-    borderColor: "rgba(56, 189, 248, 0.25)",
-    accentColor: "#38bdf8",
     path: "/admin/messenger-channels",
     permission: "manage_messenger",
     category: "system",
@@ -141,9 +165,6 @@ const allActions = [
     id: 56,
     title: "تنظیمات گزارش اخبار",
     icon: <FileText size={24} />,
-    color: "rgba(192, 0, 0, 0.08)",
-    borderColor: "rgba(192, 0, 0, 0.25)",
-    accentColor: "#c00000",
     path: "/admin/news-report-settings",
     permission: "manage_news_reports",
     category: "system",
@@ -152,9 +173,6 @@ const allActions = [
     id: 10,
     title: "پردازش هوشمند اخبار",
     icon: <Cpu size={24} />,
-    color: "rgba(168, 85, 247, 0.08)",
-    borderColor: "rgba(168, 85, 247, 0.25)",
-    accentColor: "#a855f7",
     path: "/ai-processor",
     permission: "ai_process",
     category: "news",
@@ -163,9 +181,6 @@ const allActions = [
     id: 6,
     title: "جستجوی گزارشات",
     icon: <Search size={24} />,
-    color: "rgba(236, 72, 153, 0.08)",
-    borderColor: "rgba(236, 72, 153, 0.25)",
-    accentColor: "#ec4899",
     path: "/search",
     permission: "search_reports",
     category: "field",
@@ -174,20 +189,30 @@ const allActions = [
     id: 7,
     title: "تنظیمات سیستم",
     icon: <Settings size={24} />,
-    color: "rgba(245, 158, 11, 0.08)",
-    borderColor: "rgba(245, 158, 11, 0.25)",
-    accentColor: "#f59e0b",
     path: "/SystemSetting",
     permission: "sys_settings",
+    category: "system",
+  },
+  {
+    id: 59,
+    title: "پیام‌ها",
+    icon: <Bell size={24} />,
+    path: "/messages",
+    permission: "messages",
+    category: "system",
+  },
+  {
+    id: 61,
+    title: "صدور ابلاغ",
+    icon: <Megaphone size={24} />,
+    path: "/messages/compose",
+    permission: "manage_announcements",
     category: "system",
   },
   {
     id: 8,
     title: "گزارشات تحلیلی",
     icon: <Activity size={24} />,
-    color: "rgba(244, 63, 94, 0.08)",
-    borderColor: "rgba(244, 63, 94, 0.25)",
-    accentColor: "#f43f5e",
     path: "/field-reports-dashboard",
     permission: "analytics",
     category: "field",
@@ -196,9 +221,6 @@ const allActions = [
     id: 20,
     title: "خلاصه مدیریتی میدانی",
     icon: <FileText size={24} />,
-    color: "rgba(14, 165, 233, 0.08)",
-    borderColor: "rgba(14, 165, 233, 0.25)",
-    accentColor: "#0ea5e9",
     path: "/field-management-summary",
     permission: "field_mgmt_summary",
     category: "field",
@@ -207,9 +229,6 @@ const allActions = [
     id: 21,
     title: "مدیریت پرامپت‌ها",
     icon: <FileText size={24} />,
-    color: "rgba(234, 179, 8, 0.08)",
-    borderColor: "rgba(234, 179, 8, 0.25)",
-    accentColor: "#eab308",
     path: "/admin/prompts",
     permission: "manage_prompts",
     category: "system",
@@ -218,9 +237,6 @@ const allActions = [
     id: 22,
     title: "مدیریت API هوش مصنوعی",
     icon: <KeyRound size={24} />,
-    color: "rgba(139, 92, 246, 0.08)",
-    borderColor: "rgba(139, 92, 246, 0.25)",
-    accentColor: "#8b5cf6",
     path: "/admin/ai-api-configs",
     permission: "manage_ai_api",
     category: "system",
@@ -229,9 +245,6 @@ const allActions = [
     id: 23,
     title: "اکشن‌های AI فرم‌ها",
     icon: <Cpu size={24} />,
-    color: "rgba(124, 58, 237, 0.08)",
-    borderColor: "rgba(124, 58, 237, 0.25)",
-    accentColor: "#7c3aed",
     path: "/admin/ai-form-actions",
     permission: "manage_ai_api",
     category: "system",
@@ -240,9 +253,6 @@ const allActions = [
     id: 25,
     title: "لاگ اجرای AI",
     icon: <FileText size={24} />,
-    color: "rgba(244, 63, 94, 0.08)",
-    borderColor: "rgba(244, 63, 94, 0.25)",
-    accentColor: "#f43f5e",
     path: "/admin/ai-run-logs",
     permission: "manage_ai_api",
     category: "system",
@@ -251,9 +261,6 @@ const allActions = [
     id: 24,
     title: "الگوهای پاکسازی خبر",
     icon: <FileText size={24} />,
-    color: "rgba(236, 72, 153, 0.08)",
-    borderColor: "rgba(236, 72, 153, 0.25)",
-    accentColor: "#ec4899",
     path: "/admin/news-clean-patterns",
     permission: "manage_prompts",
     category: "system",
@@ -262,31 +269,30 @@ const allActions = [
     id: 11,
     title: "مدیریت تحلیل‌ها",
     icon: <Shield size={24} />,
-    color: "rgba(16, 185, 129, 0.08)",
-    borderColor: "rgba(16, 185, 129, 0.25)",
-    accentColor: "#10b981",
     path: "/analysis/management",
     permission: "analysis_manage",
+    category: "analysis",
+  },
+  {
+    id: 15,
+    title: "تصویب محورها",
+    icon: <CheckCircle size={24} />,
+    path: "/analysis/management?tab=approve",
+    permission: "analysis_topic_approve",
     category: "analysis",
   },
   {
     id: 12,
     title: "مأموریت‌های تحلیل من",
     icon: <FilePlus size={24} />,
-    color: "rgba(99, 102, 241, 0.08)",
-    borderColor: "rgba(99, 102, 241, 0.25)",
-    accentColor: "#6366f1",
     path: "/analysis/my-missions",
     permission: "analysis_missions",
     category: "analysis",
   },
   {
     id: 13,
-    title: "ثبت موضوع تحلیل",
+    title: "ثبت محور تحلیل",
     icon: <FilePlus size={24} />,
-    color: "rgba(20, 184, 166, 0.08)",
-    borderColor: "rgba(20, 184, 166, 0.25)",
-    accentColor: "#14b8a6",
     path: "/analysis/propose-topic",
     permission: "analysis_propose",
     category: "analysis",
@@ -295,9 +301,6 @@ const allActions = [
     id: 14,
     title: "بازبینی تحلیل‌ها",
     icon: <Activity size={24} />,
-    color: "rgba(168, 85, 247, 0.08)",
-    borderColor: "rgba(168, 85, 247, 0.25)",
-    accentColor: "#a855f7",
     path: "/analysis/review",
     permission: "analysis_review",
     category: "analysis",
@@ -489,7 +492,7 @@ export default function MainForm() {
         }
         .action-card-button:hover {
           transform: translateY(-4px);
-          background-color: rgba(255, 255, 255, 0.03) !important;
+          filter: brightness(1.08);
           border-color: var(--hover-border) !important;
           box-shadow: 0 8px 24px var(--hover-shadow);
         }
@@ -546,13 +549,22 @@ export default function MainForm() {
           align-items: center;
           justify-content: space-between;
           padding: 10px 14px;
-          border-radius: 12px;
-          border: 1px solid var(--border-color);
-          background: var(--input-bg);
+          border-radius: 10px;
+          border: 1px solid transparent;
           cursor: pointer;
           font-family: inherit;
           color: var(--text-main);
           margin-bottom: 10px;
+          transition: filter 0.2s ease;
+        }
+        .menu-category-header:hover {
+          filter: brightness(1.06);
+        }
+        .menu-category-block {
+          border-radius: 14px;
+          padding: 12px;
+          margin-bottom: 14px;
+          border: 1px solid transparent;
         }
         .menu-category-grid {
           display: grid;
@@ -601,10 +613,12 @@ export default function MainForm() {
           
           {/* مشخصات هویتی و نقش‌های فعال کاربر جاری */}
           <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "center", marginTop: "10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--text-sub)" }}>
-              <User size={14} color="#38bdf8" />
-              {/* نام کامل کاربر با اولویت‌بندی هوشمند و بدون بازگشت به مقدار پیش‌فرض هاردکد */}
-              <span>جناب آقای <b>{userMeta.name}</b> خوش آمدید</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "center" }}>
+              <NotificationBell />
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--text-sub)" }}>
+                <User size={14} color="#38bdf8" />
+                <span>جناب آقای <b>{userMeta.name}</b> خوش آمدید</span>
+              </div>
             </div>
             <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginTop: "2px" }}>
               <Shield size={12} color="#f59e0b" />
@@ -619,39 +633,61 @@ export default function MainForm() {
         </div>
 
         {/* بدنه و گرید منوهای کاربر — دسته‌بندی بر اساس فرایند */}
+        <GlobalAnnouncementBanner />
         <div className="loginCard" style={{ padding: "30px", borderRadius: "20px", direction: "rtl" }}>
           {groupedActions.map((group) => {
             const isOpen = collapsed[group.id] !== true;
+            const catTheme = getCategoryTheme(group.id);
+            const base = catTheme.base;
             return (
-              <div key={group.id} style={{ marginBottom: 8 }}>
-                <button type="button" className="menu-category-header" onClick={() => toggleCategory(group.id)}>
+              <div
+                key={group.id}
+                className="menu-category-block"
+                style={{
+                  background: rgbaHex(base, 0.07),
+                  borderColor: rgbaHex(base, 0.22),
+                }}
+              >
+                <button
+                  type="button"
+                  className="menu-category-header"
+                  onClick={() => toggleCategory(group.id)}
+                  style={{
+                    background: rgbaHex(base, 0.16),
+                    borderColor: rgbaHex(base, 0.32),
+                    color: base,
+                  }}
+                >
                   <span style={{ fontSize: 13, fontWeight: "bold", display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: group.color, display: "inline-block" }} />
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: base, display: "inline-block", boxShadow: `0 0 8px ${rgbaHex(base, 0.5)}` }} />
                     {group.title}
-                    <span style={{ fontSize: 10, opacity: 0.6, fontWeight: "normal" }}>({toPersianDigits(group.items.length)})</span>
+                    <span style={{ fontSize: 10, opacity: 0.75, fontWeight: "normal", color: "var(--text-main)" }}>({toPersianDigits(group.items.length)})</span>
                   </span>
                   {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
                 {isOpen && (
                   <div className="menu-category-grid">
-                    {group.items.map((item) => (
+                    {group.items.map((item, idx) => {
+                      const btnStyle = getActionButtonStyle(group.id, idx);
+                      return (
                       <button
                         key={item.id}
                         className="action-card-button"
                         onClick={() => navigate(item.path)}
                         style={{
-                          background: item.color,
-                          border: `1px solid ${item.borderColor}`,
+                          background: btnStyle.background,
+                          border: `1px solid ${btnStyle.borderColor}`,
                           height: "110px",
                           color: "var(--text-main)",
-                          "--hover-border": item.accentColor,
-                          "--hover-shadow": `${item.accentColor}33`,
+                          "--hover-border": btnStyle.accentColor,
+                          "--hover-shadow": btnStyle.hoverShadow,
                         }}
                       >
-                        <div className="icon-box" style={{ color: item.accentColor }}>{item.icon}</div>
+                        <div className="icon-box" style={{ color: btnStyle.accentColor }}>{item.icon}</div>
                         <span style={{ fontSize: "12px", fontWeight: "bold", opacity: 0.95, textAlign: "center", lineHeight: 1.5 }}>{item.title}</span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

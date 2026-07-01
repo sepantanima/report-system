@@ -31,6 +31,11 @@ import NewsReportGenerator from "./pages/NewsReportGenerator.jsx";
 import NewsReportSettingsAdmin from "./pages/NewsReportSettingsAdmin.jsx";
 import FieldManagementSummary from "./pages/FieldManagementSummary.jsx";
 import FieldManagementSummaryCreate from "./pages/FieldManagementSummaryCreate.jsx";
+import FieldReportSettingsAdmin from "./pages/FieldReportSettingsAdmin.jsx";
+import NewsEntrySettingsAdmin from "./pages/NewsEntrySettingsAdmin.jsx";
+import MessageInboxPage from "./pages/MessageInboxPage.jsx";
+import ComposeAnnouncementPage from "./pages/ComposeAnnouncementPage.jsx";
+import MessageSettingsAdmin from "./pages/MessageSettingsAdmin.jsx";
 
 
 // کامپوننت محافظت از مسیرها
@@ -75,6 +80,11 @@ function App() {
         <Route path="/admin/messenger-channels" element={<PrivateRoute><MessengerChannelManagement /></PrivateRoute>} />
         <Route path="/news-reports" element={<PrivateRoute><NewsReportGenerator /></PrivateRoute>} />
         <Route path="/admin/news-report-settings" element={<PrivateRoute><NewsReportSettingsAdmin /></PrivateRoute>} />
+        <Route path="/admin/field-report-settings" element={<PrivateRoute><FieldReportSettingsAdmin /></PrivateRoute>} />
+        <Route path="/admin/news-entry-settings" element={<PrivateRoute><NewsEntrySettingsAdmin /></PrivateRoute>} />
+        <Route path="/messages" element={<PrivateRoute><MessageInboxPage /></PrivateRoute>} />
+        <Route path="/messages/compose" element={<PrivateRoute><ComposeAnnouncementPage /></PrivateRoute>} />
+        <Route path="/admin/message-settings" element={<PrivateRoute><MessageSettingsAdmin /></PrivateRoute>} />
         <Route path="/SystemSetting" element={<PrivateRoute><SystemSetting /></PrivateRoute>} />
         <Route path="/analysis/management" element={<PrivateRoute><AnalysisManagerPanel /></PrivateRoute>} />
         <Route path="/analysis/management/approve/:id" element={<PrivateRoute><AnalysisTopicApprovalDetail /></PrivateRoute>} />

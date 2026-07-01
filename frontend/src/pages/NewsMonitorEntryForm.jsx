@@ -10,6 +10,7 @@ import RichTextEditor, { stripHtml } from "../components/analysis/RichTextEditor
 import MultiSelect from "../components/MultiSelect.jsx";
 import NewsChoiceButtons from "../components/news/NewsChoiceButtons.jsx";
 import SearchableSourceSelect from "../components/news/SearchableSourceSelect.jsx";
+import CharCounter from "../components/news/CharCounter.jsx";
 import NewsSourceUrlField from "../components/news/NewsSourceUrlField.jsx";
 import newsMonitorService from "../services/newsMonitorService.js";
 import { decodeToken, getSessionRoles, hasPermission } from "../utils/userRoles.js";
@@ -18,6 +19,8 @@ import { plainTextLength } from "../constants/analysisFieldLimits.js";
 import { NEWS_PRIORITIES } from "../constants/newsMonitorMeta.js";
 import { NEWS_FIELD_LIMITS, validateNewsEntryPayload } from "../constants/newsFieldLimits.js";
 import { NEWS_ENTRY_HELP } from "../content/newsFormHelp.jsx";
+import DailyQuotaBanner, { isQuotaExhausted } from "../components/common/DailyQuotaBanner.jsx";
+import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
 import { clampText } from "../utils/limitInput.js";
 import { toPersianDigits, toEnDigit } from "../utils/analysisMonitorUtils.js";
 import { NEWS_EDITOR_BODY_HEIGHT, NEWS_EDITOR_BOX_HEIGHT } from "../constants/newsEditorLayout.js";
@@ -81,6 +84,7 @@ export default function NewsMonitorEntryForm() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [form, setForm] = useState(() => emptyForm(defaultSender));
+  const [dailyQuota, setDailyQuota] = useState(null);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -111,12 +115,22 @@ export default function NewsMonitorEntryForm() {
     }
   }, []);
 
+  const loadDailyQuota = useCallback(async () => {
+    try {
+      const data = await newsMonitorService.dailyQuota();
+      setDailyQuota(data);
+    } catch {
+      setDailyQuota(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (allowed) {
       loadMeta();
       loadDrafts();
+      loadDailyQuota();
     }
-  }, [allowed, loadMeta, loadDrafts]);
+  }, [allowed, loadMeta, loadDrafts, loadDailyQuota]);
 
   const entryFieldError = useMemo(
     () => validateNewsEntryPayload({
@@ -189,6 +203,7 @@ export default function NewsMonitorEntryForm() {
         resetForm();
       }
       loadDrafts();
+      if (submit) loadDailyQuota();
     } catch (e) {
       showToast(e.response?.data?.error || "خطا در ثبت");
     } finally {
@@ -294,6 +309,8 @@ export default function NewsMonitorEntryForm() {
           {toast}
         </div>
       ) : null}
+
+      <DailyQuotaBanner quota={dailyQuota} itemLabel="خبر" isDarkMode={theme.isDarkMode} />
 
       <div>
           {drafts.length > 0 ? (
@@ -404,9 +421,12 @@ export default function NewsMonitorEntryForm() {
                   <div style={{ fontSize: "0.8em", opacity: 0.75, marginTop: 4 }}>
                     فرستنده (از سیستم): <b style={{ color: theme.accent }}>{defaultSender || "—"}</b>
                     {" · "}
-                    <span style={{ color: rawTextLen > NEWS_FIELD_LIMITS.rawText ? "#ef4444" : undefined }}>
-                      {toPersianDigits(rawTextLen)} / {toPersianDigits(NEWS_FIELD_LIMITS.rawText)} کاراکتر
-                    </span>
+                    <CharCounter
+                      current={rawTextLen}
+                      max={NEWS_FIELD_LIMITS.rawText}
+                      style={{ fontSize: "0.85em", color: rawTextLen > NEWS_FIELD_LIMITS.rawText ? "#ef4444" : undefined }}
+                    />
+                    {" کاراکتر"}
                   </div>
                 </div>
                 <button type="button" onClick={pasteFromClipboard} style={{ ...btnStyle(false), minHeight: "2.2em", padding: "0.4em 0.75em", fontSize: "0.85em", color: theme.accent }}>
@@ -432,9 +452,7 @@ export default function NewsMonitorEntryForm() {
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <label style={{ fontSize: "0.85em", opacity: 0.8 }}>منبع *</label>
-                <span style={{ fontSize: "0.75em", color: form.source.length > NEWS_FIELD_LIMITS.source ? "#ef4444" : "#64748b" }}>
-                  {toPersianDigits(form.source.length)} / {toPersianDigits(NEWS_FIELD_LIMITS.source)}
-                </span>
+                <CharCounter current={form.source.length} max={NEWS_FIELD_LIMITS.source} style={{ fontSize: "0.75em" }} />
               </div>
               <SearchableSourceSelect
                 value={form.source}
@@ -507,14 +525,22 @@ export default function NewsMonitorEntryForm() {
               </button>
               <button
                 type="button"
-                disabled={saving || !!entryFieldError}
+                disabled={saving || !!entryFieldError || isQuotaExhausted(dailyQuota)}
                 onClick={() => handleSave(true)}
-                style={{ ...btnStyle(true), opacity: saving || entryFieldError ? 0.55 : 1, cursor: entryFieldError ? "not-allowed" : "pointer" }}
+                style={{ ...btnStyle(true), opacity: saving || entryFieldError || isQuotaExhausted(dailyQuota) ? 0.55 : 1, cursor: entryFieldError || isQuotaExhausted(dailyQuota) ? "not-allowed" : "pointer" }}
               >
                 <Send size={16} /> {saving ? "در حال ارسال..." : "ارسال برای بررسی"}
               </button>
             </div>
           </div>
+
+          {editingDraftId ? (
+            <EntityMessagesPanel
+              entityType="news"
+              entityId={editingDraftId}
+              theme={theme}
+            />
+          ) : null}
         </div>
     </FormPageLayout>
   );

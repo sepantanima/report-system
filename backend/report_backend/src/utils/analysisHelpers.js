@@ -85,10 +85,10 @@ export function toGregorianDate(input) {
 export function validateTopicPayload(body = {}) {
   const L = TOPIC_FIELD_LIMITS;
   if (body.title !== undefined && String(body.title).length > L.title) {
-    return `عنوان حداکثر ${L.title} کاراکتر باشد`;
+    return `محور حداکثر ${L.title} کاراکتر باشد`;
   }
   if (body.description !== undefined && plainTextLength(body.description) > L.description) {
-    return `شرح موضوع حداکثر ${L.description} کاراکتر باشد`;
+    return `شرح محور حداکثر ${L.description} کاراکتر باشد`;
   }
   if (body.domain !== undefined && String(body.domain || "").length > L.domain) {
     return `حوزه حداکثر ${L.domain} کاراکتر باشد`;

@@ -68,6 +68,11 @@ const newsMonitorService = {
     return res.data;
   },
 
+  dailyQuota: async (date) => {
+    const res = await api.get(`${BASE}/monitor/daily-quota`, { params: date ? { date } : {} });
+    return res.data;
+  },
+
   submit: async (id) => {
     const res = await api.post(`${BASE}/monitor/${id}/submit`);
     return res.data;

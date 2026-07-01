@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import { Bold, Underline, Heading2, Heading3, Palette, Maximize2, Minimize2, Code2 } from "lucide-react";
 import { plainTextLength, stripHtml as stripHtmlUtil } from "../../constants/analysisFieldLimits.js";
-import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import { pxToEm } from "../../utils/pageFontSize.js";
+import CharCounter from "../news/CharCounter.jsx";
 import "./RichTextEditor.css";
 
 export { stripHtmlUtil as stripHtml };
@@ -261,9 +261,7 @@ export default function RichTextEditor({
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {maxLength != null && (
-            <span style={{ fontSize: pxToEm(10), color: plainLen > maxLength ? "#ef4444" : "#94a3b8", whiteSpace: "nowrap" }}>
-              {toPersianDigits(plainLen)}/{toPersianDigits(maxLength)}
-            </span>
+            <CharCounter current={plainLen} max={maxLength} />
           )}
           {allowSourceView && (
             <button

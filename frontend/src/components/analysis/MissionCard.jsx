@@ -1,7 +1,8 @@
 import React from "react";
 import { User, Clock, AlertTriangle } from "lucide-react";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import {
-  PRIORITY_META, MISSION_STATUS_META, getDeadlineMeta, formatPersianDateShort, toPersianDigits,
+  PRIORITY_META, MISSION_STATUS_META, getDeadlineMeta, formatPersianDateShort,
 } from "../../utils/analysisMonitorUtils.js";
 
 export default function MissionCard({ mission, theme, onOpen, actionLabel = "مدیریت مأموریت" }) {
@@ -15,7 +16,10 @@ export default function MissionCard({ mission, theme, onOpen, actionLabel = "م�
       <div style={{ position: "absolute", top: 0, right: 0, width: 4, height: "100%", background: priority.color }} />
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }}>
-        <strong style={{ fontSize: 14, lineHeight: 1.5 }}>{mission.topic_title}</strong>
+        <strong style={{ fontSize: 14, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.65, marginLeft: 6 }}>{ANALYSIS_TERMS.axisLabelPrefix}</span>
+          {mission.topic_title}
+        </strong>
         <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 6, background: `${status.color}22`, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
       </div>
 

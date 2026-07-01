@@ -14,6 +14,11 @@ import managementSummaryRoutes from "./managementSummaryRoutes.js";
 import { executeFormAiAction } from "../services/aiFormRunOrchestrator.js";
 import { listActiveActionsForForm } from "../services/aiFormActionService.js";
 import { validateFormActionName, validateFormDataObject } from "../constants/aiFormActions.js";
+import {
+  assertFieldSubmissionAllowed,
+  getFieldDailyQuotaForUser,
+} from "../services/fieldReportSettingsService.js";
+import { nowJalaliDate } from "../services/newsTextUtils.js";
 
 const router = Router();
 
@@ -139,6 +144,15 @@ router.get("/by-date", auth, async (req, res) => {
   }
 });
 
+router.get("/daily-quota", auth, async (req, res) => {
+  try {
+    const date = req.query.date || nowJalaliDate();
+    res.json(await getFieldDailyQuotaForUser(req.user, date));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // لیست گزارشات برگشت‌خورده کاربر با مپ فیلدهای جدید
 router.get("/rejected-list", auth, async (req, res) => {
   const { id, unitcd } = req.user;
@@ -193,6 +207,8 @@ router.post("/", auth, async (req, res) => {
   const { id, name, username, unitcd, statename } = req.user;
 
   try {
+    await assertFieldSubmissionAllowed(req.user, date);
+
     const now = new Date();
     const timeNumeric = parseInt(
       now.getHours().toString() + now.getMinutes().toString().padStart(2, "0"),
@@ -231,7 +247,8 @@ router.post("/", auth, async (req, res) => {
     await pool.query(query, values);
     res.status(201).json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const status = String(err.message || "").includes("سقف ثبت روزانه") ? 400 : 500;
+    res.status(status).json({ error: err.message });
   }
 });
 

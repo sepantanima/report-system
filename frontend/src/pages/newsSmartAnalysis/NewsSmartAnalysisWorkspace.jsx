@@ -5,12 +5,17 @@ import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import messengerAdminService from "../../services/messengerAdminService.js";
 import { MESSENGER_USAGE_KEYS } from "../../constants/messengerUsageKeys.js";
+import newsSmartAnalysisService from "../../services/newsSmartAnalysisService.js";
 import NewsSmartAnalysisStepNav from "./NewsSmartAnalysisStepNav.jsx";
 import NewsSmartAnalysisQueryStep from "./NewsSmartAnalysisQueryStep.jsx";
 import NewsSmartAnalysisSelectStep from "./NewsSmartAnalysisSelectStep.jsx";
 import NewsSmartAnalysisAnalysisStep from "./NewsSmartAnalysisAnalysisStep.jsx";
-import NewsSmartAnalysisOutputStep from "./NewsSmartAnalysisOutputStep.jsx";
-import { createInitialSmartAnalysisState } from "./newsSmartAnalysisUtils.js";
+import {
+  createInitialSmartAnalysisState,
+  hasAnalysisContent,
+  workspaceFromPack,
+} from "./newsSmartAnalysisUtils.js";
+import NewsSmartAnalysisProgressOverlay from "./NewsSmartAnalysisProgressOverlay.jsx";
 
 export default function NewsSmartAnalysisWorkspace() {
   const allowed = hasPermission(getSessionRoles(), "ai_process");
@@ -21,10 +26,14 @@ export default function NewsSmartAnalysisWorkspace() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [extractedCount, setExtractedCount] = useState(null);
   const [hasVisitedSelect, setHasVisitedSelect] = useState(false);
-  const [hasAnalysis, setHasAnalysis] = useState(false);
   const [analysisState, setAnalysisState] = useState(null);
+  const [analysisDrafts, setAnalysisDrafts] = useState({});
+  const [packId, setPackId] = useState(null);
+  const [packMeta, setPackMeta] = useState(null);
+  const [aiRunning, setAiRunning] = useState(null);
   const [publishDestinations, setPublishDestinations] = useState([]);
   const [publishDestinationId, setPublishDestinationId] = useState("");
+  const [historyRefresh, setHistoryRefresh] = useState(0);
 
   const hasExtracted = Boolean(queryState.queryPayload) && extractedCount != null;
 
@@ -58,13 +67,57 @@ export default function NewsSmartAnalysisWorkspace() {
   }, []);
 
   useEffect(() => {
-    setHasAnalysis(Boolean(analysisState?.analysisType));
-  }, [analysisState]);
+    if (!analysisState?.analysisType || !hasAnalysisContent(analysisState)) return;
+    setAnalysisDrafts((prev) => ({
+      ...prev,
+      [analysisState.analysisType]: { ...analysisState, packId },
+    }));
+  }, [analysisState, packId]);
+
+  const resetAnalysisSession = () => {
+    setAnalysisState(null);
+    setAnalysisDrafts({});
+    setPackId(null);
+    setPackMeta(null);
+  };
+
+  const applyPackToWorkspace = (pack) => {
+    const ws = workspaceFromPack(pack);
+    if (!ws) return;
+    setQueryState(ws.queryState);
+    setSelectedIds(ws.selectedIds);
+    setExtractedCount(ws.extractedCount);
+    setPackId(ws.packId);
+    setPackMeta(ws.packMeta);
+    setAnalysisDrafts(ws.analysisDrafts);
+    setAnalysisState(ws.analysisState);
+    setHasVisitedSelect(true);
+    setStep(3);
+    setErr("");
+  };
+
+  const loadPack = async (id) => {
+    try {
+      const pack = await newsSmartAnalysisService.getPack(id);
+      if (!pack) {
+        setErr("پک یافت نشد.");
+        return;
+      }
+      applyPackToWorkspace(pack);
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handlePackReady = (pack) => {
+    setPackId(pack.id);
+    setPackMeta(pack);
+  };
 
   const goToStep = (next) => {
+    if (aiRunning) return;
     if (next === 2 && !hasExtracted) return;
     if (next === 3 && (!hasExtracted || !hasVisitedSelect)) return;
-    if (next === 4 && (!hasExtracted || !hasAnalysis)) return;
     if (next === 2) setHasVisitedSelect(true);
     setStep(next);
     setErr("");
@@ -74,14 +127,14 @@ export default function NewsSmartAnalysisWorkspace() {
     if (!payload) {
       setExtractedCount(null);
       setHasVisitedSelect(false);
-      setAnalysisState(null);
+      resetAnalysisSession();
       return;
     }
     setExtractedCount(count);
     setQueryState((s) => ({ ...s, queryPayload: payload }));
     setSelectedIds([]);
     setHasVisitedSelect(false);
-    setAnalysisState(null);
+    resetAnalysisSession();
   };
 
   if (!allowed) {
@@ -96,6 +149,7 @@ export default function NewsSmartAnalysisWorkspace() {
         <span style={{ fontSize: "0.79em", color: theme.muted }}>
           یافت‌شده: {toPersianDigits(extractedCount)}
           {selectedIds.length > 0 && ` · انتخاب: ${toPersianDigits(selectedIds.length)}`}
+          {packId ? ` · پک: ${toPersianDigits(packId)}` : ""}
         </span>
       ) : null}
       maxWidth="1100px"
@@ -118,10 +172,14 @@ export default function NewsSmartAnalysisWorkspace() {
         onStepChange={goToStep}
         canGoToStep2={hasExtracted}
         canGoToStep3={hasExtracted && hasVisitedSelect}
-        canGoToStep4={hasExtracted && hasAnalysis}
         theme={theme}
         isMobile={isMobile}
+        blocked={!!aiRunning}
       />
+
+      {aiRunning && (
+        <NewsSmartAnalysisProgressOverlay actionName={aiRunning} theme={theme} />
+      )}
 
       {step === 1 && (
         <NewsSmartAnalysisQueryStep
@@ -153,24 +211,20 @@ export default function NewsSmartAnalysisWorkspace() {
           extractedCount={extractedCount}
           analysisState={analysisState}
           setAnalysisState={setAnalysisState}
-          onError={setErr}
-          theme={theme}
-        />
-      )}
-
-      {step === 4 && queryState.queryPayload && hasAnalysis && (
-        <NewsSmartAnalysisOutputStep
-          queryState={queryState}
-          queryPayload={queryState.queryPayload}
-          selectedIds={selectedIds}
-          extractedCount={extractedCount}
-          analysisState={analysisState}
-          setAnalysisState={setAnalysisState}
+          analysisDrafts={analysisDrafts}
+          setAnalysisDrafts={setAnalysisDrafts}
+          packId={packId}
+          packMeta={packMeta}
+          onPackReady={handlePackReady}
+          onRunningChange={setAiRunning}
+          onOpenPack={loadPack}
           onError={setErr}
           theme={theme}
           destinations={publishDestinations}
           destinationId={publishDestinationId}
           onDestinationChange={setPublishDestinationId}
+          historyRefresh={historyRefresh}
+          onHistoryRefresh={() => setHistoryRefresh((k) => k + 1)}
         />
       )}
     </FormPageLayout>

@@ -5,6 +5,7 @@ import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../../theme/unitReportFormStyles";
 import AnalysisPageShell from "../../components/analysis/AnalysisPageShell.jsx";
 import { MENTOR_REVIEW_HELP } from "../../content/analysisFormHelp.jsx";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import analysisService from "../../services/analysisService";
 import { getCurrentUser, parseUserRoles, MISSION_STATUS, canManageAnalysis } from "../../utils/analysisAuth.js";
 
@@ -46,7 +47,7 @@ export default function AnalysisMentorReview() {
       )}
       {missions.map((m) => (
         <div key={m.id} style={{ ...S.historyItem, borderRadius: "12px", marginBottom: "10px", background: isDarkMode ? "#1e293b" : "#f8fafc", padding: "14px" }}>
-          <strong style={{ fontSize: "13px", color: S.headingOnCard, display: "block", marginBottom: "6px" }}>{m.topic_title}</strong>
+          <strong style={{ fontSize: "13px", color: S.headingOnCard, display: "block", marginBottom: "6px" }}>{ANALYSIS_TERMS.axisLabelPrefix} {m.topic_title}</strong>
           <div style={{ fontSize: "11px", color: S.subMuted, marginBottom: "10px", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             <span>تحلیل‌گر: {m.analyst_realname}</span>
             <span>| {MISSION_STATUS[m.status] || m.status}</span>

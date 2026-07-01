@@ -6,6 +6,8 @@ import { FORM_PAGE_CSS } from "../../theme/formPageStyles.js";
 import { getFormPageTheme } from "../../theme/formPageTheme.js";
 import StandardFormHeader from "./StandardFormHeader.jsx";
 import HelpModal from "./HelpModal.jsx";
+import GlobalAnnouncementBanner from "../messaging/GlobalAnnouncementBanner.jsx";
+import NotificationBell from "../messaging/NotificationBell.jsx";
 
 /**
  * قالب یکسان صفحات فرم: تم، فونت، هدر، راهنما
@@ -54,7 +56,12 @@ export default function FormPageLayout({
       onBack={onBack}
       onHelp={openHelp}
       showHelp={showHelp}
-      headerEnd={headerEnd}
+      headerEnd={(
+        <>
+          {headerEnd}
+          <NotificationBell isDarkMode={isDarkMode} />
+        </>
+      )}
       toolbarExtra={toolbarExtra}
       subRow={subRow}
       variant={card ? "embedded" : headerVariant}
@@ -82,12 +89,14 @@ export default function FormPageLayout({
         }}
       >
         {header}
+        <GlobalAnnouncementBanner />
         <div style={{ padding: padding ?? "18px" }}>{children}</div>
       </div>
     </div>
   ) : (
     <>
       {header}
+      <GlobalAnnouncementBanner />
       <main
         style={{
           maxWidth: contentMaxWidth,

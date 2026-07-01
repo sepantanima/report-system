@@ -9,6 +9,8 @@ import analysisService from "../../services/analysisService";
 import { canApproveTopics, canManageAnalysis } from "../../utils/analysisAuth.js";
 import { loadManagementFilters, saveManagementFilters } from "../../utils/analysisManagementNav.js";
 import AnalysisReportsDashboard from "./AnalysisReportsDashboard.jsx";
+import AnalysisWorkflowStepper from "../../components/analysis/AnalysisWorkflowStepper.jsx";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { MANAGER_PANEL_HELP } from "../../content/analysisFormHelp.jsx";
 import {
   TOPIC_STATUS_META, MISSION_STATUS_META, PRIORITY_META, getDateRangeParams, toPersianDigits,
@@ -35,9 +37,9 @@ export default function AnalysisManagerPanel() {
 
   const allTabs = useMemo(() => {
     const tabs = [];
-    if (canApprove) tabs.push({ id: "approve", label: "بررسی موضوعات", icon: CheckCircle });
+    if (canApprove) tabs.push({ id: "approve", label: ANALYSIS_TERMS.ratifyTab, icon: CheckCircle });
     if (canManage) {
-      tabs.push({ id: "assign", label: "ارجاع موضوعات", icon: BookOpen });
+      tabs.push({ id: "assign", label: ANALYSIS_TERMS.assignTab, icon: BookOpen });
       tabs.push({ id: "missions", label: "مأموریت‌ها", icon: ClipboardList });
       tabs.push({ id: "reports", label: "گزارش‌ها", icon: TrendingUp });
     }
@@ -139,13 +141,13 @@ export default function AnalysisManagerPanel() {
       return [{ label: "گزارش تحلیلی", value: "—", color: "#38bdf8" }];
     }
     if (tab === "assign") {
-      return [{ label: "موضوعات قابل ارجاع", value: topics.length, color: "#22c55e" }];
+      return [{ label: "محورهای قابل ارجاع", value: topics.length, color: "#22c55e" }];
     }
     return [
-      { label: "کل موضوعات", value: topicSummary.total, color: "#38bdf8" },
+      { label: "کل محورها", value: topicSummary.total, color: "#38bdf8" },
       { label: "ثبت‌شده", value: topicSummary.submitted, color: "#0ea5e9" },
       { label: "برگشت‌خورده", value: topicSummary.under_review, color: "#f59e0b" },
-      { label: "تایید", value: topicSummary.approved, color: "#22c55e" },
+      { label: ANALYSIS_TERMS.ratify, value: topicSummary.approved, color: "#22c55e" },
       { label: "رد شده", value: topicSummary.rejected, color: "#ef4444" },
     ];
   }, [tab, topicSummary, missionSummary, topics.length]);
@@ -168,7 +170,7 @@ export default function AnalysisManagerPanel() {
     </>
   ) : (
     <>
-      <label className="v3-filter-label">وضعیت موضوع</label>
+      <label className="v3-filter-label">وضعیت محور</label>
       <select className="v3-select-filter" style={{ background: theme.card, color: theme.text, border: `1px solid ${theme.border}` }} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
         <option value="">همه</option>
         {Object.entries(TOPIC_STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -209,7 +211,7 @@ export default function AnalysisManagerPanel() {
   return (
     <AnalysisMonitorLayout
       pageTitle="مدیریت تحلیل‌ها"
-      searchPlaceholder={tab === "missions" ? "جستجو موضوع، تحلیل‌گر..." : "جستجو موضوعات..."}
+      searchPlaceholder={tab === "missions" ? "جستجو محور، تحلیل‌گر..." : "جستجو محورها..."}
       searchTerm={searchTerm}
       onSearchChange={setSearchTerm}
       dates={dates}
@@ -227,8 +229,15 @@ export default function AnalysisManagerPanel() {
       onTabChange={setTab}
     >
       {(tab === "approve" || tab === "assign") && (
+        <AnalysisWorkflowStepper
+          currentStep={tab === "approve" ? "ratify" : "assign"}
+          compact
+        />
+      )}
+
+      {(tab === "approve" || tab === "assign") && (
         <div className="v3-report-grid">
-          {topics.length === 0 && !loading && <p style={{ gridColumn: "1/-1", textAlign: "center", opacity: 0.5 }}>موضوعی یافت نشد</p>}
+          {topics.length === 0 && !loading && <p style={{ gridColumn: "1/-1", textAlign: "center", opacity: 0.5 }}>محوری یافت نشد</p>}
           {topics.map((t) => (
             <TopicCard key={t.id} topic={t} theme={theme} onClick={() => handleTopicClick(t)} showAssignStats={tab === "assign"} />
           ))}

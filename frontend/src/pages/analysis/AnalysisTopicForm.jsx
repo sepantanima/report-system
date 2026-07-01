@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import AnalysisMonitorLayout from "../../components/analysis/AnalysisMonitorLayout.jsx";
+import AnalysisWorkflowStepper from "../../components/analysis/AnalysisWorkflowStepper.jsx";
 import TopicCard from "../../components/analysis/TopicCard.jsx";
-import TopicFormModal from "../../components/analysis/TopicFormModal.jsx";
+import TopicFormFields from "../../components/analysis/TopicFormFields.jsx";
 import TopicHistoryModal from "../../components/analysis/TopicHistoryModal.jsx";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
+import { TOPIC_FORM_HELP } from "../../content/analysisFormHelp.jsx";
 import analysisService from "../../services/analysisService";
 import { getCurrentUser } from "../../utils/analysisAuth.js";
 import {
@@ -18,22 +22,6 @@ import {
   getLatestReviewComment,
 } from "../../utils/analysisMonitorUtils.js";
 
-const PROPOSER_HELP = () => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 14, fontSize: 13, lineHeight: 2, textAlign: "justify" }}>
-    <div style={{ background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.2)", borderRadius: 10, padding: 12, fontSize: 12, color: "#38bdf8" }}>
-      این فرم برای ثبت و پیگیری موضوعات پیشنهادی تحلیل است. پس از ثبت، موضوع در وضعیت «ثبت‌شده» قرار می‌گیرد تا بررسی‌کننده آن را ارزیابی کند.
-    </div>
-    <b>۱. ثبت موضوع:</b>
-    <p style={{ margin: "-8px 0 0" }}>با دکمه «موضوع جدید» فرم را باز کنید. عنوان/حوزه/کلیدواژه حداکثر ۸۰ و شرح/دلیل اهمیت حداکثر ۱۵۰ کاراکتر است.</p>
-    <b>۲. پیگیری وضعیت:</b>
-    <p style={{ margin: "-8px 0 0" }}>موضوعات «برگشت برای اصلاح» با رنگ متمایز و علت برگشت نمایش داده می‌شوند. تاریخچه تغییرات را از کارت ببینید.</p>
-    <b>۳. ویرایش و ارسال مجدد:</b>
-    <p style={{ margin: "-8px 0 0" }}>اگر رد یا برگشت خورد، ویرایش کنید و «ارسال مجدد» بزنید. پس از ارسال مجدد، دکمه تا پاسخ بعدی بررسی‌کننده نمایش داده نمی‌شود.</p>
-    <b>۴. فیلتر و جستجو:</b>
-    <p style={{ margin: "-8px 0 0" }}>از نوار تاریخ شمسی، جستجو و فیلتر وضعیت/اولویت برای یافتن سریع موضوعات استفاده کنید.</p>
-  </div>
-);
-
 export default function AnalysisTopicForm() {
   const { isDarkMode } = useAppTheme();
   const user = getCurrentUser();
@@ -45,7 +33,7 @@ export default function AnalysisTopicForm() {
   const [showFilters, setShowFilters] = useState(false);
   const [dates, setDates] = useState(null);
   const [filters, setFilters] = useState({ status: "", priority: "" });
-  const [modalOpen, setModalOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState(null);
   const [topicHistory, setTopicHistory] = useState([]);
   const [form, setForm] = useState(EMPTY_TOPIC_FORM);
@@ -89,7 +77,7 @@ export default function AnalysisTopicForm() {
     { key: "total", label: "کل", value: summary.total, color: "#38bdf8" },
     { key: "submitted", label: "ثبت‌شده", value: summary.submitted, color: "#0ea5e9" },
     { key: "returned", label: "برگشت‌خورده", value: summary.under_review, color: "#f59e0b" },
-    { key: "approved", label: "تایید", value: summary.approved, color: "#22c55e" },
+    { key: "approved", label: ANALYSIS_TERMS.ratify, value: summary.approved, color: "#22c55e" },
     { key: "rejected", label: "رد شده", value: summary.rejected, color: "#ef4444" },
   ];
 
@@ -107,7 +95,7 @@ export default function AnalysisTopicForm() {
     setEditingTopic(null);
     setTopicHistory([]);
     setForm(EMPTY_TOPIC_FORM);
-    setModalOpen(true);
+    setFormOpen(true);
   };
 
   const openEdit = async (topic) => {
@@ -116,13 +104,20 @@ export default function AnalysisTopicForm() {
       setEditingTopic(full);
       setTopicHistory(full.history || []);
       setForm(topicToForm(full));
-      setModalOpen(true);
+      setFormOpen(true);
     } catch {
       setEditingTopic(topic);
       setTopicHistory([]);
       setForm(topicToForm(topic));
-      setModalOpen(true);
+      setFormOpen(true);
     }
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingTopic(null);
+    setTopicHistory([]);
+    setForm(EMPTY_TOPIC_FORM);
   };
 
   const openHistory = async (topic, e) => {
@@ -144,7 +139,7 @@ export default function AnalysisTopicForm() {
       } else {
         await analysisService.createTopic(form);
       }
-      setModalOpen(false);
+      closeForm();
       loadData();
     } catch (err) {
       alert(err.response?.data?.error || "خطا در ذخیره");
@@ -152,7 +147,7 @@ export default function AnalysisTopicForm() {
   };
 
   const handleResubmit = async (topic) => {
-    if (!window.confirm("موضوع مجدداً برای بررسی ارسال شود؟")) return;
+    if (!window.confirm("محور مجدداً برای تصویب ارسال شود؟")) return;
     try {
       await analysisService.resubmitTopic(topic.id);
       loadData();
@@ -162,7 +157,7 @@ export default function AnalysisTopicForm() {
   };
 
   const handleArchive = async (topic) => {
-    if (!window.confirm("موضوع بایگانی شود؟")) return;
+    if (!window.confirm("محور بایگانی شود؟")) return;
     try {
       await analysisService.archiveTopic(topic.id);
       loadData();
@@ -189,8 +184,8 @@ export default function AnalysisTopicForm() {
   return (
     <>
       <AnalysisMonitorLayout
-        pageTitle="موضوعات تحلیل من"
-        searchPlaceholder="جستجو در عنوان، شرح، کلیدواژه..."
+        pageTitle={ANALYSIS_TERMS.myAxesPageTitle}
+        searchPlaceholder="جستجو در محور، شرح، کلیدواژه..."
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         dates={dates}
@@ -205,13 +200,68 @@ export default function AnalysisTopicForm() {
         }}
         filterContent={filterContent}
         loading={loading}
-        onHelp={PROPOSER_HELP}
-        helpTitle="راهنمای ثبت موضوع تحلیل"
+        onHelp={TOPIC_FORM_HELP}
+        helpTitle={`راهنمای ${ANALYSIS_TERMS.proposeAxisMenu}`}
         onAdd={openCreate}
-        addLabel="موضوع جدید"
+        addLabel={ANALYSIS_TERMS.newAxis}
       >
+        <AnalysisWorkflowStepper currentStep="propose" compact />
+
+        <div
+          style={{
+            marginBottom: 20,
+            borderRadius: 12,
+            border: `1px solid ${theme.border}`,
+            background: theme.card,
+            overflow: "hidden",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setFormOpen((v) => !v)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 16px",
+              background: isDarkMode ? "rgba(56,189,248,0.08)" : "rgba(56,189,248,0.06)",
+              border: "none",
+              color: theme.text,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            <span>{formOpen ? (editingTopic ? ANALYSIS_TERMS.editAxis : ANALYSIS_TERMS.newAxis) : `ثبت ${ANALYSIS_TERMS.axis} جدید`}</span>
+            {formOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+
+          {formOpen && (
+            <div style={{ padding: 16, borderTop: `1px solid ${theme.border}` }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <button type="button" onClick={closeForm} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                  <X size={14} /> بستن فرم
+                </button>
+              </div>
+              <TopicFormFields
+                form={form}
+                setForm={setForm}
+                theme={theme}
+                isDarkMode={isDarkMode}
+                history={topicHistory}
+                returnComment={getLatestReviewComment(editingTopic, topicHistory)}
+                onSubmit={handleSubmit}
+                onCancel={closeForm}
+                submitLabel={editingTopic ? "ذخیره تغییرات" : ANALYSIS_TERMS.registerAxis}
+              />
+            </div>
+          )}
+        </div>
+
         {topics.length === 0 && !loading && (
-          <p style={{ textAlign: "center", opacity: 0.5, padding: "40px 0" }}>موضوعی یافت نشد</p>
+          <p style={{ textAlign: "center", opacity: 0.5, padding: "40px 0" }}>محوری یافت نشد</p>
         )}
         <div className="v3-report-grid">
           {topics.map((t) => (
@@ -231,19 +281,6 @@ export default function AnalysisTopicForm() {
           ))}
         </div>
       </AnalysisMonitorLayout>
-
-      <TopicFormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleSubmit}
-        form={form}
-        setForm={setForm}
-        isEdit={!!editingTopic}
-        theme={theme}
-        isDarkMode={isDarkMode}
-        history={topicHistory}
-        returnComment={getLatestReviewComment(editingTopic, topicHistory)}
-      />
 
       <TopicHistoryModal
         open={historyModal.open}

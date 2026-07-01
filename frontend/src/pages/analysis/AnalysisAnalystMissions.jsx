@@ -4,6 +4,7 @@ import { PenLine } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../../theme/unitReportFormStyles";
 import AnalysisPageShell from "../../components/analysis/AnalysisPageShell.jsx";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import analysisService from "../../services/analysisService";
 import { getCurrentUser, MISSION_STATUS, toPersianDigits } from "../../utils/analysisAuth.js";
 
@@ -33,7 +34,7 @@ export default function AnalysisAnalystMissions() {
       {missions.map((m) => (
         <div key={m.id} style={{ ...S.historyItem, borderRadius: "12px", marginBottom: "10px", background: isDarkMode ? "#1e293b" : "#f8fafc", padding: "14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
-            <strong style={{ fontSize: "13px", color: S.headingOnCard, lineHeight: 1.5 }}>{m.topic_title}</strong>
+            <strong style={{ fontSize: "13px", color: S.headingOnCard, lineHeight: 1.5 }}>{ANALYSIS_TERMS.axisLabelPrefix} {m.topic_title}</strong>
             <span style={{ fontSize: "10px", color: "#38bdf8", whiteSpace: "nowrap" }}>{MISSION_STATUS[m.status] || m.status}</span>
           </div>
           <div style={{ fontSize: "11px", color: S.subMuted, marginBottom: "10px" }}>

@@ -59,7 +59,7 @@ const AVAILABLE_ROLES = [
   { id: "analyst", label: "تحلیل‌گر" },
   { id: "mentor", label: "راهنما / داور" },
   { id: "topic_proposer", label: "پیشنهاددهنده موضوع" },
-  { id: "topic_approver", label: "تاییدکننده موضوع" },
+  { id: "topic_approver", label: "تصویب‌کننده محور" },
   { id: "news_monitor", label: "پایشگر اخبار" },
   { id: "news_editor", label: "دبیر اخبار" },
   { id: "news_chief", label: "سردبیر اخبار" },
@@ -270,7 +270,7 @@ export default function UserManagement() {
     if (roleId === "analyst") return { label: "تحلیل‌گر", bg: "rgba(99, 102, 241, 0.12)", color: "#6366f1", border: "rgba(99, 102, 241, 0.25)" };
     if (roleId === "mentor") return { label: "راهنما", bg: "rgba(168, 85, 247, 0.12)", color: "#a855f7", border: "rgba(168, 85, 247, 0.25)" };
     if (roleId === "topic_proposer") return { label: "پیشنهاددهنده", bg: "rgba(20, 184, 166, 0.12)", color: "#14b8a6", border: "rgba(20, 184, 166, 0.25)" };
-    if (roleId === "topic_approver") return { label: "تاییدکننده", bg: "rgba(14, 165, 233, 0.12)", color: "#0ea5e9", border: "rgba(14, 165, 233, 0.25)" };
+    if (roleId === "topic_approver") return { label: "تصویب‌کننده", bg: "rgba(14, 165, 233, 0.12)", color: "#0ea5e9", border: "rgba(14, 165, 233, 0.25)" };
     if (roleId === "news_monitor") return { label: "پایشگر اخبار", bg: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", border: "rgba(56, 189, 248, 0.25)" };
     if (roleId === "news_editor") return { label: "دبیر اخبار", bg: "rgba(59, 130, 246, 0.12)", color: "#3b82f6", border: "rgba(59, 130, 246, 0.25)" };
     if (roleId === "news_chief") return { label: "سردبیر اخبار", bg: "rgba(245, 158, 11, 0.12)", color: "#f59e0b", border: "rgba(245, 158, 11, 0.25)" };

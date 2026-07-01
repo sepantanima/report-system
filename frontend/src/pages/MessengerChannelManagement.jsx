@@ -1,14 +1,49 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Save, FlaskConical } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Plus, Trash2, Save, FlaskConical, X } from "lucide-react";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import MultiSelect from "../components/MultiSelect.jsx";
 import messengerAdminService from "../services/messengerAdminService.js";
 import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
+import { ANALYSIS_MONITOR_CSS } from "../theme/analysisMonitorStyles.js";
 import {
   MESSENGER_USAGE_KEY_OPTIONS,
   DESTINATION_KIND_OPTIONS,
   MESSENGER_USAGE_KEYS,
 } from "../constants/messengerUsageKeys.js";
+
+const MESSENGER_MODAL_CSS = `
+  .messenger-channel-modal-box {
+    width: min(760px, 96vw);
+    max-width: 760px;
+    max-height: min(90vh, 860px);
+  }
+  .messenger-channel-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px 16px;
+    align-items: start;
+  }
+  .mc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .mc-field > label {
+    font-size: 0.86em;
+    opacity: 0.9;
+  }
+  .mc-col-12 { grid-column: span 12; }
+  .mc-col-8 { grid-column: span 8; }
+  .mc-col-7 { grid-column: span 7; }
+  .mc-col-6 { grid-column: span 6; }
+  .mc-col-5 { grid-column: span 5; }
+  .mc-col-4 { grid-column: span 4; }
+  @media (max-width: 640px) {
+    .mc-col-8, .mc-col-7, .mc-col-6, .mc-col-5, .mc-col-4 { grid-column: span 12; }
+  }
+`;
 
 const usageLabelMap = Object.fromEntries(
   MESSENGER_USAGE_KEY_OPTIONS.map((o) => [o.value, o.label]),
@@ -23,8 +58,7 @@ function formatUsageKeys(row) {
 
 const inp = {
   width: "100%",
-  padding: 8,
-  marginBottom: 12,
+  padding: "8px 10px",
   borderRadius: 6,
   background: "#1e293b",
   border: "1px solid #334155",
@@ -32,6 +66,15 @@ const inp = {
   boxSizing: "border-box",
   fontFamily: "inherit",
 };
+
+function McField({ label, col = 12, children, className = "" }) {
+  return (
+    <div className={`mc-field mc-col-${col} ${className}`.trim()}>
+      {label ? <label>{label}</label> : null}
+      {children}
+    </div>
+  );
+}
 
 function buildEmptyForm(templates) {
   const t = (templates || []).find((x) => x.slug === "bale_bot") || templates?.[0];
@@ -203,6 +246,10 @@ export default function MessengerChannelManagement() {
     >
       {err && <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div>}
 
+      <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", fontSize: 12, lineHeight: 1.8 }}>
+        کانال‌هایی که کاربرد <strong>«هشدار / اطلاع‌رسانی»</strong> ({MESSENGER_USAGE_KEYS.NEWS_ALERT_BROADCAST}) دارند، به‌عنوان مقصد انتشار <strong>ابلاغ درون‌سامانه</strong> در صفحه صدور ابلاغ قابل انتخاب هستند.
+      </div>
+
       <div style={{ marginBottom: 16 }}>
         <label style={{ marginLeft: 8 }}>فیلتر کاربرد:</label>
         <select value={filterUsage} onChange={(e) => setFilterUsage(e.target.value)} style={{ ...inp, width: 280, display: "inline-block" }}>
@@ -255,71 +302,104 @@ export default function MessengerChannelManagement() {
       )}
       {testMsg && <p style={{ marginTop: 12, color: "#86efac" }}>{testMsg}</p>}
 
-      {modal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: "#1e293b", padding: 24, borderRadius: 12, width: "min(520px, 96vw)", maxHeight: "90vh", overflow: "auto" }}>
-            <h2 style={{ marginTop: 0 }}>{modal === "create" ? "مقصد جدید" : "ویرایش مقصد"}</h2>
-            <label>عنوان</label>
-            <input style={inp} value={form.title_fa} onChange={(e) => setForm((f) => ({ ...f, title_fa: e.target.value }))} />
-            <label>پلتفرم</label>
-            <select style={inp} value={form.provider_type} onChange={(e) => setForm((f) => ({ ...f, provider_type: e.target.value }))}>
-              {templateOptions.map((t) => (
-                <option key={t.slug} value={t.slug}>{t.label_fa || t.slug}</option>
-              ))}
-            </select>
-            <label>نوع مقصد</label>
-            <select style={inp} value={form.destination_kind} onChange={(e) => setForm((f) => ({ ...f, destination_kind: e.target.value }))}>
-              {DESTINATION_KIND_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-            <label>chat_id</label>
-            <input style={inp} value={form.chat_id} onChange={(e) => setForm((f) => ({ ...f, chat_id: e.target.value }))} />
-            <label>کاربرد (یک یا چند مورد)</label>
-            <div style={{ marginBottom: 12 }}>
-              <MultiSelect
-                options={MESSENGER_USAGE_KEY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-                values={form.usage_keys || []}
-                onChange={(v) => setForm((f) => ({ ...f, usage_keys: v }))}
-                placeholder="انتخاب کاربرد..."
-                theme={{ isDarkMode: true, card: "#1e293b", border: "#334155", text: "#fff" }}
-              />
-            </div>
-            <label>ترتیب (sort_order)</label>
-            <input type="number" style={inp} value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))} />
-            <label>نام کاربری ربات</label>
-            <input style={inp} value={form.bot_username} onChange={(e) => setForm((f) => ({ ...f, bot_username: e.target.value }))} placeholder="@NezNewsBot" />
-            <label>لینک عمومی</label>
-            <input style={inp} value={form.bot_public_link} onChange={(e) => setForm((f) => ({ ...f, bot_public_link: e.target.value }))} />
-            <label>حالت اعتبار</label>
-            <select style={inp} value={form.credential_mode} onChange={(e) => setForm((f) => ({ ...f, credential_mode: e.target.value }))}>
-              <option value="env_ref">متغیر محیطی (.env)</option>
-              <option value="stored_secret">ذخیره در DB</option>
-            </select>
-            {form.credential_mode === "env_ref" ? (
-              <>
-                <label>نام متغیر env</label>
-                <input style={inp} value={form.credential_env_name} onChange={(e) => setForm((f) => ({ ...f, credential_env_name: e.target.value }))} />
-              </>
-            ) : (
-              <>
-                <label>توکن ربات</label>
-                <input type="password" style={inp} value={form.credential_secret_cipher} onChange={(e) => setForm((f) => ({ ...f, credential_secret_cipher: e.target.value }))} />
-              </>
-            )}
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <input type="checkbox" checked={form.is_enabled} onChange={(e) => setForm((f) => ({ ...f, is_enabled: e.target.checked }))} />
-              فعال
-            </label>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setModal(null)} style={{ padding: "8px 14px", cursor: "pointer" }}>انصراف</button>
-              <button type="button" disabled={saving} onClick={submit} style={{ padding: "8px 14px", background: "#0ea5e9", border: "none", color: "#fff", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                <Save size={14} /> ذخیره
-              </button>
+      {modal && typeof document !== "undefined" ? createPortal(
+        <>
+          <style>{ANALYSIS_MONITOR_CSS}</style>
+          <style>{MESSENGER_MODAL_CSS}</style>
+          <div className="v3-modal-overlay" onClick={() => setModal(null)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="v3-modal-box messenger-channel-modal-box"
+              style={{ background: "#1e293b", border: "1px solid #334155" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="v3-modal-header-new">
+                <button
+                  type="button"
+                  onClick={() => setModal(null)}
+                  className="v3-icon-btn"
+                  style={{ color: "#f87171", border: "none" }}
+                  aria-label="بستن"
+                >
+                  <X size={18} />
+                </button>
+                <span style={{ fontWeight: 700 }}>{modal === "create" ? "مقصد جدید" : "ویرایش مقصد"}</span>
+              </div>
+              <div className="v3-modal-body">
+                <div className="messenger-channel-modal-grid">
+                  <McField label="عنوان" col={12}>
+                    <input style={inp} value={form.title_fa} onChange={(e) => setForm((f) => ({ ...f, title_fa: e.target.value }))} />
+                  </McField>
+                  <McField label="پلتفرم" col={6}>
+                    <select style={inp} value={form.provider_type} onChange={(e) => setForm((f) => ({ ...f, provider_type: e.target.value }))}>
+                      {templateOptions.map((t) => (
+                        <option key={t.slug} value={t.slug}>{t.label_fa || t.slug}</option>
+                      ))}
+                    </select>
+                  </McField>
+                  <McField label="نوع مقصد" col={6}>
+                    <select style={inp} value={form.destination_kind} onChange={(e) => setForm((f) => ({ ...f, destination_kind: e.target.value }))}>
+                      {DESTINATION_KIND_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </McField>
+                  <McField label="chat_id" col={8}>
+                    <input style={{ ...inp, fontFamily: "ui-monospace, monospace" }} value={form.chat_id} onChange={(e) => setForm((f) => ({ ...f, chat_id: e.target.value }))} />
+                  </McField>
+                  <McField label="ترتیب (sort_order)" col={4}>
+                    <input type="number" style={inp} value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))} />
+                  </McField>
+                  <McField label="کاربرد (یک یا چند مورد)" col={12}>
+                    <MultiSelect
+                      options={MESSENGER_USAGE_KEY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                      values={form.usage_keys || []}
+                      onChange={(v) => setForm((f) => ({ ...f, usage_keys: v }))}
+                      placeholder="انتخاب کاربرد..."
+                      theme={{ isDarkMode: true, card: "#1e293b", border: "#334155", text: "#fff", bg: "#0f172a" }}
+                    />
+                  </McField>
+                  <McField label="نام کاربری ربات" col={6}>
+                    <input style={inp} value={form.bot_username} onChange={(e) => setForm((f) => ({ ...f, bot_username: e.target.value }))} placeholder="@NezNewsBot" dir="ltr" />
+                  </McField>
+                  <McField label="لینک عمومی" col={6}>
+                    <input style={inp} value={form.bot_public_link} onChange={(e) => setForm((f) => ({ ...f, bot_public_link: e.target.value }))} dir="ltr" />
+                  </McField>
+                  <McField label="حالت اعتبار" col={5}>
+                    <select style={inp} value={form.credential_mode} onChange={(e) => setForm((f) => ({ ...f, credential_mode: e.target.value }))}>
+                      <option value="env_ref">متغیر محیطی (.env)</option>
+                      <option value="stored_secret">ذخیره در DB</option>
+                    </select>
+                  </McField>
+                  {form.credential_mode === "env_ref" ? (
+                    <McField label="نام متغیر env" col={7}>
+                      <input style={{ ...inp, fontFamily: "ui-monospace, monospace" }} value={form.credential_env_name} onChange={(e) => setForm((f) => ({ ...f, credential_env_name: e.target.value }))} dir="ltr" />
+                    </McField>
+                  ) : (
+                    <McField label="توکن ربات" col={7}>
+                      <input type="password" style={inp} value={form.credential_secret_cipher} onChange={(e) => setForm((f) => ({ ...f, credential_secret_cipher: e.target.value }))} dir="ltr" />
+                    </McField>
+                  )}
+                  <McField col={12}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                      <input type="checkbox" checked={form.is_enabled} onChange={(e) => setForm((f) => ({ ...f, is_enabled: e.target.checked }))} />
+                      فعال
+                    </label>
+                  </McField>
+                </div>
+              </div>
+              <div className="v3-modal-footer-new">
+                <button type="button" onClick={() => setModal(null)} className="v3-btn-footer">انصراف</button>
+                <button type="button" disabled={saving} onClick={submit} className="v3-btn-footer v3-primary-solid" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Save size={14} /> ذخیره
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        </>,
+        document.body,
+      ) : null}
     </FormPageLayout>
   );
 }

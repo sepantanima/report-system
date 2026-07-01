@@ -88,3 +88,104 @@ export function validateSmartAnalysisDates(state) {
   if (from > to) return "تاریخ شروع نباید بعد از تاریخ پایان باشد.";
   return null;
 }
+
+export function hasAnalysisContent(state) {
+  if (!state) return false;
+  const plain = String(state.bodyPlain ?? "").trim();
+  const title = String(state.title ?? "").trim();
+  return Boolean(plain || title);
+}
+
+export function smartAnalysisStateFromRow(row) {
+  if (!row) return null;
+  return {
+    savedId: row.id,
+    packId: row.pack_id ?? null,
+    title: row.title || "",
+    analysisType: row.analysis_type,
+    bodyHtml: row.body_html || "",
+    bodyPlain: row.body_plain || "",
+    aiPromptKey: row.ai_prompt_key,
+    manualFallback: false,
+  };
+}
+
+function parseJalaliDateStr(str) {
+  if (!str) return todayJalaliDate();
+  const parts = String(str).replace(/\//g, "-").split("-").map((x) => parseInt(x, 10));
+  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) return todayJalaliDate();
+  return new DateObject({ year: parts[0], month: parts[1], day: parts[2], calendar: persian });
+}
+
+export function filtersFromQueryPayload(apiFilters = {}) {
+  const statuses = apiFilters.status || apiFilters.statuses || [];
+  return {
+    ...DEFAULT_CONTENT_FILTERS,
+    keyword: apiFilters.keyword || "",
+    statuses: Array.isArray(statuses) ? statuses : [statuses].filter(Boolean),
+    priorities: apiFilters.importance || apiFilters.priorities || [],
+    qualities: apiFilters.quality || apiFilters.qualities || [],
+    categories: (apiFilters.category || apiFilters.categories || []).map(String),
+    sources: apiFilters.source || apiFilters.sources || [],
+    units: apiFilters.units || (apiFilters.unit != null ? [apiFilters.unit] : []),
+    user_id: apiFilters.user_id != null ? String(apiFilters.user_id) : "",
+  };
+}
+
+export function analysisStateFromPackAnalysis(analysis, packId) {
+  if (!analysis) return null;
+  return {
+    savedId: analysis.id,
+    packId: analysis.pack_id ?? packId ?? null,
+    title: analysis.title || "",
+    analysisType: analysis.analysis_type,
+    bodyHtml: analysis.body_html || "",
+    bodyPlain: analysis.body_plain || "",
+    aiPromptKey: analysis.ai_prompt_key,
+    manualFallback: false,
+  };
+}
+
+export function draftsFromPack(pack) {
+  const drafts = {};
+  const analyses = pack?.analyses || {};
+  for (const type of Object.keys(analyses)) {
+    const state = analysisStateFromPackAnalysis(analyses[type], pack?.id);
+    if (state && hasAnalysisContent(state)) drafts[type] = state;
+  }
+  return drafts;
+}
+
+export function workspaceFromPack(pack) {
+  if (!pack) return null;
+  const qp = pack.query_payload || {};
+  const fromDate = parseJalaliDateStr(pack.period_from || qp.from_date);
+  const toDate = parseJalaliDateStr(pack.period_to || qp.to_date || pack.period_from);
+  const selectedIds = pack.selection_mode === "subset" ? (pack.news_ids || []) : [];
+  const drafts = draftsFromPack(pack);
+  const firstType = Object.keys(drafts)[0] || pack.analysis_types_done?.[0] || null;
+
+  return {
+    queryState: {
+      fromDate,
+      toDate,
+      filters: filtersFromQueryPayload(qp.filters),
+      queryPayload: qp,
+      pageSize: 20,
+    },
+    selectedIds,
+    extractedCount: pack.news_count ?? selectedIds.length,
+    packId: pack.id,
+    packMeta: pack,
+    analysisDrafts: drafts,
+    analysisState: firstType ? drafts[firstType] : null,
+  };
+}
+
+export function formatPackBannerLabel(pack) {
+  if (!pack) return "";
+  const from = pack.period_from || "";
+  const to = pack.period_to || from;
+  const range = from === to ? from : `${from} — ${to}`;
+  return `پک #${pack.id} · ${range} · ${toPersianDigits(pack.news_count ?? 0)} خبر فریزشده`;
+}

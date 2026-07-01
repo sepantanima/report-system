@@ -19,6 +19,7 @@ function mapRow(row) {
   if (!row) return null;
   return {
     id: row.id,
+    pack_id: row.pack_id ?? null,
     title: row.title,
     analysis_type: row.analysis_type,
     body_html: row.body_html,

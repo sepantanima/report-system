@@ -7,6 +7,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../../theme/unitReportFormStyles";
 import AnalysisPageShell from "../../components/analysis/AnalysisPageShell.jsx";
+import AnalysisWorkflowStepper from "../../components/analysis/AnalysisWorkflowStepper.jsx";
+import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { MISSION_FIELD_LIMITS } from "../../constants/analysisFieldLimits.js";
 import { MISSION_MANAGE_HELP } from "../../content/analysisFormHelp.jsx";
 import analysisService from "../../services/analysisService";
@@ -74,19 +76,21 @@ export default function AnalysisMissionManage() {
 
   return (
     <AnalysisPageShell title="مدیریت مأموریت" subtitle={assignment.topic_title} backTo={backTo} onHelp={MISSION_MANAGE_HELP} helpTitle="راهنمای مدیریت مأموریت">
+      <AnalysisWorkflowStepper currentStep="analyze" topicStatus="Assigned" compact />
       <div style={{ marginBottom: 16, fontSize: 12, color: S.subMuted, lineHeight: 1.8, padding: 12, borderRadius: 10, background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc", border: `1px solid ${S.inputBorder}` }}>
         <div style={{ marginBottom: 6 }}>
           <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: `${st.color}22`, color: st.color }}>{st.label}</span>
         </div>
+        <div>{ANALYSIS_TERMS.axisLabelPrefix} {assignment.topic_title}</div>
         <div>تحلیل‌گر: {assignment.analyst_name || assignment.analyst_realname || "—"}</div>
         <div>راهنما: {assignment.mentor_name || "—"}</div>
-        <div>کد موضوع: {assignment.topic_code || "—"}</div>
-        <div>مهلت پیشنهادی موضوع: {formatPersianDateShort(assignment.topic_suggested_deadline)}</div>
-        <div>مهلت فعلی انجام تحلیل: {formatPersianDateShort(assignment.deadline)}</div>
+        <div>کد محور: {assignment.topic_code || "—"}</div>
+        <div>{ANALYSIS_TERMS.suggestedDeadline}: {formatPersianDateShort(assignment.topic_suggested_deadline)}</div>
+        <div>{ANALYSIS_TERMS.missionDeadline}: {formatPersianDateShort(assignment.deadline)}</div>
       </div>
 
       <div style={S.inputWrapper}>
-        <label style={S.labelStyle}>مهلت جدید انجام تحلیل (شمسی)</label>
+        <label style={S.labelStyle}>مهلت جدید {ANALYSIS_TERMS.missionDeadline} (شمسی)</label>
         <div style={{ ...S.inputStyle, padding: "6px 10px" }}>
           <ThemedDatePicker
             isDarkMode={isDarkMode}

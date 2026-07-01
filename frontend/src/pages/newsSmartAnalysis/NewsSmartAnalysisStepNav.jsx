@@ -5,47 +5,44 @@ import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 const STEPS = [
   { id: 1, label: "جستجو" },
   { id: 2, label: "انتخاب" },
-  { id: 3, label: "تحلیل" },
-  { id: 4, label: "خروجی" },
+  { id: 3, label: "تحلیل و خروجی" },
 ];
 
 export default function NewsSmartAnalysisStepNav({
-  step, onStepChange, canGoToStep2, canGoToStep3, canGoToStep4, theme, isMobile,
+  step, onStepChange, canGoToStep2, canGoToStep3, theme, isMobile, blocked = false,
 }) {
   const canGo = (id) => {
     if (id === 1) return true;
     if (id === 2) return canGoToStep2;
     if (id === 3) return canGoToStep3;
-    if (id === 4) return canGoToStep4;
     return false;
   };
 
-  const goPrev = () => { if (step > 1) onStepChange(step - 1); };
+  const goPrev = () => { if (!blocked && step > 1) onStepChange(step - 1); };
   const goNext = () => {
+    if (blocked) return;
     if (step === 1 && canGoToStep2) onStepChange(2);
     else if (step === 2 && canGoToStep3) onStepChange(3);
-    else if (step === 3 && canGoToStep4) onStepChange(4);
   };
 
-  const nextDisabled =
-    (step === 1 && !canGoToStep2)
+  const nextDisabled = blocked
+    || (step === 1 && !canGoToStep2)
     || (step === 2 && !canGoToStep3)
-    || (step === 3 && !canGoToStep4)
-    || step === 4;
+    || step === 3;
 
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12,
     }}
     >
-      <button type="button" disabled={step <= 1} onClick={goPrev} style={navBtn(theme, step <= 1)}>
+      <button type="button" disabled={blocked || step <= 1} onClick={goPrev} style={navBtn(theme, blocked || step <= 1)}>
         <ChevronRight size={16} />
         {!isMobile && <span>قبلی</span>}
       </button>
 
       <div style={{ display: "flex", flex: 1, gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
         {STEPS.map((s) => {
-          const enabled = canGo(s.id);
+          const enabled = !blocked && canGo(s.id);
           const active = step === s.id;
           return (
             <button
