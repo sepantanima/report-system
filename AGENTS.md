@@ -55,12 +55,14 @@ The `dev/` bootstrap files are dev-only helpers and are not used in production.
 
 ### Known caveats
 
-- `npm run build` (frontend production build) currently fails on a pre-existing,
-  case-sensitivity bug: `src/pages/login.jsx` imports `./login.css` but the file is
-  `Login.css`. Vite's **dev** server resolves it fine, so `npm run dev` works. This
-  is a repo bug, unrelated to environment setup — do not treat it as an env problem.
+- Case-sensitivity fix: `src/pages/login.jsx` imported `./login.css` while the file
+  is `Login.css`. On case-sensitive Linux filesystems this made Vite fail to resolve
+  the import — the login page (app entry) would not render in `npm run dev` and
+  `npm run build` failed. The import was corrected to `./Login.css` (works on both
+  case-sensitive and case-insensitive filesystems). If you see a Vite
+  `Failed to resolve import "./login.css"` overlay, this is the cause.
 - `npm run lint` (frontend) reports many pre-existing errors/warnings in the current
-  codebase; ESLint itself runs correctly.
+  codebase; ESLint itself runs correctly (these are not from environment setup).
 - Backend has no automated test framework; `npm run test:news-format` and
   `npm run test:news-analytics` are standalone script checks.
 - Backend has no watcher/hot-reload — after changing backend code, restart the
