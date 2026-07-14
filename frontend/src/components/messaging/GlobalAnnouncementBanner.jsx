@@ -12,6 +12,9 @@ const PRIORITY_STYLE = {
 export default function GlobalAnnouncementBanner() {
   const { isDarkMode } = useAppTheme();
   const [banners, setBanners] = useState([]);
+  const [isNarrow, setIsNarrow] = useState(() => (
+    typeof window !== "undefined" ? window.innerWidth < 520 : false
+  ));
 
   const load = useCallback(async () => {
     try {
@@ -28,6 +31,12 @@ export default function GlobalAnnouncementBanner() {
     return () => clearInterval(t);
   }, [load]);
 
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 520);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const dismiss = async (id) => {
     try {
       await messageService.dismissBanner(id);
@@ -40,7 +49,7 @@ export default function GlobalAnnouncementBanner() {
   if (!banners.length) return null;
 
   return (
-    <div style={{ padding: "0 16px 8px", maxWidth: "min(1100px, 96vw)", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+    <div style={{ padding: "0 0 8px", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
       {banners.map((b) => {
         const p = PRIORITY_STYLE[b.priority] || PRIORITY_STYLE.normal;
         return (
@@ -53,19 +62,43 @@ export default function GlobalAnnouncementBanner() {
               background: isDarkMode ? p.bg : p.bg,
               border: `1px solid ${p.border}`,
               color: isDarkMode ? p.color : "#1e293b",
+              width: "100%",
+              maxWidth: "100%",
+              boxSizing: "border-box",
+              overflow: "hidden",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ flex: 1 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: isNarrow ? "column" : "row",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: isNarrow ? "stretch" : "flex-start",
+                minWidth: 0,
+                width: "100%",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
                 {b.title ? (
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 6, overflowWrap: "anywhere", wordBreak: "break-word" }}>
                     {b.title}
                     {b.is_edited || b.edited_at ? (
                       <span style={{ color: "#f59e0b", fontSize: "0.85em", marginRight: 8 }}> (ویرایش‌شده)</span>
                     ) : null}
                   </div>
                 ) : null}
-                <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{b.body}</div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 1.7,
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {b.body}
+                </div>
                 {b.sender_name || b.created_at ? (
                   <div style={{ fontSize: 11, opacity: 0.75, marginTop: 8 }}>
                     {b.sender_name ? `— ${b.sender_name}` : ""}
@@ -79,6 +112,8 @@ export default function GlobalAnnouncementBanner() {
                   onClick={() => dismiss(b.id)}
                   style={{
                     flexShrink: 0,
+                    alignSelf: isNarrow ? "stretch" : "flex-start",
+                    width: isNarrow ? "100%" : "auto",
                     padding: "6px 12px",
                     borderRadius: 8,
                     border: `1px solid ${p.border}`,

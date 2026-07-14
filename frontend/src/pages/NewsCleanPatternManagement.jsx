@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Save, Trash2, FlaskConical } from "lucide-react";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
+import { PAGE_SETTINGS_WIDE_CSS } from "../constants/pageLayoutWidths.js";
 import api from "../api/api";
 import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 
@@ -176,7 +177,7 @@ export default function NewsCleanPatternManagement() {
       title="الگوهای پاکسازی خبر"
       documentTitle="الگوهای پاکسازی خبر"
       onBack={() => navigate(-1)}
-      maxWidth="960px"
+      maxWidth={PAGE_SETTINGS_WIDE_CSS}
       toolbarExtra={(
         <button type="button" className="v3-add-fab" style={{ padding: "6px 12px", fontSize: "0.86em" }} onClick={openCreate}>
           <Plus size={16} />

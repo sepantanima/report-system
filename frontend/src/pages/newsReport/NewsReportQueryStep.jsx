@@ -7,8 +7,8 @@ import newsReportService from "../../services/newsReportService.js";
 import { NEWS_REPORT_QUERY_HELP } from "../../content/newsFormHelp.jsx";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import {
-  DEFAULT_CONTENT_FILTERS, buildNewsReportTitle, buildQueryDebugInfo, buildReportFilters, buildPeriodPayload,
-  buildReportApiBody, formatReportTitleWithCount, jalaliStr, sanitizeNewsReportPayload, todayJalaliDate,
+  DEFAULT_CONTENT_FILTERS, buildContentFiltersFromWorkflow, buildNewsReportTitle, buildNewsReportFilterSummary, buildQueryDebugInfo, buildReportFilters, buildPeriodPayload,
+  buildReportApiBody, formatReportTitleWithCount, getCurrentPresetSlotIndex, jalaliStr, sanitizeNewsReportPayload, todayJalaliDate,
 } from "./newsReportUtils.js";
 import NewsReportPeriodFilters from "./NewsReportPeriodFilters.jsx";
 import NewsReportNewsTable from "./NewsReportNewsTable.jsx";
@@ -16,6 +16,7 @@ import NewsReportCollapsible from "./NewsReportCollapsible.jsx";
 
 export default function NewsReportQueryStep({
   state, setState, onExtracted, onError, extractedCount, theme, isMobile,
+  workflowDefaultFilters = null,
 }) {
   const [showHelp, setShowHelp] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -46,7 +47,8 @@ export default function NewsReportQueryStep({
     return null;
   };
 
-  const reportTitle = useMemo(() => buildNewsReportTitle(state, meta), [state, meta]);
+  const reportTitle = useMemo(() => buildNewsReportTitle(state), [state]);
+  const filterSummary = useMemo(() => buildNewsReportFilterSummary(state, meta), [state, meta]);
   const displayTitle = useMemo(
     () => formatReportTitleWithCount(reportTitle, applied ? total : extractedCount),
     [reportTitle, applied, total, extractedCount],
@@ -57,8 +59,8 @@ export default function NewsReportQueryStep({
   const buildPayload = useCallback(() => sanitizeNewsReportPayload({
     ...buildPeriodPayload(state),
     filters: buildReportFilters(state.filters),
-    label: buildNewsReportTitle(state, meta),
-  }), [state, meta]);
+    label: buildNewsReportTitle(state),
+  }), [state]);
 
   const fetchResults = useCallback(async (payload, pageNum, size) => {
     setLoading(true);
@@ -71,7 +73,7 @@ export default function NewsReportQueryStep({
         sort: { key: "ref_key", direction: "desc" },
       });
       const count = r.total || 0;
-      const label = buildNewsReportTitle(state, meta);
+      const label = buildNewsReportTitle(state);
       const fullPayload = sanitizeNewsReportPayload({
         ...payload,
         label: formatReportTitleWithCount(label, count),
@@ -167,10 +169,15 @@ export default function NewsReportQueryStep({
         background: theme.isDarkMode ? "rgba(56,189,248,0.08)" : "rgba(14,165,233,0.06)",
       }}
       >
-        <div style={{ fontSize: 11, color: theme.muted, marginBottom: 4 }}>عنوان گزارش (بر اساس فیلترهای فعال)</div>
+        <div style={{ fontSize: 11, color: theme.muted, marginBottom: 4 }}>عنوان گزارش</div>
         <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.7 }}>
           {toPersianDigits(displayTitle) || "—"}
         </div>
+        {filterSummary && (
+          <div style={{ fontSize: 12, color: theme.muted, marginTop: 8, lineHeight: 1.6 }}>
+            فیلتر: {filterSummary}
+          </div>
+        )}
         {applied && (
           <div style={{ fontSize: 12, color: theme.muted, marginTop: 6 }}>
             تعداد اخبار فیلترشده: {toPersianDigits(total)}
@@ -182,6 +189,7 @@ export default function NewsReportQueryStep({
         state={state}
         setState={(fn) => { handleFilterChange(); setState(fn); }}
         theme={theme}
+        isMobile={isMobile}
       />
 
       <div style={{ marginTop: 14 }}>
@@ -218,7 +226,8 @@ export default function NewsReportQueryStep({
         onApply={handleApply}
         onReset={() => {
           handleFilterChange();
-          setState((s) => ({ ...s, filters: { ...DEFAULT_CONTENT_FILTERS } }));
+          const resetFilters = buildContentFiltersFromWorkflow(workflowDefaultFilters);
+          setState((s) => ({ ...s, filters: resetFilters }));
         }}
         priorityQualityMultiSelect
         statusMultiSelect
@@ -330,7 +339,7 @@ export function createInitialQueryState() {
   const today = todayJalaliDate();
   return {
     mode: "preset_6h",
-    slotIndex: 3,
+    slotIndex: getCurrentPresetSlotIndex("preset_6h"),
     reportDate: today,
     fromDate: today,
     toDate: today,

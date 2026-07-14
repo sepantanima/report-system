@@ -1,8 +1,13 @@
 import { useSearchParams } from "react-router-dom";
-import { getManagementBackUrl } from "../utils/analysisManagementNav.js";
+import { getManagementBackUrl, getApprovalBackUrl } from "../utils/analysisManagementNav.js";
 
-export function useManagementBackUrl(defaultTab = "approve") {
+export function useManagementBackUrl(defaultTab = "missions") {
   const [params] = useSearchParams();
   const fromTab = params.get("fromTab");
-  return getManagementBackUrl(fromTab || defaultTab);
+  const tab = fromTab === "assign" ? "missions" : (fromTab || defaultTab);
+  return getManagementBackUrl(tab);
+}
+
+export function useApprovalBackUrl() {
+  return getApprovalBackUrl();
 }

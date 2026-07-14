@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, Replace, X } from "lucide-react";
 import { pxToEm } from "../../utils/pageFontSize.js";
+import { PAGE_MESSAGE_MAX } from "../../constants/pageLayoutWidths.js";
 
 export default function NewsSummarizeCompareModal({
   open,
@@ -28,7 +29,7 @@ export default function NewsSummarizeCompareModal({
   };
 
   const panel = {
-    width: "min(920px, 100%)",
+    width: `min(${PAGE_MESSAGE_MAX}px, 100%)`,
     maxHeight: "min(88vh, 720px)",
     display: "flex",
     flexDirection: "column",

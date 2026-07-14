@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, Loader2, Send } from "lucide-react";
 import DashboardDataTable from "../../components/dashboard/DashboardDataTable.jsx";
 import newsReportService from "../../services/newsReportService.js";
@@ -8,6 +8,7 @@ import {
   getNewsRowCellValue,
 } from "./newsReportTableConfig.js";
 import { buildReportApiBody, reportPayloadDateRange } from "./newsReportUtils.js";
+import { PAGE_NARROW_MAX } from "../../constants/pageLayoutWidths.js";
 
 export default function NewsReportNewsTable({
   queryPayload,
@@ -141,7 +142,7 @@ export default function NewsReportNewsTable({
           onClick={() => setDetailRow(null)}
         >
           <div
-            style={{ background: isDarkMode ? "#1e293b" : "#fff", borderRadius: 12, padding: 20, maxWidth: 640, width: "100%", maxHeight: "80vh", overflow: "auto", color: isDarkMode ? "#f1f5f9" : "#1e293b" }}
+            style={{ background: isDarkMode ? "#1e293b" : "#fff", borderRadius: 12, padding: 20, maxWidth: PAGE_NARROW_MAX, width: "100%", maxHeight: "80vh", overflow: "auto", color: isDarkMode ? "#f1f5f9" : "#1e293b" }}
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ marginTop: 0 }}>متن کامل خبر</h3>

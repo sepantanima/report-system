@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { ArrowRight, UserPlus, Trash2, Edit, X, Search, CheckSquare, Square, ChevronDown, Key, HelpCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import HelpModal from "../components/common/HelpModal.jsx";
+import { UserPlus, Trash2, Edit, X, Search, CheckSquare, Square, ChevronDown, Key, HelpCircle } from "lucide-react";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
+import { PAGE_ADMIN_PX } from "../constants/pageLayoutWidths.js";
+import MessengerAccountsPanel from "../components/settings/MessengerAccountsPanel.jsx";
 import { USER_ROLE_GUIDE_HELP } from "../content/userRoleGuideHelp.jsx";
+import { GENDER_OPTIONS, normalizeGender } from "../utils/userGreeting.js";
 
 // =========================================================================
 // 🌟 راهنمای ایمپورت در پروژه واقعی شما (جهت اتصال به دیتابیس و استایل‌ها):
@@ -74,24 +76,24 @@ const toPersianDigits = (val) => {
 };
 
 export default function UserManagement() {
-  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [showRoleGuide, setShowRoleGuide] = useState(false);
   const [editMode, setEditMode] = useState(false);
   
   // 🌟 استیت پویای کنترل نمایش فیلد پسورد در حالت ویرایش کاربر قدیمی
   const [showPassField, setShowPassField] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [contributorFilter, setContributorFilter] = useState("all");
   const [formData, setFormData] = useState({
     id: "",
     username: "",
     name: "",
     password: "", // فیلد کلمه عبور
-    role: ["user"], // پیش‌فرض کاربر واحد
-    unit_cd: "", // می‌تواند خالی بماند (اختیاری)
+    role: ["user"],
+    unit_cd: "",
+    gender: "male",
     active: true,
   });
 
@@ -103,7 +105,7 @@ export default function UserManagement() {
   // تعریف متد دریافت لیست کاربران
   const fetchData = async () => {
     try {
-      const res = await api.get("/users");
+      const res = await api.get("/users", { params: { include_brief_stats: "true" } });
       setUsers(res.data);
     } catch (err) { alert("خطا در دریافت لیست کاربران"); }
   };
@@ -167,6 +169,7 @@ export default function UserManagement() {
       role: userRoles, 
       password: "", // ابتدا فیلد پسورد ویرایش خالی رها شود
       unit_cd: user.unit_cd || "",
+      gender: normalizeGender(user.gender),
       active: user.active !== undefined ? user.active : true
     });
     setUnitSearchQuery("");
@@ -203,7 +206,7 @@ export default function UserManagement() {
       setShowModal(false);
       fetchData();
       alert("تغییرات با موفقیت اعمال شد ✅");
-    } catch (err) { alert("خطا در ذخیره‌سازی مشخصات کاربر"); }
+    } catch (err) { alert(err.response?.data?.error || "خطا در ذخیره‌سازی مشخصات کاربر"); }
   };
 
   const handleDeleteUser = async (id) => {
@@ -221,6 +224,8 @@ export default function UserManagement() {
   // سیستم جستجوی همه‌جانبه و عمیق بر روی تمام مشخصات هویتی، واحدها، نقش‌ها و وضعیت فعال بودن کاربر
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
+      if (contributorFilter === "contributors" && !(u.brief_submission_count > 0)) return false;
+      if (contributorFilter === "suggested" && !u.analyst_suggested) return false;
       if (!searchTerm.trim()) return true;
       const term = searchTerm.toLowerCase().trim();
 
@@ -247,7 +252,7 @@ export default function UserManagement() {
 
       return matchName || matchUsername || matchUnit || matchStatus || matchRole;
     });
-  }, [users, searchTerm]);
+  }, [users, searchTerm, contributorFilter]);
 
   // فیلتر کردن هوشمند واحدهای سازمانی درون کمبوباکس بر اساس تایپ کاربر
   const filteredUnits = useMemo(() => {
@@ -279,7 +284,19 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="loginPage" style={{ flexDirection: "column", padding: "20px", overflowY: "auto" }}>
+    <FormPageLayout
+      title="مدیریت کاربران"
+      onHelp={() => <USER_ROLE_GUIDE_HELP />}
+      helpTitle="راهنمای جامع نقش‌ها و مسئولیت‌ها"
+      wide
+      maxWidth={PAGE_ADMIN_PX}
+      contentPadding="0 0 32px"
+      toolbarExtra={(
+        <span className="user-count-badge">
+          تعداد کاربران: {toPersianDigits(filteredUsers.length)} از {toPersianDigits(users.length)}
+        </span>
+      )}
+    >
       {/* استایل‌های درونی و بلورین سازمانی تیره جهت ممانعت از ایجاد وابستگی خارجی */}
       <style>{`
         .loginPage {
@@ -456,47 +473,25 @@ export default function UserManagement() {
         }
       `}</style>
 
-      <div className="loginCardWrap" style={{ maxWidth: "1200px", width: "100%" }}>
+      <div style={{ width: "100%" }}>
         
-        {/* بخش فیلتر، دکمه بازگشت و نشانگر تعداد کل کاربران */}
-        <div style={{ display: "flex", gap: "15px", marginBottom: "25px", alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={() => navigate("/main")} className="submitBtn" style={{ width: "45px", height: "45px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", marginTop: 0 }}><ArrowRight size={18} /></button>
-            <h2 style={{ color: "#fff", margin: 0, fontSize: "1.4rem", fontWeight: "bold" }}>مدیریت کاربران</h2>
-            <button
-              type="button"
-              onClick={() => setShowRoleGuide(true)}
-              className="submitBtn"
-              style={{
-                width: "auto",
-                padding: "0 14px",
-                height: "38px",
-                marginTop: 0,
-                background: "#38bdf8",
-                border: "none",
-                color: "#0f172a",
-                borderRadius: "10px",
-                fontWeight: "bold",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: "13px",
-              }}
+        {/* بخش فیلتر و افزودن کاربر */}
+        <div style={{ display: "flex", gap: "15px", marginBottom: "25px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "10px", flex: "1", minWidth: "280px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <select
+              value={contributorFilter}
+              onChange={(e) => setContributorFilter(e.target.value)}
+              style={{ height: 42, borderRadius: 10, padding: "0 12px", background: "#1e293b", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", fontFamily: "inherit" }}
             >
-              <HelpCircle size={17} />
-              راهنمای نقش‌ها
-            </button>
-            <span className="user-count-badge">
-              تعداد کاربران: {toPersianDigits(filteredUsers.length)} از {toPersianDigits(users.length)}
-            </span>
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", flex: "1", minWidth: "280px", justifyContent: "flex-end" }}>
-            <div style={{ position: "relative", flex: 1, maxWidth: "450px" }}>
+              <option value="all">همه کاربران</option>
+              <option value="contributors">دارای تحلیل کوتاه</option>
+              <option value="suggested">پیشنهاد تحلیل‌گر</option>
+            </select>
+            <div style={{ position: "relative", flex: 1, maxWidth: "450px", minWidth: 200 }}>
               <Search style={{ position: "absolute", right: "12px", top: "12px", opacity: 0.5, color: "#fff" }} size={18} />
               <input className="input" style={{ width: "100%", paddingRight: "40px", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontSize: "13.5px" }} placeholder="جستجو بر اساس نام، یوزرنیم، نقش، نام واحد، وضعیت..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <button onClick={() => { setEditMode(false); setFormData({ id: "", username: "", name: "", password: "", role: ["user"], unit_cd: "", active: true }); setUnitSearchQuery(""); setShowModal(true); }} className="submitBtn" style={{ width: "auto", padding: "0 20px", height: "45px", marginTop: 0, background: "#00cec9", border: "none", color: "#fff", borderRadius: "10px", fontWeight: "bold", display: "flex", alignItems: "center" }}><UserPlus size={18} style={{ marginLeft: "8px" }} /> کاربر جدید</button>
+            <button onClick={() => { setEditMode(false); setFormData({ id: "", username: "", name: "", password: "", role: ["user"], unit_cd: "", gender: "male", active: true }); setUnitSearchQuery(""); setShowModal(true); }} className="submitBtn" style={{ width: "auto", padding: "0 20px", height: "45px", marginTop: 0, background: "#00cec9", border: "none", color: "#fff", borderRadius: "10px", fontWeight: "bold", display: "flex", alignItems: "center" }}><UserPlus size={18} style={{ marginLeft: "8px" }} /> کاربر جدید</button>
           </div>
         </div>
 
@@ -508,6 +503,7 @@ export default function UserManagement() {
                 <th style={{ padding: "15px", textAlign: "right" }}>نام کاربر</th>
                 <th style={{ textAlign: "center" }}>واحد سازمانی</th>
                 <th style={{ textAlign: "center" }}>نقش‌های دسترسی</th>
+                <th style={{ textAlign: "center" }}>تحلیل کوتاه</th>
                 <th style={{ textAlign: "center" }}>وضعیت</th>
                 <th style={{ textAlign: "center" }}>عملیات</th>
               </tr>
@@ -515,7 +511,7 @@ export default function UserManagement() {
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>کاربری با مشخصات جستجو شده یافت نشد.</td>
+                  <td colSpan="6" style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>کاربری با مشخصات جستجو شده یافت نشد.</td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
@@ -560,6 +556,12 @@ export default function UserManagement() {
                           })}
                         </div>
                       </td>
+                      <td style={{ textAlign: "center", fontSize: 12 }}>
+                        {toPersianDigits(user.brief_submission_count || 0)}
+                        {user.analyst_suggested ? (
+                          <span style={{ display: "block", marginTop: 4, fontSize: 10, color: "#a855f7", fontWeight: 700 }}>پیشنهاد تحلیل‌گر</span>
+                        ) : null}
+                      </td>
                       <td style={{ textAlign: "center" }}>{user.active ? "✅" : "❌"}</td>
                       <td style={{ textAlign: "center" }}>
                         <Edit size={18} onClick={() => openEdit(user)} style={{ color: "#fdcb6e", cursor: "pointer", marginLeft: "12px" }} />
@@ -588,6 +590,30 @@ export default function UserManagement() {
 
             <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right" }}>نام کاربری:</label>
             <input className="input" style={{ width: "100%", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "0 10px", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontFamily: "inherit" }} value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
+
+            <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right" }}>جنسیت (برای خطاب خوش‌آمدگویی):</label>
+            <div style={{ display: "flex", gap: "10px" }}>
+              {GENDER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, gender: opt.value })}
+                  style={{
+                    flex: 1,
+                    height: "42px",
+                    borderRadius: "8px",
+                    border: formData.gender === opt.value ? "1px solid #00cec9" : "1px solid rgba(255,255,255,0.12)",
+                    background: formData.gender === opt.value ? "rgba(0,206,201,0.15)" : "rgba(255,255,255,0.05)",
+                    color: formData.gender === opt.value ? "#fff" : "#94a3b8",
+                    fontFamily: "inherit",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
             {/* 🌟 بخش مدیریت کلمه عبور به همراه مهار امنیتی برای حالت ویرایش */}
             {editMode ? (
@@ -704,16 +730,29 @@ export default function UserManagement() {
               )}
             </div>
 
+            {editMode && formData.id ? (
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px dashed rgba(255,255,255,0.15)" }}>
+                <MessengerAccountsPanel
+                  mode="admin"
+                  userId={formData.id}
+                  theme={{
+                    card: "rgba(15,23,42,0.5)",
+                    border: "rgba(255,255,255,0.12)",
+                    text: "#f8fafc",
+                    input: "rgba(15,23,42,0.9)",
+                  }}
+                  title="اکانت‌های پیام‌رسان این کاربر"
+                  description="برای نگاشت sender اخبار دریافتی از بله/تلگرام/ایتا به این کاربر."
+                />
+              </div>
+            ) : null}
+
             <button onClick={handleSave} className="submitBtn" style={{ height: "50px", background: "linear-gradient(45deg, #6c5ce7, #0984e3)", border: "none", color: "#fff", borderRadius: "10px", fontWeight: "bold", marginTop: "15px", fontFamily: "inherit" }}>
               {editMode ? "بروزرسانی نهایی" : "ثبت و ایجاد کاربر"}
             </button>
           </div>
         </div>
       )}
-
-      <HelpModal open={showRoleGuide} onClose={() => setShowRoleGuide(false)} title="راهنمای جامع نقش‌ها و مسئولیت‌ها" maxWidth={640}>
-        <USER_ROLE_GUIDE_HELP />
-      </HelpModal>
-    </div>
+    </FormPageLayout>
   );
 }

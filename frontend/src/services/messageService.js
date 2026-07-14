@@ -91,6 +91,10 @@ const messageService = {
     const res = await api.post(`${BASE}/bulk-delete`, { ids, scope });
     return res.data;
   },
+  bulkMarkRead: async (ids) => {
+    const res = await api.post(`${BASE}/bulk-read`, { ids });
+    return res.data;
+  },
   updateMessage: async (id, body) => {
     const res = await api.patch(`${BASE}/${id}`, body);
     return res.data;

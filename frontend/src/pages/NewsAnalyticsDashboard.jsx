@@ -191,6 +191,8 @@ function SummaryCards({ summary, theme }) {
     { label: "تأیید", key: "approved", color: "#22c55e" },
     { label: "رد", key: "rejected", color: "#ef4444" },
     { label: "منتشر", key: "published", color: "#10b981" },
+    { label: "بانک انتظار", key: "banked", color: "#0ea5e9" },
+    { label: "فرستنده نامشخص", key: "unmapped_sender", color: "#f59e0b" },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 8, marginBottom: 12 }}>

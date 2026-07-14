@@ -5,11 +5,25 @@ const BASE = "/news";
 const newsMonitorService = {
   list: async (params) => {
     const res = await api.get(`${BASE}/monitor`, { params });
-    return res.data;
+    if (Array.isArray(res.data)) return { items: res.data, total: res.data.length };
+    return {
+      items: Array.isArray(res.data?.items) ? res.data.items : [],
+      total: Number.isFinite(res.data?.total) ? res.data.total : (res.data?.items?.length ?? 0),
+    };
   },
 
   myDrafts: async () => {
     const res = await api.get(`${BASE}/monitor/my-drafts`);
+    return res.data;
+  },
+
+  mySubmissions: async (params) => {
+    const res = await api.get(`${BASE}/monitor/my-submissions`, { params });
+    return res.data;
+  },
+
+  entrySettings: async () => {
+    const res = await api.get(`${BASE}/monitor/entry-settings`);
     return res.data;
   },
 
@@ -73,13 +87,28 @@ const newsMonitorService = {
     return res.data;
   },
 
-  submit: async (id) => {
-    const res = await api.post(`${BASE}/monitor/${id}/submit`);
+  submit: async (id, body = {}) => {
+    const res = await api.post(`${BASE}/monitor/${id}/submit`, body);
     return res.data;
   },
 
   finalize: async (id) => {
     const res = await api.post(`${BASE}/monitor/${id}/finalize`);
+    return res.data;
+  },
+
+  finalizePublish: async (id) => {
+    const res = await api.post(`${BASE}/monitor/${id}/finalize-publish`);
+    return res.data;
+  },
+
+  finalizeBank: async (id) => {
+    const res = await api.post(`${BASE}/monitor/${id}/finalize-bank`);
+    return res.data;
+  },
+
+  chiefReject: async (id, note) => {
+    const res = await api.post(`${BASE}/monitor/${id}/chief-reject`, { note });
     return res.data;
   },
 
@@ -98,8 +127,23 @@ const newsMonitorService = {
     return res.data;
   },
 
+  duplicatesStats: async () => {
+    const res = await api.get(`${BASE}/monitor/duplicates/stats`);
+    return res.data;
+  },
+
   searchParent: async (q) => {
     const res = await api.get(`${BASE}/monitor/parent-search`, { params: { q } });
+    return res.data;
+  },
+
+  findSimilarDuplicates: async (id, body = {}) => {
+    const res = await api.post(`${BASE}/monitor/duplicates/${id}/similar`, body);
+    return res.data;
+  },
+
+  clusterLinkDuplicates: async (newsIds) => {
+    const res = await api.post(`${BASE}/monitor/duplicates/cluster-link`, { news_ids: newsIds });
     return res.data;
   },
 
@@ -115,6 +159,26 @@ const newsMonitorService = {
 
   getAudit: async (id) => {
     const res = await api.get(`${BASE}/monitor/${id}/audit`);
+    return res.data;
+  },
+
+  editorialEligibility: async (params) => {
+    const res = await api.get(`${BASE}/monitor/editorial/eligibility`, { params });
+    return res.data;
+  },
+
+  startEditorialRun: async (body) => {
+    const res = await api.post(`${BASE}/monitor/editorial/run`, body, { timeout: 60000 });
+    return res.data;
+  },
+
+  getEditorialRun: async (id) => {
+    const res = await api.get(`${BASE}/monitor/editorial/runs/${id}`);
+    return res.data;
+  },
+
+  restoreRelevance: async (newsIds) => {
+    const res = await api.post(`${BASE}/monitor/editorial/restore-relevance`, { news_ids: newsIds });
     return res.data;
   },
 };

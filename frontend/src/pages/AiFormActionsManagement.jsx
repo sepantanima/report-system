@@ -16,6 +16,93 @@ import {
 import { AI_FORM_ACTIONS_HELP } from "../content/aiFormActionsHelp.jsx";
 import { PROMPT_KEY_BY_CLASSIFICATION } from "../constants/promptKeys.js";
 import { AI_USAGE_KEYS } from "../constants/aiUsageKeys.js";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme, FORM_PAGE_MODAL_Z_INDEX } from "../theme/formPageTheme.js";
+
+function getAiFormActionsStyles(theme, isDarkMode) {
+  const inp = {
+    width: "100%",
+    padding: "8px 10px",
+    marginBottom: 10,
+    borderRadius: 6,
+    background: theme.inputBg,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+    fontSize: 14,
+  };
+
+  const btnBase = {
+    fontFamily: "inherit",
+    fontSize: 13,
+    fontWeight: 500,
+    borderRadius: 8,
+    cursor: "pointer",
+    border: "1px solid transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    lineHeight: 1.25,
+  };
+
+  const btnGhost = {
+    ...btnBase,
+    padding: "6px 12px",
+    minHeight: 34,
+    background: isDarkMode ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+    borderColor: theme.border,
+    color: theme.text,
+  };
+
+  const btnPrimary = {
+    ...btnBase,
+    padding: "6px 14px",
+    minHeight: 34,
+    background: "#0ea5e9",
+    borderColor: "#0284c7",
+    color: "#fff",
+  };
+
+  const btnDanger = {
+    ...btnBase,
+    padding: "4px 10px",
+    minHeight: 32,
+    background: "transparent",
+    borderColor: isDarkMode ? "#7f1d1d" : "#fecaca",
+    color: isDarkMode ? "#f87171" : "#dc2626",
+  };
+
+  const btnTable = {
+    ...btnGhost,
+    padding: "4px 10px",
+    minHeight: 30,
+    fontSize: 12,
+  };
+
+  const sectionTitle = { fontSize: 13, color: theme.accent, margin: "18px 0 8px", fontWeight: 600 };
+
+  const hintBox = {
+    fontSize: 12,
+    lineHeight: 1.8,
+    color: theme.muted,
+    marginBottom: 12,
+    padding: "10px 12px",
+    background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f1f5f9",
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+  };
+
+  const code = {
+    background: isDarkMode ? "rgba(0,0,0,0.25)" : "#e2e8f0",
+    color: theme.text,
+    padding: "2px 6px",
+    borderRadius: 4,
+  };
+
+  return { inp, btnGhost, btnPrimary, btnDanger, btnTable, sectionTitle, hintBox, code };
+}
 
 const emptyForm = () => {
   const d = getDefaultRegisteredFormAction();
@@ -34,6 +121,10 @@ const emptyForm = () => {
 
 export default function AiFormActionsManagement() {
   const navigate = useNavigate();
+  const { isDarkMode } = useAppTheme();
+  const theme = getFormPageTheme(isDarkMode);
+  const styles = useMemo(() => getAiFormActionsStyles(theme, isDarkMode), [theme, isDarkMode]);
+  const { inp, btnGhost, btnPrimary, btnDanger, btnTable, sectionTitle, hintBox, code } = styles;
   const allowed = hasPermission(getSessionRoles(), "manage_ai_api");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -125,67 +216,6 @@ export default function AiFormActionsManagement() {
       button_label_fa: act?.default_button_label_fa ?? f.button_label_fa,
       prompt_key: isMgmtGen ? f.prompt_key || PROMPT_KEY_BY_CLASSIFICATION[1] : "",
     }));
-  };
-
-  const inp = {
-    width: "100%",
-    padding: "8px 10px",
-    marginBottom: 10,
-    borderRadius: 6,
-    background: "#1e293b",
-    border: "1px solid #334155",
-    color: "#fff",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-    fontSize: 14,
-  };
-
-  const btnBase = {
-    fontFamily: "inherit",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 8,
-    cursor: "pointer",
-    border: "1px solid transparent",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    lineHeight: 1.25,
-  };
-
-  const btnGhost = {
-    ...btnBase,
-    padding: "6px 12px",
-    minHeight: 34,
-    background: "#1e293b",
-    borderColor: "#334155",
-    color: "#e2e8f0",
-  };
-
-  const btnPrimary = {
-    ...btnBase,
-    padding: "6px 14px",
-    minHeight: 34,
-    background: "#0ea5e9",
-    borderColor: "#0284c7",
-    color: "#fff",
-  };
-
-  const btnDanger = {
-    ...btnBase,
-    padding: "4px 10px",
-    minHeight: 32,
-    background: "transparent",
-    borderColor: "#7f1d1d",
-    color: "#f87171",
-  };
-
-  const btnTable = {
-    ...btnGhost,
-    padding: "4px 10px",
-    minHeight: 30,
-    fontSize: 12,
   };
 
   const openCreate = () => {
@@ -312,17 +342,6 @@ export default function AiFormActionsManagement() {
     );
   }
 
-  const sectionTitle = { fontSize: 13, color: "#38bdf8", margin: "18px 0 8px", fontWeight: 600 };
-  const hintBox = {
-    fontSize: 12,
-    lineHeight: 1.8,
-    color: "#94a3b8",
-    marginBottom: 12,
-    padding: "10px 12px",
-    background: "#1e293b",
-    borderRadius: 8,
-    border: "1px solid #334155",
-  };
   const promptKeyInList = promptRows.some((p) => p.prompt_key === form.prompt_key);
 
   const regFormDef = REGISTERED_FORM_AI_ACTIONS.find((x) => x.form_name === form.form_name);
@@ -413,46 +432,37 @@ export default function AiFormActionsManagement() {
       {loading ? <div>در حال بارگذاری…</div> : null}
 
       <div className="form-page-table-wrap">
-        <table className="form-page-table">
+        <table className="form-page-table form-page-table--ai-form-actions">
           <thead>
-            <tr style={{ background: "#1e293b" }}>
+            <tr style={{ background: isDarkMode ? theme.card : "#f1f5f9" }}>
               <th className="col-narrow">شناسه</th>
-              <th className="col-wide">فرم</th>
-              <th className="col-wide">اکشن</th>
-              <th className="col-title">متن دکمه</th>
-              <th className="col-wide">روش ساخت متن</th>
-              <th className="col-wide">کاربرد API / ردیف ویژه</th>
+              <th className="col-form-action">فرم / اکشن</th>
+              <th className="col-button-label">متن دکمه</th>
+              <th className="col-api">کاربرد API</th>
               <th className="col-short">فعال</th>
               <th className="col-actions">—</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} style={{ borderTop: "1px solid #334155" }}>
+              <tr key={r.id} style={{ borderTop: `1px solid ${theme.border}` }}>
                 <td className="col-narrow">{r.id}</td>
-                <td className="col-wide">
-                  <div>{getFormLabelFa(r.form_name)}</div>
-                  <div className="col-mono" style={{ opacity: 0.65, marginTop: 4 }} dir="ltr">
-                    {r.form_name}
+                <td className="col-form-action">
+                  <div>{getFormLabelFa(r.form_name)} · {getActionLabelFa(r.form_name, r.action_name)}</div>
+                  <div
+                    className="col-mono"
+                    style={{ opacity: 0.65, marginTop: 4 }}
+                    dir="ltr"
+                    title={`${r.form_name} / ${r.action_name}`}
+                  >
+                    {r.form_name} / {r.action_name}
                   </div>
                 </td>
-                <td className="col-wide">
-                  <div>{getActionLabelFa(r.form_name, r.action_name)}</div>
-                  <div className="col-mono" style={{ opacity: 0.65, marginTop: 4 }} dir="ltr">
-                    {r.action_name}
-                  </div>
-                </td>
-                <td className="col-title">{r.button_label_fa}</td>
-                <td className="col-wide">
-                  <div>یکسان — پرامپت + داده</div>
-                  <div className="col-mono" style={{ opacity: 0.55, marginTop: 4 }} dir="ltr">
-                    {r.assembly_strategy}
-                  </div>
-                </td>
-                <td className="col-wide" dir="ltr">
+                <td className="col-button-label">{r.button_label_fa}</td>
+                <td className="col-api" dir="ltr">
                   {r.usage_key || "—"}
                   {r.ai_config_id != null ? (
-                    <div style={{ opacity: 0.85, marginTop: 4 }}>اولویت ردیف #{r.ai_config_id}</div>
+                    <div style={{ opacity: 0.85, marginTop: 4, fontSize: "0.9em" }}>#{r.ai_config_id}</div>
                   ) : null}
                 </td>
                 <td className="col-short">{r.is_enabled ? "بله" : "خیر"}</td>
@@ -471,17 +481,18 @@ export default function AiFormActionsManagement() {
       </div>
 
       {modal ? (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: FORM_PAGE_MODAL_Z_INDEX, padding: 16 }}>
           <div
             style={{
-              background: "#0f172a",
-              border: "1px solid #334155",
+              background: theme.card,
+              border: `1px solid ${theme.border}`,
               borderRadius: 12,
               maxWidth: 720,
               width: "100%",
               padding: 20,
               maxHeight: "92vh",
               overflow: "auto",
+              color: theme.text,
             }}
           >
             {err ? (
@@ -502,13 +513,19 @@ export default function AiFormActionsManagement() {
               </div>
             ) : null}
             <h3 style={{ marginTop: 0 }}>{modal === "create" ? "اتصال: فرم + دکمه + پرامپت + API" : `ویرایش اکشن #${modal.id}`}</h3>
-            <div style={{ ...hintBox, marginTop: 0, color: "#e2e8f0" }}>
+            <div style={{ ...hintBox, marginTop: 0, color: theme.text }}>
               <b>فرم و دکمه</b> از لیست برنامه، <b>پرامپت</b> از لیست «مدیریت پرامپت‌ها» (در صورت نیاز)، <b>کاربرد API</b> از همان چیزی که در «مدیریت API» ثبت کرده‌اید، و در صورت تمایل <b>اولویت یک ردیف API</b>.
             </div>
 
             <p style={sectionTitle}>۱) فرم و دکمه (فقط موارد ثبت‌شده در برنامه)</p>
             {(!formInRegistry || !actionInRegistry) && (form.form_name || form.action_name) ? (
-              <div style={{ ...hintBox, color: "#fbbf24", borderColor: "#854d0e", marginBottom: 10 }}>
+              <div style={{
+                ...hintBox,
+                color: isDarkMode ? "#fbbf24" : "#92400e",
+                borderColor: isDarkMode ? "#854d0e" : "#fcd34d",
+                background: isDarkMode ? "rgba(0,0,0,0.2)" : "#fffbeb",
+                marginBottom: 10,
+              }}>
                 این ردیف در دیتابیس با فرم/اکشنی است که در <b>رجیستری فعلی</b> نیست (مثلاً دادهٔ قدیمی). از لیست زیر یک فرم و دکمهٔ <b>معتبر</b> انتخاب کنید تا ذخیره شود؛ فقط همان ترکیب‌هایی که توسعه‌دهنده در کد ثبت کرده اینجا هستند.
               </div>
             ) : null}
@@ -566,12 +583,12 @@ export default function AiFormActionsManagement() {
             </select>
             <div style={{ ...hintBox, fontSize: 11, marginTop: 4 }}>
               متن اصلی ارسال به مدل از همین پرامپت خوانده می‌شود. برای اکشن خلاصه میدانی می‌توانید در پرامپت از{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>{"{{PERIOD_START}}"}</code>،{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>{"{{PERIOD_END}}"}</code>،{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>{"{{PERIOD_KIND_FA}}"}</code>،{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>{"{{REPORTS_DIGEST}}"}</code> استفاده کنید؛ سرور آن‌ها را پر می‌کند. فیلدهای JSON زیر برای چسباندن مقادیر فرم به صورت بلوک (و توکن‌های{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>FORM_</code>) در مسیرهای دیگر است؛ برای همین اکشن معمولاً{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>[]</code> کافی است.
+              <code style={code}>{"{{PERIOD_START}}"}</code>،{" "}
+              <code style={code}>{"{{PERIOD_END}}"}</code>،{" "}
+              <code style={code}>{"{{PERIOD_KIND_FA}}"}</code>،{" "}
+              <code style={code}>{"{{REPORTS_DIGEST}}"}</code> استفاده کنید؛ سرور آن‌ها را پر می‌کند. فیلدهای JSON زیر برای چسباندن مقادیر فرم به صورت بلوک (و توکن‌های{" "}
+              <code style={code}>FORM_</code>) در مسیرهای دیگر است؛ برای همین اکشن معمولاً{" "}
+              <code style={code}>[]</code> کافی است.
             </div>
 
             <label style={{ fontSize: 12, opacity: 0.88, display: "block", marginBottom: 4 }}>
@@ -579,8 +596,8 @@ export default function AiFormActionsManagement() {
             </label>
             <textarea style={{ ...inp, minHeight: 88, fontFamily: "monospace", fontSize: 12 }} value={form.source_fields_json} onChange={(e) => setForm((f) => ({ ...f, source_fields_json: e.target.value }))} dir="ltr" />
             <div style={{ ...hintBox, fontSize: 11, marginTop: 4 }}>
-              مثال: <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>[&quot;period_start&quot;,&quot;classification&quot;]</code> — هر کدام یک خط{" "}
-              <code style={{ background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>نام: مقدار</code> زیر پرامپت می‌آید (در مسیر unified). برای «تولید پیش‌نویس خلاصه میدانی» معمولاً آرایه خالی کافی است.
+              مثال: <code style={code}>[&quot;period_start&quot;,&quot;classification&quot;]</code> — هر کدام یک خط{" "}
+              <code style={code}>نام: مقدار</code> زیر پرامپت می‌آید (در مسیر unified). برای «تولید پیش‌نویس خلاصه میدانی» معمولاً آرایه خالی کافی است.
             </div>
 
             <p style={sectionTitle}>۴) کدام API زده شود؟</p>

@@ -10,8 +10,8 @@ export const NEWS_EDITOR_BODY_HEIGHT = Math.round(
 
 export const NEWS_EDITOR_BOX_HEIGHT = NEWS_EDITOR_BODY_HEIGHT + NEWS_EDITOR_TOOLBAR_PX;
 
-/** موبایل — حدود ۷ خط با اسکرول داخلی */
-export const NEWS_EDITOR_MOBILE_LINE_COUNT = 7;
+/** موبایل — حدود ۵ خط تا فضای بیشتری برای حکم/اهمیت بماند */
+export const NEWS_EDITOR_MOBILE_LINE_COUNT = 5;
 export const NEWS_EDITOR_MOBILE_FONT_PX = 13;
 export const NEWS_EDITOR_MOBILE_TOOLBAR_PX = 34;
 

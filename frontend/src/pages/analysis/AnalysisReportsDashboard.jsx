@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { StatChart } from "../../components/StatChart.jsx";
 import analysisService from "../../services/analysisService";
+import useAnalysisToast from "../../hooks/useAnalysisToast.jsx";
 import { MISSION_STATUS_META, formatPersianDateShort, toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import { exportToExcel } from "../../utils/excelExport";
 import { buildExportFileName, formatDateRangeLabel } from "../../utils/exportDateRange";
@@ -29,6 +30,23 @@ const UNIT_COLUMNS = {
   analyst_count: "تعداد تحلیل‌گر",
   completed: "تحلیل تکمیل",
   avg_score: "میانگین امتیاز",
+};
+
+const CONTRIBUTOR_COLUMNS = {
+  rank: "رتبه",
+  name: "مشارکت‌کننده",
+  unit_name: "واحد",
+  submission_count: "ارسال",
+  promoted_count: "ارتقا",
+  promising_count: "امیدوارکننده",
+};
+
+const DELAY_COLUMNS = {
+  topic_title: "محور",
+  analyst_name: "تحلیل‌گر",
+  deadline: "مهلت",
+  days_overdue: "تأخیر (روز)",
+  status: "وضعیت",
 };
 
 const COMPLETED_COLUMNS = {
@@ -102,12 +120,31 @@ export default function AnalysisReportsDashboard({ theme, isDarkMode, dateRange,
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
+  const [contributors, setContributors] = useState([]);
+  const [delays, setDelays] = useState([]);
+  const [analystPerf, setAnalystPerf] = useState([]);
+  const { showToast, Toast } = useAnalysisToast();
 
   useEffect(() => {
     setLoading(true);
-    analysisService.getReportDashboard(dateRange)
-      .then(setData)
-      .catch(() => setData(null))
+    Promise.all([
+      analysisService.getReportDashboard(dateRange),
+      analysisService.getBriefContributorStats().catch(() => []),
+      analysisService.getReportDelays().catch(() => []),
+      analysisService.getReportAnalystPerformance().catch(() => []),
+    ])
+      .then(([dash, contrib, delayRows, perf]) => {
+        setData(dash);
+        setContributors(contrib || []);
+        setDelays(delayRows || []);
+        setAnalystPerf(perf || []);
+      })
+      .catch(() => {
+        setData(null);
+        setContributors([]);
+        setDelays([]);
+        setAnalystPerf([]);
+      })
       .finally(() => setLoading(false));
   }, [dateRange?.startDate, dateRange?.endDate]);
 
@@ -145,11 +182,11 @@ export default function AnalysisReportsDashboard({ theme, isDarkMode, dateRange,
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err.response?.data?.error || "خطا در دریافت PDF");
+      showToast(err.response?.data?.error || "خطا در دریافت PDF");
     } finally {
       setPdfLoadingId(null);
     }
-  }, [dateRange]);
+  }, [dateRange, showToast]);
 
   if (loading || parentLoading) {
     return <p style={{ textAlign: "center", opacity: 0.6, padding: 32 }}>در حال بارگذاری گزارش‌ها...</p>;
@@ -163,6 +200,7 @@ export default function AnalysisReportsDashboard({ theme, isDarkMode, dateRange,
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {Toast}
       {!hasDateFilter && (
         <p style={{ fontSize: 12, color: "#f59e0b", margin: 0, padding: 10, borderRadius: 10, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)" }}>
           برای فیلتر بازه زمانی، از «فیلتر تاریخ ثبت» در بالای صفحه استفاده کنید.
@@ -235,6 +273,57 @@ export default function AnalysisReportsDashboard({ theme, isDarkMode, dateRange,
           { key: "avg_score", label: "میانگین امتیاز", render: (r) => r.avg_score != null ? toPersianDigits(r.avg_score) : "—" },
         ]} />
       </Widget>
+
+      <Widget title="مشارکت‌کنندگان تحلیل کوتاه" theme={theme}
+        action={(contributors?.length > 0) && (
+          <ExcelBtn onClick={() => exportExcel(contributors, "brief-contributors", CONTRIBUTOR_COLUMNS)} color="#10b981" />
+        )}
+      >
+        <RankTable theme={theme} rows={contributors} columns={[
+          { key: "rank", label: "رتبه", render: (r) => toPersianDigits(r.rank) },
+          { key: "name", label: "مشارکت‌کننده" },
+          { key: "unit_name", label: "واحد", render: (r) => r.unit_name || "—" },
+          { key: "submission_count", label: "ارسال", render: (r) => toPersianDigits(r.submission_count || 0) },
+          { key: "promoted_count", label: "ارتقا", render: (r) => toPersianDigits(r.promoted_count || 0) },
+          { key: "promising_count", label: "امیدوارکننده", render: (r) => toPersianDigits(r.promising_count || 0) },
+        ]} emptyText="هنوز تحلیل کوتاهی ثبت نشده" />
+      </Widget>
+
+      <Widget title={`مأموریت‌های معوق${rangeSuffix}`} theme={theme}
+        action={(delays?.length > 0) && (
+          <ExcelBtn onClick={() => exportExcel(delays.map((r) => ({
+            ...r,
+            deadline: r.deadline ? formatPersianDateShort(r.deadline) : "—",
+            status: MISSION_STATUS_META[r.status]?.label || r.status,
+          })), "mission-delays", DELAY_COLUMNS)} color="#ef4444" />
+        )}
+      >
+        <RankTable theme={theme} rows={delays} columns={[
+          { key: "topic_title", label: "محور" },
+          { key: "analyst_name", label: "تحلیل‌گر", render: (r) => r.analyst_name || "—" },
+          { key: "deadline", label: "مهلت", render: (r) => formatPersianDateShort(r.deadline) },
+          { key: "days_overdue", label: "تأخیر", render: (r) => {
+            if (!r.deadline) return "—";
+            const dl = new Date(r.deadline);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            dl.setHours(0, 0, 0, 0);
+            return toPersianDigits(Math.max(0, Math.ceil((today - dl) / 86400000)));
+          } },
+          { key: "status", label: "وضعیت", render: (r) => MISSION_STATUS_META[r.status]?.label || r.status },
+        ]} emptyText="مأموریت معوقی نیست" />
+      </Widget>
+
+      {analystPerf?.length > 0 && (
+        <Widget title="عملکرد تحلیل‌گران (گزارش تفصیلی)" theme={theme}>
+          <RankTable theme={theme} rows={analystPerf.slice(0, 15)} columns={[
+            { key: "name", label: "تحلیل‌گر" },
+            { key: "completed", label: "تکمیل", render: (r) => toPersianDigits(r.completed || 0) },
+            { key: "avg_score", label: "میانگین", render: (r) => r.avg_score != null ? toPersianDigits(Number(r.avg_score).toFixed(1)) : "—" },
+            { key: "revisions", label: "اصلاحات", render: (r) => toPersianDigits(r.revisions || 0) },
+          ]} />
+        </Widget>
+      )}
 
       <Widget title={`تحلیل‌های انجام‌شده (${toPersianDigits(data.completedAnalyses?.length || 0)})${rangeSuffix}`} theme={theme}
         action={(data.completedAnalyses?.length > 0) && (

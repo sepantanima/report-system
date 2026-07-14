@@ -2,6 +2,7 @@ import { FORMAT, SOURCE_PLATFORM, normalizeFormat, normalizeSourcePlatform } fro
 import { isLikelyHtml, astToHtml, htmlToAst } from "./htmlUtils.js";
 import { messengerToHtml } from "./messengerToHtml.js";
 import { htmlToMessenger, htmlToPlainFromContent } from "./htmlToMessenger.js";
+import { decodeHtmlEntities } from "../../constants/analysisFieldLimits.js";
 
 export { FORMAT, SOURCE_PLATFORM, normalizeFormat, normalizeSourcePlatform };
 export { messengerToHtml, htmlToMessenger, htmlToPlainFromContent, isLikelyHtml };
@@ -65,7 +66,8 @@ export function ingestRawToCleanedHtml(rawText, sourcePlatform = SOURCE_PLATFORM
   const resolved = plat === SOURCE_PLATFORM.AUTO ? detectSourcePlatform(raw) : plat;
 
   if (resolved === SOURCE_PLATFORM.MANUAL) {
-    return `<p>${raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</p>`;
+    const plain = decodeHtmlEntities(raw);
+    return `<p>${plain.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</p>`;
   }
 
   return messengerToHtml(raw, resolved);

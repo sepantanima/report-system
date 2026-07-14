@@ -20,6 +20,7 @@ import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
 import { formatMessageDateTime } from "../utils/messageDateUtils.js";
 import { priorityLabel } from "../utils/messageLabelUtils.js";
 import { MESSAGE_ANNOUNCEMENT_HELP, MESSAGE_PRIORITY_HINTS } from "../content/messageFormHelp.jsx";
+import useAnalysisToast from "../hooks/useAnalysisToast.jsx";
 
 const TARGET_TYPES = [
   { value: "all", label: "همه کاربران" },
@@ -73,7 +74,7 @@ export default function ComposeAnnouncementPage() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ title: "", body: "", priority: "important", show_as_banner: true });
   const [sending, setSending] = useState(false);
-  const [toast, setToast] = useState("");
+  const { showToast, Toast } = useAnalysisToast();
 
   const theme = useMemo(() => ({
     card: isDarkMode ? "#1e293b" : "#fff",
@@ -89,11 +90,6 @@ export default function ComposeAnnouncementPage() {
     () => sentList.filter((m) => m.kind === "announcement"),
     [sentList],
   );
-
-  const showToast = useCallback((msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3500);
-  }, []);
 
   const loadUnits = useCallback(async (q) => {
     try {
@@ -273,11 +269,7 @@ export default function ComposeAnnouncementPage() {
       helpTitle="راهنمای صدور ابلاغ"
     >
       <style>{MESSAGE_PAGE_CSS}</style>
-      {toast ? (
-        <div style={{ marginBottom: 10, padding: 10, borderRadius: 10, background: "rgba(14,165,233,0.15)" }}>
-          {toast}
-        </div>
-      ) : null}
+      {Toast}
 
       <div className="message-tab-row" style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
         <button

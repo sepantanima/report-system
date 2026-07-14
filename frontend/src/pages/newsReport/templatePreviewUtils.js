@@ -90,6 +90,36 @@ export function buildTemplatePreview(templateKey, template, settings = {}) {
     };
   }
 
+  if (templateKey === "document_caption_template") {
+    return {
+      type: "text",
+      content: applyTemplate(template, {
+        report_type: "اخبار ۶ ساعته HTML جدولی",
+        label: settings.default_label || "گزارش اخبار نمونه",
+        report_date: "۱۴۰۵/۰۴/۱۹",
+        display_from: "۱۴۰۵/۰۴/۱۹ - ۱۲:۰۰",
+        display_to: "۱۴۰۵/۰۴/۱۹ - ۱۸:۰۰",
+        news_count: "۴۸۷",
+        news_count_text: "۴۸۷ خبر",
+        system_name: settings.system_name || "سامانه سپنتا",
+        pack_label: "اخبار فوری",
+        format_label: "HTML جدولی",
+      }),
+    };
+  }
+
+  if (templateKey === "brief_submission_messenger_template") {
+    return {
+      type: "text",
+      content: applyTemplate(template, {
+        author_hashtag: "نویسنده_نمونه",
+        composition_date: "۱۴۰۴/۰۱/۱۵",
+        brief_body: "این متن نمونه تحلیل کوتاه است. محتوای واقعی تحلیل در انتشار جایگزین می‌شود.",
+        submitter_hashtag: "ثبت_کننده_نمونه",
+      }),
+    };
+  }
+
   if (templateKey === "html_card_template" || templateKey === "html_table_template") {
     return {
       type: "html",

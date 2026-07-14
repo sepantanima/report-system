@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Download, Loader2, Printer, Save, Send } from "lucide-react";
 import NewsReportDestinationBar from "../newsReport/NewsReportDestinationBar.jsx";
-import newsSmartAnalysisService, { ANALYSIS_ACTION_LABELS } from "../../services/newsSmartAnalysisService.js";
+import newsSmartAnalysisService, { analysisTypeLabel } from "../../services/newsSmartAnalysisService.js";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import { stripHtml } from "../../components/analysis/RichTextEditor.jsx";
 
@@ -58,9 +58,11 @@ export default function NewsSmartAnalysisOutputActions({
           body_html: analysisState.bodyHtml || "",
           body_plain: analysisState.bodyPlain || stripHtml(analysisState.bodyHtml || ""),
           ai_prompt_key: analysisState.aiPromptKey,
+          custom_prompt: analysisState.customPrompt || undefined,
+          custom_prompt_title: analysisState.customPromptTitle || undefined,
         },
       );
-      setAnalysisState((s) => ({ ...s, savedId: row.id, packId }));
+      setAnalysisState((s) => ({ ...s, savedId: row.id, packId, createdBy: row.created_by ?? s.createdBy }));
       onSaved?.(row);
     } catch (e) {
       onError(e.response?.data?.error || e.message);
@@ -143,7 +145,7 @@ ${analysisState?.bodyHtml || ""}
 
   if (!analysisState?.analysisType) return null;
 
-  const typeLabel = ANALYSIS_ACTION_LABELS[analysisState.analysisType] || "—";
+  const typeLabel = analysisTypeLabel(analysisState.analysisType, analysisState.customPrompt);
 
   return (
     <div style={{

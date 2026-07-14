@@ -38,6 +38,8 @@ export const canApproveTopics = () => hasRole(getUserRoles(), "admin", "analysis
 
 export const canManageAnalysis = () => hasRole(getUserRoles(), "admin", "analysis_manager", "Field_admin");
 
+export const canManageTopicOps = () => canManageAnalysis() || canApproveTopics();
+
 
 
 export const toPersianDigits = (val) => {
@@ -52,9 +54,9 @@ export const toPersianDigits = (val) => {
 
 export const TOPIC_STATUS = {
 
-  Draft: "پیش‌نویس", Submitted: "ثبت‌شده", UnderReview: "برگشت برای اصلاح", Approved: "تصویب شده",
+  Draft: "پیش‌نویس", Submitted: "منتظر تصویب", UnderReview: "برگشت برای اصلاح", Approved: "محور تصویب‌شده",
 
-  Rejected: "رد شده", Assigned: "ارجاع شده", Closed: "بسته",
+  Rejected: "رد شده", Assigned: "در جریان تحلیل", Completed: "تکمیل‌شده", Closed: "بایگانی‌شده",
 
 };
 

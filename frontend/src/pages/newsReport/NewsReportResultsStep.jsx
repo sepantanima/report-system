@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Send } from "lucide-react";
 
 import HelpModal from "../../components/common/HelpModal.jsx";
 
@@ -16,7 +16,7 @@ import NewsReportNewsTable from "./NewsReportNewsTable.jsx";
 
 import NewsReportCollapsible from "./NewsReportCollapsible.jsx";
 
-import NewsReportDestinationBar from "./NewsReportDestinationBar.jsx";
+import MessengerChannelSendModal from "./MessengerChannelSendModal.jsx";
 
 
 
@@ -26,7 +26,7 @@ export default function NewsReportResultsStep({
 
   extractedCount, onExtractedCount, onError, theme,
 
-  destinations = [], destinationId = "", onDestinationChange,
+  destinations = [],
 
 }) {
 
@@ -47,6 +47,10 @@ export default function NewsReportResultsStep({
   const [bulkSending, setBulkSending] = useState(false);
 
   const [sendMsg, setSendMsg] = useState("");
+
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+
+  const [pendingNewsId, setPendingNewsId] = useState(null);
 
 
 
@@ -148,73 +152,97 @@ export default function NewsReportResultsStep({
 
 
 
-  const sendSingle = async (newsId) => {
+  const openSingleSend = (newsId) => {
 
-    if (!destinationId) { onError("ابتدا کانال یا گروه مقصد را انتخاب کنید."); return; }
+    if (!destinations.length) { onError("کانال مقصد برای ارسال تعریف نشده است."); return; }
 
-    setSendingId(newsId);
+    setPendingNewsId(newsId);
 
-    setSendMsg("");
-
-    onError("");
-
-    try {
-
-      await newsReportService.sendSingle({
-
-        news_id: newsId,
-
-        destination_id: parseInt(destinationId, 10),
-
-      });
-
-      setSendMsg("خبر ارسال شد.");
-
-    } catch (e) {
-
-      onError(e.response?.data?.error || e.message);
-
-    } finally {
-
-      setSendingId(null);
-
-    }
+    setSendModalOpen(true);
 
   };
 
 
 
-  const sendSelectedBatch = async () => {
+  const openBulkSend = () => {
 
-    if (!destinationId) { onError("ابتدا کانال یا گروه مقصد را انتخاب کنید."); return; }
+    if (!destinations.length) { onError("کانال مقصد برای ارسال تعریف نشده است."); return; }
 
     if (!selectedIds.length) { onError("حداقل یک خبر را در جدول انتخاب کنید."); return; }
 
-    setBulkSending(true);
+    setPendingNewsId(null);
+
+    setSendModalOpen(true);
+
+  };
+
+
+
+  const handleModalSend = async (destIds) => {
 
     setSendMsg("");
 
     onError("");
 
+    if (pendingNewsId) {
+
+      setSendingId(pendingNewsId);
+
+      try {
+
+        for (const destId of destIds) {
+
+          await newsReportService.sendSingle({ news_id: pendingNewsId, destination_id: destId });
+
+        }
+
+        setSendMsg("خبر ارسال شد.");
+
+        setSendModalOpen(false);
+
+      } catch (e) {
+
+        onError(e.response?.data?.error || e.message);
+
+      } finally {
+
+        setSendingId(null);
+
+      }
+
+      return;
+
+    }
+
+    setBulkSending(true);
+
     try {
 
-      const r = await newsReportService.sendBatch({
+      let sentTotal = 0;
 
-        news_ids: selectedIds,
+      let failedTotal = 0;
 
-        destination_id: parseInt(destinationId, 10),
+      for (const destId of destIds) {
 
-      });
+        const r = await newsReportService.sendBatch({ news_ids: selectedIds, destination_id: destId });
 
-      if (r.failed?.length) {
+        sentTotal += r.sent_count || 0;
 
-        onError(`${toPersianDigits(r.sent_count)} ارسال شد؛ ${toPersianDigits(r.failed.length)} ناموفق.`);
+        failedTotal += r.failed?.length || 0;
+
+      }
+
+      if (failedTotal) {
+
+        onError(`${toPersianDigits(sentTotal)} ارسال شد؛ ${toPersianDigits(failedTotal)} ناموفق.`);
 
       } else {
 
-        setSendMsg(`${toPersianDigits(r.sent_count)} خبر با موفقیت ارسال شد.`);
+        setSendMsg(`${toPersianDigits(sentTotal)} خبر با موفقیت ارسال شد.`);
 
       }
+
+      setSendModalOpen(false);
 
     } catch (e) {
 
@@ -278,25 +306,55 @@ export default function NewsReportResultsStep({
 
 
 
-      <NewsReportDestinationBar
+      {destinations.length > 0 && (
 
-        destinations={destinations}
+        <div style={{ marginBottom: 12 }}>
 
-        destinationId={destinationId}
+          <button
 
-        onDestinationChange={onDestinationChange}
+            type="button"
 
-        theme={theme}
+            disabled={!selectedIds.length || bulkSending}
 
-        showBulkSend
+            onClick={openBulkSend}
 
-        bulkCount={selectedIds.length}
+            style={{
 
-        bulkSending={bulkSending}
+              display: "inline-flex",
 
-        onBulkSend={sendSelectedBatch}
+              alignItems: "center",
 
-      />
+              gap: 6,
+
+              padding: "8px 14px",
+
+              borderRadius: 8,
+
+              border: "none",
+
+              background: !selectedIds.length ? theme.border : "#22c55e",
+
+              color: !selectedIds.length ? theme.muted : "#fff",
+
+              cursor: !selectedIds.length ? "not-allowed" : "pointer",
+
+              fontFamily: "inherit",
+
+              fontSize: 13,
+
+            }}
+
+          >
+
+            <Send size={16} />
+
+            ارسال انتخاب‌شده‌ها ({toPersianDigits(selectedIds.length)})
+
+          </button>
+
+        </div>
+
+      )}
 
 
 
@@ -382,7 +440,7 @@ export default function NewsReportResultsStep({
 
       <p style={{ margin: "0 0 14px", fontSize: 13, color: theme.muted, lineHeight: 1.7 }}>
 
-        مقصد انتشار را یک‌بار بالا انتخاب کنید. سپس با دکمه سبز همه انتخاب‌شده‌ها را بفرستید، یا از آیکن ارسال در هر ردیف برای تکی استفاده کنید.
+        برای ارسال تکی از آیکن ارسال در هر ردیف استفاده کنید؛ برای ارسال گروهی، اخبار را انتخاب کرده و دکمه ارسال را بزنید. کانال مقصد هنگام ارسال انتخاب می‌شود.
 
       </p>
 
@@ -422,7 +480,7 @@ export default function NewsReportResultsStep({
 
           isDarkMode={theme.isDarkMode}
 
-          onSendSingle={destinationId ? sendSingle : null}
+          onSendSingle={destinations.length ? openSingleSend : null}
 
           sendingId={sendingId}
 
@@ -447,6 +505,32 @@ export default function NewsReportResultsStep({
         <NEWS_REPORT_RESULTS_HELP />
 
       </HelpModal>
+
+
+
+      <MessengerChannelSendModal
+
+        open={sendModalOpen}
+
+        onClose={() => !bulkSending && !sendingId && setSendModalOpen(false)}
+
+        title={pendingNewsId ? "ارسال خبر تکی" : "ارسال اخبار انتخاب‌شده"}
+
+        description={pendingNewsId
+
+          ? "کانال(های) مقصد را انتخاب کنید."
+
+          : `${toPersianDigits(selectedIds.length)} خبر انتخاب شده است.`}
+
+        destinations={destinations}
+
+        onSend={handleModalSend}
+
+        sending={bulkSending || !!sendingId}
+
+        theme={theme}
+
+      />
 
     </div>
 

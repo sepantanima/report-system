@@ -4,6 +4,7 @@ import { MessageSquare } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../../theme/unitReportFormStyles";
 import AnalysisPageShell from "../../components/analysis/AnalysisPageShell.jsx";
+import AnalysisWorkflowStepper from "../../components/analysis/AnalysisWorkflowStepper.jsx";
 import { MENTOR_REVIEW_HELP } from "../../content/analysisFormHelp.jsx";
 import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import analysisService from "../../services/analysisService";
@@ -39,6 +40,7 @@ export default function AnalysisMentorReview() {
 
   return (
     <AnalysisPageShell title="بازبینی تحلیل‌ها" subtitle="بررسی، بازخورد و امتیازدهی" backTo="/main" onHelp={MENTOR_REVIEW_HELP} helpTitle="راهنمای بازبینی">
+      <AnalysisWorkflowStepper currentStep="review" compact />
       {loading && <p style={{ color: S.subMuted, fontSize: "12px" }}>در حال بارگذاری...</p>}
       {!loading && missions.length === 0 && (
         <p style={{ color: S.emptyStateColor, fontSize: "12px", textAlign: "center", padding: "32px 0" }}>

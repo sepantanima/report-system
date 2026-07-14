@@ -7,9 +7,12 @@ import {
   Search, ArrowRight, Filter, X, RotateCcw, SlidersHorizontal, Plus,
 } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
-import { usePageFontSize } from "../../utils/pageFontSize.js";
+import { BASE_PAGE_FONT_PX, usePageFontSize } from "../../utils/pageFontSize.js";
 import PageToolbarButtons from "../common/PageToolbarButtons.jsx";
+import PageUserMenu from "../common/PageUserMenu.jsx";
+import NotificationBell from "../messaging/NotificationBell.jsx";
 import { ANALYSIS_MONITOR_CSS } from "../../theme/analysisMonitorStyles.js";
+import { FORM_PAGE_CSS } from "../../theme/formPageStyles.js";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 
 export default function AnalysisMonitorLayout({
@@ -20,6 +23,7 @@ export default function AnalysisMonitorLayout({
   dates,
   onDatesChange,
   stats = [],
+  onStatClick,
   showFilters,
   onToggleFilters,
   onResetFilters,
@@ -29,6 +33,7 @@ export default function AnalysisMonitorLayout({
   helpTitle = "راهنما",
   onAdd,
   addLabel = "جدید",
+  subNavExtra,
   tabs,
   activeTab,
   onTabChange,
@@ -80,11 +85,12 @@ export default function AnalysisMonitorLayout({
         color: theme.text,
         overflow: "hidden",
         fontFamily: "Tahoma, sans-serif",
-        fontSize: fontSizePx,
-        ["--page-font-size"]: fontSizePx,
+        fontSize: BASE_PAGE_FONT_PX,
+        ["--input-font-size"]: fontSizePx,
       }}
     >
       <style>{ANALYSIS_MONITOR_CSS}</style>
+      <style>{FORM_PAGE_CSS}</style>
 
       <header className="v3-navbar" style={{ background: theme.card, borderBottom: `1px solid ${theme.border}` }}>
         <div className="v3-nav-row">
@@ -95,27 +101,42 @@ export default function AnalysisMonitorLayout({
           </div>
           <div className="v3-nav-tools">
             <button type="button" onClick={() => onToggleFilters(!showFilters)} className={`v3-icon-btn v3-filter-btn-trigger ${showFilters ? "active" : ""}`} title="فیلتر"><Filter size={18} /></button>
+            <NotificationBell isDarkMode={isDarkMode} />
             <PageToolbarButtons fontLevel={fontLevel} onCycleFont={cycleFont} onHelp={openHelp} showHelp={!!onHelp} btnClass="v3-icon-btn" />
+            <PageUserMenu btnClass="v3-icon-btn" />
           </div>
           {onAdd && (
             <button type="button" className="v3-add-fab v3-add-fab-row" onClick={onAdd}><Plus size={16} /> {addLabel}</button>
           )}
         </div>
         <div className="v3-nav-row sub">
-          <div className="v3-date-box v3-date-row" style={{ border: `1px solid ${theme.border}`, background: theme.inputBg, color: theme.text }}>
-            <ThemedDatePicker isDarkMode={isDarkMode} value={dates} onChange={onDatesChange} range calendar={persian} locale={persian_fa} calendarPosition="bottom-right" placeholder="فیلتر تاریخ ثبت (اختیاری)" />
+          <div className="v3-nav-date-priority-row">
+            <div className="v3-date-box v3-date-row" style={{ border: `1px solid ${theme.border}`, background: theme.inputBg, color: theme.text }}>
+              <ThemedDatePicker isDarkMode={isDarkMode} value={dates} onChange={onDatesChange} range calendar={persian} locale={persian_fa} calendarPosition="bottom-right" placeholder="فیلتر تاریخ ثبت (اختیاری)" />
+            </div>
+            {subNavExtra}
           </div>
           {stats.length > 0 && (
             <div className="v3-summary-bar">
-              {stats.map((s, idx) => (
+              {stats.map((s, idx) => {
+                const clickable = Boolean(onStatClick && (s.filterKey || s.tabId));
+                return (
                 <React.Fragment key={s.key || idx}>
                   {idx > 0 && <div className="v3-stat-divider" />}
-                  <div className="v3-stat-seg" style={{ "--seg-color": s.color }}>
+                  <div
+                    className={`v3-stat-seg${clickable ? " v3-stat-clickable" : ""}`}
+                    style={{ "--seg-color": s.color }}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={clickable ? () => onStatClick(s) : undefined}
+                    onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") onStatClick(s); } : undefined}
+                  >
                     <span>{s.label}</span>
                     <b>{toPersianDigits(s.value ?? 0)}</b>
                   </div>
                 </React.Fragment>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -143,7 +164,18 @@ export default function AnalysisMonitorLayout({
                 style={{ color: activeTab === t.id ? "#38bdf8" : theme.text, borderColor: theme.border }}
                 onClick={() => onTabChange(t.id)}
               >
-                {t.icon && <t.icon size={14} />} {t.label}
+                {t.icon && <t.icon size={14} />}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {t.label}
+                  {t.badge > 0 && (
+                    <span
+                      className={`v3-tab-badge v3-tab-badge-${t.badgeTone || "count"}`}
+                      style={t.badgeTone === "custom" ? t.badgeStyle : undefined}
+                    >
+                      {toPersianDigits(t.badge > 99 ? "99+" : t.badge)}
+                    </span>
+                  )}
+                </span>
               </button>
             ))}
           </div>

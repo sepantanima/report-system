@@ -6,6 +6,9 @@ const MIN = 1;
 const MAX = 6;
 const DEFAULT = 2;
 
+/** اندازه ثابت UI (دکمه‌ها، برچسب‌ها، عناوین) — ورودی‌ها و متن کارت‌ها با --input-font-size مقیاس می‌شوند */
+export const BASE_PAGE_FONT_PX = "14px";
+
 export function readPageFontLevel() {
   if (typeof window === "undefined") return DEFAULT;
   const v = parseInt(localStorage.getItem(STORAGE_KEY), 10);

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import { Bold, Underline, Heading2, Heading3, Palette, Maximize2, Minimize2, Code2 } from "lucide-react";
+import { Bold, Underline, Strikethrough, Heading2, Heading3, Palette, Maximize2, Minimize2, Code2 } from "lucide-react";
+import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { plainTextLength, stripHtml as stripHtmlUtil } from "../../constants/analysisFieldLimits.js";
 import { pxToEm } from "../../utils/pageFontSize.js";
 import CharCounter from "../news/CharCounter.jsx";
@@ -44,6 +45,7 @@ function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColo
     <div className="rich-text-toolbar" style={{ flexWrap: "wrap", gap: 4, display: "flex", alignItems: "center" }}>
       {btn("bold", "بولد", <Bold />)}
       {btn("underline", "زیرخط", <Underline />)}
+      {btn("strikeThrough", "خط‌خور", <Strikethrough />)}
       {!isMobile && btn("italic", "ایتالیک", <em style={{ fontStyle: "italic", fontSize: pxToEm(12) }}>I</em>)}
       <button
         type="button"
@@ -113,7 +115,7 @@ export default function RichTextEditor({
   onChange,
   onPlainTextChange,
   placeholder = "متن را وارد کنید...",
-  isDarkMode = true,
+  isDarkMode: isDarkModeProp,
   minHeight = 120,
   readOnly = false,
   maxLength,
@@ -121,7 +123,10 @@ export default function RichTextEditor({
   allowSourceView = false,
   resizable = false,
   maxHeight,
+  fillContainer = false,
 }) {
+  const { isDarkMode: themeDark } = useAppTheme();
+  const isDarkMode = isDarkModeProp !== undefined ? isDarkModeProp : themeDark;
   const editorRef = useRef(null);
   const isMobile = useIsMobile();
   const [showColors, setShowColors] = useState(false);
@@ -220,7 +225,7 @@ export default function RichTextEditor({
 
   return (
     <div
-      className={`rich-text-editor ${isDarkMode ? "dark" : "light"}${fullscreen ? " rich-text-editor--fullscreen" : ""}${resizable ? " rich-text-editor--resizable" : ""}${maxHeight ? " rich-text-editor--fixed-height" : ""}`}
+      className={`rich-text-editor ${isDarkMode ? "dark" : "light"}${fullscreen ? " rich-text-editor--fullscreen" : ""}${resizable ? " rich-text-editor--resizable" : ""}${fillContainer ? " rich-text-editor--fill-container" : ""}${maxHeight && !fillContainer ? " rich-text-editor--fixed-height" : ""}`}
       style={fullscreen ? {
         position: "fixed",
         inset: 0,
@@ -236,6 +241,13 @@ export default function RichTextEditor({
         flex: 1,
         minHeight: 0,
         height: "100%",
+      } : fillContainer ? {
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
       } : maxHeight ? {
         display: "flex",
         flexDirection: "column",
@@ -288,10 +300,10 @@ export default function RichTextEditor({
           spellCheck={false}
           style={{
             width: "100%",
-            flex: fullscreen || resizable ? 1 : undefined,
-            minHeight: fullscreen ? "60vh" : minHeight,
-            maxHeight: fullscreen ? undefined : maxHeight,
-            overflowY: maxHeight ? "auto" : undefined,
+            flex: fullscreen || resizable || fillContainer ? 1 : undefined,
+            minHeight: fillContainer ? minHeight : undefined,
+            maxHeight: fullscreen || fillContainer ? undefined : maxHeight,
+            overflowY: (maxHeight || fillContainer) ? "auto" : undefined,
             fontFamily: "ui-monospace, Consolas, monospace",
             fontSize: pxToEm(12),
             lineHeight: 1.6,
@@ -308,15 +320,15 @@ export default function RichTextEditor({
       ) : (
       <div
         ref={editorRef}
-        className={`rich-text-area${resizable ? " rich-text-area--resizable" : ""}${maxHeight ? " rich-text-area--fixed-mobile" : ""}`}
+        className={`rich-text-area${resizable ? " rich-text-area--resizable" : ""}${(maxHeight || fillContainer) ? " rich-text-area--fixed-mobile" : ""}`}
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
         style={{
-          minHeight: fullscreen ? "60vh" : minHeight,
-          maxHeight: fullscreen ? undefined : maxHeight,
-          flex: fullscreen || resizable ? 1 : undefined,
-          overflowY: maxHeight ? "auto" : undefined,
+          minHeight: fullscreen ? "60vh" : (fillContainer ? minHeight : minHeight),
+          maxHeight: fullscreen || fillContainer ? undefined : maxHeight,
+          flex: fullscreen || resizable || fillContainer ? 1 : undefined,
+          overflowY: (maxHeight || fillContainer) ? "auto" : undefined,
         }}
         onInput={handleInput}
         onBlur={emitChange}

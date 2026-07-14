@@ -8,6 +8,7 @@ import {
   ResponsiveContainer, PieChart, Pie, BarChart, Bar, XAxis, YAxis, Cell, Tooltip, Legend, CartesianGrid, LabelList
 } from "recharts";
 import { Printer, Settings, RotateCcw } from "lucide-react";
+import { scalePageWidth } from "../constants/pageLayoutWidths.js";
 import { renderPieExternalLabel, toPersianChartDigits } from "../utils/chartLabelUtils.jsx";
 import { useChartContainerReady } from "../hooks/useChartContainerReady.js";
 // =========================================================================
@@ -80,7 +81,7 @@ export default function App() {
 
   return (
     <div style={{ padding: "20px", background: "#020617", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}>
-      <div style={{ width: "100%", maxWidth: "850px", background: "#0f172a", borderRadius: "16px", border: "1px solid #1e293b", padding: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
+      <div style={{ width: "100%", maxWidth: `${scalePageWidth(850)}px`, background: "#0f172a", borderRadius: "16px", border: "1px solid #1e293b", padding: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
         <StatChart data={mockData} title="نمودار توزیع فراوانی موضوعات پایش گزارش‌ها" isDarkMode={true} />
       </div>
     </div>

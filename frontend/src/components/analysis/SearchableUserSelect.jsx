@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import React, { useCallback, useMemo } from "react";
+import SearchableCombobox from "./SearchableCombobox.jsx";
 
 function normalizeUsers(data) {
   if (Array.isArray(data)) return data;
@@ -17,61 +17,53 @@ export default function SearchableUserSelect({
   labelStyle = {},
   label,
   required = false,
+  isDarkMode,
 }) {
-  const [search, setSearch] = useState("");
   const list = useMemo(() => normalizeUsers(users), [users]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((u) => (u.name || u.username || "").toLowerCase().includes(q));
-  }, [list, search]);
+  const filterUsers = useCallback((options, q) => {
+    const query = q.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((u) =>
+      (u.name || "").toLowerCase().includes(query) ||
+      (u.username || "").toLowerCase().includes(query) ||
+      (u.unit_name || "").toLowerCase().includes(query),
+    );
+  }, []);
 
-  const selected = list.find((u) => String(u.id) === String(value));
+  const getUserLabel = useCallback((u) => u.name || u.username || "", []);
+
+  const renderUser = useCallback((u, active) => (
+    <>
+      <span style={{ fontWeight: active ? 600 : 400 }}>{u.name || u.username}</span>
+      {(u.username || u.unit_name) && (
+        <span style={{ display: "block", fontSize: 10, opacity: 0.65, marginTop: 2 }}>
+          {[u.username, u.unit_name].filter(Boolean).join(" · ")}
+        </span>
+      )}
+    </>
+  ), []);
 
   return (
-    <div>
-      {label && (
-        <label style={labelStyle}>
-          {label}
-          {required ? " *" : ""}
-        </label>
-      )}
-      {list.length === 0 ? (
-        <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0", lineHeight: 1.6 }}>{emptyMessage}</p>
-      ) : (
-        <>
-          <div style={{ position: "relative", marginBottom: 6 }}>
-            <Search size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", opacity: 0.5, pointerEvents: "none" }} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="جستجو بر اساس نام..."
-              disabled={disabled}
-              style={{ ...inputStyle, paddingRight: 32, marginBottom: 0 }}
-            />
-          </div>
-          <select
-            style={inputStyle}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={disabled}
-          >
-            <option value="">{placeholder}</option>
-            {filtered.map((u) => (
-              <option key={u.id} value={u.id}>{u.name || u.username}</option>
-            ))}
-          </select>
-          {selected && !search && (
-            <p style={{ fontSize: 10, color: "#64748b", margin: "4px 0 0" }}>انتخاب‌شده: {selected.name}</p>
-          )}
-          {filtered.length === 0 && search && (
-            <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0" }}>نتیجه‌ای برای «{search}» یافت نشد</p>
-          )}
-        </>
-      )}
-    </div>
+    <SearchableCombobox
+      options={list}
+      value={value}
+      onChange={onChange}
+      getOptionValue={(u) => u.id}
+      getOptionLabel={getUserLabel}
+      filterOptions={filterUsers}
+      renderOption={renderUser}
+      placeholder={placeholder}
+      emptyListMessage={emptyMessage}
+      disabled={disabled}
+      inputStyle={inputStyle}
+      labelStyle={labelStyle}
+      label={label}
+      required={required}
+      isDarkMode={isDarkMode}
+      allowClear={!required}
+      clearLabel={placeholder}
+    />
   );
 }
 

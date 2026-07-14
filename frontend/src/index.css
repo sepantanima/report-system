@@ -57,6 +57,12 @@ button, input {
   font-family: Vazirmatn !important;
 }
 
+/* متن بلند: justify در همه textareaها و باکس‌های متنی فقط‌خواندنی */
+textarea,
+.text-justify {
+  text-align: justify;
+}
+
 @media (max-width: 640px) {
   .analysis-assign-table thead {
     display: none;

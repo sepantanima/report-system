@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { usePageFontSize } from "../../utils/pageFontSize.js";
 import PageToolbarButtons from "./PageToolbarButtons.jsx";
+import PageUserMenu from "./PageUserMenu.jsx";
 import { getFormPageTheme } from "../../theme/formPageTheme.js";
 
 /**
@@ -18,6 +19,8 @@ export default function StandardFormHeader({
   onBack,
   onHelp,
   showHelp = true,
+  showProfile = true,
+  showLogout = true,
   headerEnd,
   toolbarExtra,
   subRow,
@@ -60,6 +63,7 @@ export default function StandardFormHeader({
           showHelp={showHelp && !!onHelp}
           btnClass="v3-icon-btn"
         />
+        <PageUserMenu showProfile={showProfile} showLogout={showLogout} btnClass="v3-icon-btn" />
       </div>
     </div>
   );

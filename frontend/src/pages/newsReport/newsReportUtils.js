@@ -87,6 +87,18 @@ export function clampSlotIndex(mode, slotIndex) {
   return Math.min(Math.max(0, idx), slots.length - 1);
 }
 
+/** بازهٔ ۶/۳/۱۲ ساعتهٔ جاری بر اساس ساعت محلی مرورگر */
+export function getCurrentPresetSlotIndex(mode, date = new Date()) {
+  const slots = getSlotsForMode(mode);
+  if (!slots.length) return 0;
+  const hm = date.getHours() * 100 + date.getMinutes();
+  for (let i = slots.length - 1; i >= 0; i -= 1) {
+    const from = parseInt(slots[i].from.replace(":", ""), 10);
+    if (hm >= from) return i;
+  }
+  return 0;
+}
+
 export function resolveActivePeriod(state) {
   const {
     mode, reportDate, fromDate, toDate, fromTime, toTime, slotIndex,
@@ -156,6 +168,8 @@ function normalizeFilterIntArray(val) {
 export function buildReportFilters(filters) {
   const f = {};
   if (filters.keyword?.trim()) f.keyword = filters.keyword.trim();
+  if (filters.duplicate) f.duplicate = filters.duplicate;
+  if (filters.is_deleted != null) f.is_deleted = filters.is_deleted;
   const statuses = filters.statuses?.length ? filters.statuses : (filters.status ? [filters.status] : []);
   if (statuses.length === 1) f.status = statuses[0];
   else if (statuses.length > 1) f.statuses = statuses;
@@ -270,19 +284,84 @@ export function buildOutputFormatsFromKeys(keys = []) {
     .map((c) => ({ ...c.output }));
 }
 
-export const DEFAULT_CONTENT_FILTERS = {
-  keyword: "",
-  status: "",
-  statuses: [],
-  priorities: [],
-  qualities: [],
-  categories: [],
-  sources: [],
-  unit_cd: "",
-  units: [],
-  role: "",
-  user_id: "",
+export const FALLBACK_REPORT_WORKFLOW_FILTERS = {
+  duplicate: "exclude",
+  is_deleted: false,
+  statuses: ["published"],
+  qualities: [3, 4, 5],
+  priorities: [1, 2, 3],
 };
+
+export function buildContentFiltersFromWorkflow(workflowDefaults) {
+  const defs = workflowDefaults || FALLBACK_REPORT_WORKFLOW_FILTERS;
+  return {
+    keyword: "",
+    status: "",
+    statuses: [...(defs.statuses || FALLBACK_REPORT_WORKFLOW_FILTERS.statuses)],
+    priorities: [...(defs.priorities || FALLBACK_REPORT_WORKFLOW_FILTERS.priorities)],
+    qualities: [...(defs.qualities || FALLBACK_REPORT_WORKFLOW_FILTERS.qualities)],
+    duplicate: defs.duplicate ?? "exclude",
+    is_deleted: defs.is_deleted ?? false,
+    categories: [],
+    sources: [],
+    unit_cd: "",
+    units: [],
+    role: "",
+    user_id: "",
+  };
+}
+
+export const DEFAULT_CONTENT_FILTERS = buildContentFiltersFromWorkflow(null);
+
+export function applyPackCountsToPackState(packState, packCounts) {
+  if (!packCounts || !packState?.packTypes?.length) return packState;
+  const packTypes = packState.packTypes.filter((t) => (packCounts[t.key] ?? 0) > 0);
+  const enabledTypes = {};
+  const formats = {};
+  for (const t of packTypes) {
+    enabledTypes[t.key] = !!packState.enabledTypes[t.key];
+    formats[t.key] = [...(packState.formats[t.key] || [])];
+  }
+  return { ...packState, packTypes, enabledTypes, formats };
+}
+
+export function initPackStateFromDefaults(packDefaults) {
+  const defs = packDefaults?.pack_types || [];
+  const enabledTypes = {};
+  const formats = {};
+  for (const t of defs) {
+    enabledTypes[t.key] = t.enabled_by_default !== false;
+    formats[t.key] = [...(t.format_keys || [])];
+  }
+  return {
+    packTypes: defs,
+    enabledTypes,
+    formats,
+    delivery: packDefaults?.default_delivery === "separate" ? "separate" : "zip",
+  };
+}
+
+export function buildPackItemsFromState(packState) {
+  const { enabledTypes, formats } = packState;
+  return Object.keys(enabledTypes)
+    .filter((key) => enabledTypes[key])
+    .map((packKey) => ({
+      pack_key: packKey,
+      format_keys: (formats[packKey] || []).filter(Boolean),
+    }))
+    .filter((item) => item.format_keys.length);
+}
+
+export function buildPackGenerateBody(queryPayload, { label, selectedIds, packState }) {
+  const packItems = buildPackItemsFromState(packState);
+  return buildReportApiBody(queryPayload, {
+    label,
+    selected_ids: selectedIds?.length ? selectedIds : undefined,
+    report_kind: "list",
+    pack_items: packItems,
+    delivery: packState.delivery || "zip",
+  });
+}
 
 function formatTimeFa(time) {
   if (time === "24:00") return "۲۴:۰۰";
@@ -306,21 +385,38 @@ function buildPeriodTitlePart(state) {
   return `از ${fromDateLabel} ساعت ${fromT} تا ${toDateLabel} ساعت ${toT}`;
 }
 
-export function buildNewsReportTitle(state, meta) {
+export function buildNewsReportTitle(state) {
   const periodPart = buildPeriodTitlePart(state);
-  const filtersForLabels = { ...state.filters };
-  if (!filtersForLabels.status) delete filtersForLabels.status;
+  return `گزارش اخبار ${periodPart}`;
+}
 
-  const filterLabels = buildNewsFilterLabels(filtersForLabels, meta);
+/** خلاصهٔ فیلترهای فعال — نمایش جدا از عنوان */
+export function buildNewsReportFilterSummary(state, meta) {
+  const labels = buildNewsFilterLabels(state.filters, meta);
   if (state.filters.keyword?.trim()) {
-    filterLabels.unshift(`شامل کلیدواژه «${state.filters.keyword.trim()}»`);
+    labels.unshift(`شامل کلیدواژه «${state.filters.keyword.trim()}»`);
   }
+  if (!labels.length) return "";
+  return labels.join(" · ");
+}
 
-  let title = `گزارش اخبار ${periodPart}`;
-  if (filterLabels.length) {
-    title += ` — ${filterLabels.join(" · ")}`;
-  }
-  return title;
+export function buildPackSummaryText(packState) {
+  const enabledTypes = (packState.packTypes || []).filter((t) => packState.enabledTypes[t.key]);
+  if (!enabledTypes.length) return "";
+  const typeLabels = enabledTypes.map((t) => t.label);
+  const formatKeySet = new Set();
+  enabledTypes.forEach((t) => (packState.formats[t.key] || []).forEach((k) => formatKeySet.add(k)));
+  const formatLabels = OUTPUT_FORMAT_CHOICES
+    .filter((c) => formatKeySet.has(c.key))
+    .map((c) => c.label);
+  let typesPart = typeLabels[0];
+  if (typeLabels.length === 2) typesPart = `${typeLabels[0]} و ${typeLabels[1]}`;
+  else if (typeLabels.length > 2) typesPart = `${typeLabels.slice(0, -1).join("، ")} و ${typeLabels.at(-1)}`;
+  if (!formatLabels.length) return `گزارش ${typesPart}`;
+  const formatsPart = formatLabels.length > 1
+    ? `${formatLabels.slice(0, -1).join("، ")} و ${formatLabels.at(-1)}`
+    : formatLabels[0];
+  return `گزارش ${typesPart} در فرمت‌های ${formatsPart}`;
 }
 
 function hmFromTime(time) {

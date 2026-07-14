@@ -11,3 +11,6 @@ export function getFormPageTheme(isDarkMode) {
     accent: "#38bdf8",
   };
 }
+
+/** بالاتر از هدر چسبان فرم (z-index: 100)، هم‌تراز با v3-modal-overlay */
+export const FORM_PAGE_MODAL_Z_INDEX = 2000;

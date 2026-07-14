@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import Login from "./pages/login";
 import MainForm from "./pages/MainForm";
@@ -10,17 +10,20 @@ import NewsAnalyticsDashboard from "./pages/NewsAnalyticsDashboard.jsx";
 import UnitReportForm from "./pages/UnitReportForm";
 import FieldMonitor from "./pages/FieldMonitor";
 import FieldReportDashboard from './pages/FieldReportDashboard';
-import SystemSetting from './pages/SystemSetting';
+import UnmappedSendersAdmin from "./pages/UnmappedSendersAdmin.jsx";
+import SystemSetting from "./pages/SystemSetting.jsx";
 import NewsSmartAnalysisWorkspace from "./pages/newsSmartAnalysis/NewsSmartAnalysisWorkspace.jsx";
-import AnalysisManagerRedirect from "./pages/AnalysisManager";
-import AnalysisMissionDetail from "./pages/AnalysisMissionDetail";
 import AnalysisManagerPanel from "./pages/analysis/AnalysisManagerPanel";
-import AnalysisAnalystMissions from "./pages/analysis/AnalysisAnalystMissions";
-import AnalysisTopicForm from "./pages/analysis/AnalysisTopicForm";
-import AnalysisMentorReview from "./pages/analysis/AnalysisMentorReview";
+import AnalysisMissionPanel from "./pages/analysis/AnalysisMissionPanel";
+import AnalysisTopicManagement from "./pages/analysis/AnalysisTopicManagement";
+import AnalysisDashboard from "./pages/analysis/AnalysisDashboard";
+import AnalysisMyMissionsPanel from "./pages/analysis/AnalysisMyMissionsPanel";
+import AnalysisMissionDetail from "./pages/AnalysisMissionDetail";
 import AnalysisTopicApprovalDetail from "./pages/analysis/AnalysisTopicApprovalDetail";
 import AnalysisTopicAssignDetail from "./pages/analysis/AnalysisTopicAssignDetail";
 import AnalysisMissionManage from "./pages/analysis/AnalysisMissionManage";
+import AnalysisBriefSubmit from "./pages/analysis/AnalysisBriefSubmit";
+import AnalysisPermissionRoute from "./components/analysis/AnalysisPermissionRoute.jsx";
 import PromptManagement from "./pages/PromptManagement.jsx";
 import AiApiManagement from "./pages/AiApiManagement.jsx";
 import AiFormActionsManagement from "./pages/AiFormActionsManagement.jsx";
@@ -43,6 +46,34 @@ const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("token");
   return token ? children : <Navigate to="/" />;
 };
+
+function LegacyApproveDetailRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/analysis/topics/${id}?tab=queue`} replace />;
+}
+
+function LegacyApproveTopicsRedirect() {
+  return <Navigate to="/analysis/topics?tab=queue" replace />;
+}
+
+function LegacyManagementTopicRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/analysis/missions/topic/${id}`} replace />;
+}
+
+function LegacyManagementMissionRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/analysis/missions/mission/${id}`} replace />;
+}
+
+function LegacyProposeTopicRedirect() {
+  return <Navigate to="/analysis/topics?tab=mine" replace />;
+}
+
+function LegacyApproveTopicsDetailRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/analysis/topics/${id}?tab=queue`} replace />;
+}
 
 function App() {
   return (
@@ -85,17 +116,27 @@ function App() {
         <Route path="/messages" element={<PrivateRoute><MessageInboxPage /></PrivateRoute>} />
         <Route path="/messages/compose" element={<PrivateRoute><ComposeAnnouncementPage /></PrivateRoute>} />
         <Route path="/admin/message-settings" element={<PrivateRoute><MessageSettingsAdmin /></PrivateRoute>} />
+        <Route path="/admin/unmapped-senders" element={<PrivateRoute><UnmappedSendersAdmin /></PrivateRoute>} />
         <Route path="/SystemSetting" element={<PrivateRoute><SystemSetting /></PrivateRoute>} />
-        <Route path="/analysis/management" element={<PrivateRoute><AnalysisManagerPanel /></PrivateRoute>} />
-        <Route path="/analysis/management/approve/:id" element={<PrivateRoute><AnalysisTopicApprovalDetail /></PrivateRoute>} />
-        <Route path="/analysis/management/topic/:id" element={<PrivateRoute><AnalysisTopicAssignDetail /></PrivateRoute>} />
-        <Route path="/analysis/management/mission/:id" element={<PrivateRoute><AnalysisMissionManage /></PrivateRoute>} />
-        <Route path="/analysis/my-missions" element={<PrivateRoute><AnalysisAnalystMissions /></PrivateRoute>} />
-        <Route path="/analysis/propose-topic" element={<PrivateRoute><AnalysisTopicForm /></PrivateRoute>} />
-        <Route path="/analysis/review" element={<PrivateRoute><AnalysisMentorReview /></PrivateRoute>} />
-        <Route path="/analysis/mission/:id" element={<PrivateRoute><AnalysisMissionDetail /></PrivateRoute>} />
-        <Route path="/analysis-manager" element={<PrivateRoute><AnalysisManagerRedirect /></PrivateRoute>} />
-        <Route path="/analysis-manager/mission/:id" element={<PrivateRoute><AnalysisMissionDetail /></PrivateRoute>} />
+        <Route path="/analysis/topics" element={<AnalysisPermissionRoute permission={["analysis_propose", "analysis_topic_approve", "analysis_manage"]}><AnalysisTopicManagement /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/topics/:id" element={<AnalysisPermissionRoute permission={["analysis_manage", "analysis_topic_approve"]}><AnalysisTopicApprovalDetail /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/missions" element={<AnalysisPermissionRoute permission="analysis_manage"><AnalysisMissionPanel /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/missions/topic/:id" element={<AnalysisPermissionRoute permission="analysis_manage"><AnalysisTopicAssignDetail /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/missions/mission/:id" element={<AnalysisPermissionRoute permission="analysis_manage"><AnalysisMissionManage /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/management" element={<AnalysisPermissionRoute permission="analysis_manage"><AnalysisManagerPanel /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/approve-topics" element={<LegacyApproveTopicsRedirect />} />
+        <Route path="/analysis/approve-topics/:id" element={<LegacyApproveTopicsDetailRedirect />} />
+        <Route path="/analysis/management/approve/:id" element={<LegacyApproveDetailRedirect />} />
+        <Route path="/analysis/management/topic/:id" element={<LegacyManagementTopicRedirect />} />
+        <Route path="/analysis/management/mission/:id" element={<LegacyManagementMissionRedirect />} />
+        <Route path="/analysis/dashboard" element={<AnalysisPermissionRoute permission="analysis_manage"><AnalysisDashboard /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/my-missions" element={<AnalysisPermissionRoute permission={["analysis_missions", "analysis_review"]}><AnalysisMyMissionsPanel /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/propose-topic" element={<LegacyProposeTopicRedirect />} />
+        <Route path="/analysis/review" element={<Navigate to="/analysis/my-missions?tab=review" replace />} />
+        <Route path="/analysis/mission/:id" element={<AnalysisPermissionRoute permission={["analysis_missions", "analysis_review", "analysis_manage"]}><AnalysisMissionDetail /></AnalysisPermissionRoute>} />
+        <Route path="/analysis/brief-submit" element={<AnalysisPermissionRoute permission="analysis_brief_submit"><AnalysisBriefSubmit /></AnalysisPermissionRoute>} />
+        <Route path="/analysis-manager" element={<Navigate to="/analysis/missions" replace />} />
+        <Route path="/analysis-manager/mission/:id" element={<Navigate to="/analysis/mission/:id" replace />} />
 
         {/* هدایت خودکار مسیرهای اشتباه به صفحه ورود */}
         <Route path="*" element={<Navigate to="/" />} />

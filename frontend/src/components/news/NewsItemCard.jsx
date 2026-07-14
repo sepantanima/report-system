@@ -1,10 +1,11 @@
 import React from "react";
-import { Clock, User, AlertCircle } from "lucide-react";
+import { Clock, User, AlertCircle, Edit3 } from "lucide-react";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import { getNewsDisplayStatus } from "../../utils/newsDisplayStatus.js";
 import NewsHtmlPreview from "./NewsHtmlPreview.jsx";
 import NewsCardQuickActions from "./NewsCardQuickActions.jsx";
 import { resolveNewsDisplayHtml } from "../../utils/newsDisplayHtml.js";
+import { pxToEm } from "../../utils/pageFontSize.js";
 
 const badge = (color, bgAlpha = "22") => ({
   fontSize: 9,
@@ -19,27 +20,39 @@ const badge = (color, bgAlpha = "22") => ({
 export default function NewsItemCard({
   item,
   theme,
-  fontSizeLevel = 2,
   compact = false,
+  mobileLayout = false,
   selected = false,
   roles,
   busy = false,
   onQuickVerdict,
   onFinalize,
+  onFinalizePublish,
+  onFinalizeBank,
+  onChiefReject,
   onToggleDuplicate,
-  onToggleImportant,
+  onEdit,
 }) {
-  const fSizes = { 1: 12, 2: 13, 3: 14, 4: 15 };
   const displayHtml = resolveNewsDisplayHtml(item);
   const { primaryLabel, primaryColor, secondaryTags } = getNewsDisplayStatus(item);
   const isDup = item.duplicate_status && item.duplicate_status !== "none";
+  const isAiEditorial = item.editorial_state === "ai";
+
+  const displaySender = item.resolved_sender_name || item.sender || item.observer_first_name || item.observer_username || "—";
+  const senderUnmapped = item.sender && !item.resolved_user_id;
+  const dateStr = toPersianDigits(String(item.source_date_jalali || "").replace(/-/g, "/"));
+  const timeStr = toPersianDigits(item.source_time_hm || "");
 
   return (
     <div
       className="v3-report-card"
       style={{
-        background: selected ? "rgba(56,189,248,0.08)" : theme.card,
-        border: isDup ? "1px solid rgba(148,163,184,0.45)" : `1px solid ${theme.border}`,
+        background: selected
+          ? "rgba(56,189,248,0.08)"
+          : (isAiEditorial ? "rgba(168,85,247,0.06)" : theme.card),
+        border: isDup
+          ? "1px solid rgba(148,163,184,0.45)"
+          : (isAiEditorial ? "1px solid rgba(168,85,247,0.45)" : `1px solid ${theme.border}`),
         position: "relative",
         opacity: isDup ? 0.88 : 1,
         padding: compact ? 10 : undefined,
@@ -52,11 +65,16 @@ export default function NewsItemCard({
           <div style={{ fontSize: 10, color: theme.accent || "#38bdf8", marginBottom: 4 }}>{item.source || "—"}</div>
           <div style={{ fontSize: 11, opacity: 0.75, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <User size={11} />
-            <span>{item.sender || item.observer_first_name || item.observer_username || "—"}</span>
+            <span>{displaySender}</span>
+            {senderUnmapped ? (
+              <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 6, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.35)" }}>
+                نامشخص
+              </span>
+            ) : null}
             <Clock size={11} />
             <span>
-              {toPersianDigits(String(item.source_date_jalali || "").replace(/-/g, "/"))}{" "}
-              {toPersianDigits(item.source_time_hm || "")}
+              {dateStr}{" "}
+              {timeStr}
             </span>
             <span style={{ opacity: 0.6 }}>#{toPersianDigits(item.id)}</span>
           </div>
@@ -79,13 +97,15 @@ export default function NewsItemCard({
 
       <NewsHtmlPreview
         html={displayHtml}
-        compact={compact}
+        compact={compact && !mobileLayout}
+        scrollable={mobileLayout}
         isDarkMode={theme.isDarkMode !== false}
-        style={{ fontSize: fSizes[fontSizeLevel], margin: "0 0 10px", flex: 1 }}
+        className="page-scalable-text"
+        style={{ margin: "0 0 10px", flex: 1 }}
       />
 
       {item.status_note ? (
-        <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4, padding: "6px 8px", borderRadius: 8, background: "rgba(148,163,184,0.1)" }}>
+        <div className="page-scalable-text-sm" style={{ opacity: 0.8, marginBottom: 4, padding: "6px 8px", borderRadius: 8, background: "rgba(148,163,184,0.1)" }}>
           <AlertCircle size={12} style={{ display: "inline", marginLeft: 4 }} />
           {item.status_note}
         </div>
@@ -98,9 +118,51 @@ export default function NewsItemCard({
         busy={busy}
         onQuickVerdict={onQuickVerdict}
         onFinalize={onFinalize}
+        onFinalizePublish={onFinalizePublish}
+        onFinalizeBank={onFinalizeBank}
+        onChiefReject={onChiefReject}
         onToggleDuplicate={onToggleDuplicate}
-        onToggleImportant={onToggleImportant}
       />
+
+      {mobileLayout && onEdit ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: 10,
+            paddingTop: 8,
+            borderTop: `1px dashed ${theme.border}`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 4, opacity: 0.55, fontSize: pxToEm(10) }}>
+            <Clock size={11} />
+            <span>{[dateStr, timeStr].filter(Boolean).join(" · ")}</span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEdit(item.id); }}
+            title="ویرایش خبر"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: `1px solid ${theme.accent || "#38bdf8"}55`,
+              background: "rgba(56,189,248,0.1)",
+              color: theme.accent || "#38bdf8",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: pxToEm(11),
+              fontWeight: 600,
+            }}
+          >
+            <Edit3 size={14} />
+            ویرایش
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

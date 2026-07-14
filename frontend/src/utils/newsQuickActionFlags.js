@@ -26,6 +26,9 @@ export function getNewsQuickActionFlags(item, roles) {
   return {
     canVerdict: canReview && isEditorQueue && (level === "editor" || level === "chief" || level === "admin"),
     canFinalize: canFinalizePerm && isChiefQueue && (level === "chief" || level === "admin"),
+    canChiefPublish: canFinalizePerm && isChiefQueue && (level === "chief" || level === "admin"),
+    canChiefBank: canFinalizePerm && isChiefQueue && (level === "chief" || level === "admin"),
+    canChiefReject: canFinalizePerm && isChiefQueue && (level === "chief" || level === "admin"),
     canToggleDuplicate: canReview && !dupConfirmed && (level === "editor" || level === "chief" || level === "admin"),
     canSetPriority: canReview && (level === "editor" || level === "chief" || level === "admin"),
   };

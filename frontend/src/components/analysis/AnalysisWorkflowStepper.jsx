@@ -3,14 +3,13 @@ import { Check } from "lucide-react";
 import { WORKFLOW_STEPS } from "../../constants/analysisTerminology.js";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 
-const STEP_ORDER = ["propose", "ratify", "assign", "analyze"];
+const STEP_ORDER = ["propose", "ratify", "assign", "analyze", "review", "finalize"];
 
 function stepIndex(stepId) {
   return STEP_ORDER.indexOf(stepId);
 }
 
-function isStepComplete(stepId, topicStatus) {
-  if (!topicStatus) return false;
+function topicStepProgress(topicStatus) {
   const statusOrder = {
     Draft: 0,
     Submitted: 1,
@@ -18,18 +17,50 @@ function isStepComplete(stepId, topicStatus) {
     Rejected: 1,
     Approved: 2,
     Assigned: 3,
-    Closed: 2,
+    Completed: 6,
+    Closed: 1,
   };
-  const idx = statusOrder[topicStatus] ?? 0;
+  return statusOrder[topicStatus] ?? 0;
+}
+
+function missionStepProgress(missionStatus) {
+  const map = {
+    Assigned: 3,
+    InProgress: 3,
+    Submitted: 4,
+    UnderReview: 4,
+    NeedsRevision: 3,
+    Revised: 4,
+    FinalApproved: 5,
+    Archived: 5,
+    Cancelled: 3,
+  };
+  return map[missionStatus] ?? 3;
+}
+
+function isStepComplete(stepId, topicStatus, missionStatus) {
   const stepIdx = stepIndex(stepId);
-  if (stepIdx < 2) return idx >= stepIdx + 1;
-  if (stepId === "ratify") return idx >= 2;
-  if (stepId === "assign") return idx >= 3;
-  if (stepId === "analyze") return idx >= 3;
+  if (stepIdx < 0) return false;
+
+  const progress = missionStatus != null
+    ? missionStepProgress(missionStatus)
+    : topicStepProgress(topicStatus);
+
+  if (stepId === "propose") return progress >= 1;
+  if (stepId === "ratify") return progress >= 2;
+  if (stepId === "assign") return progress >= 3;
+  if (stepId === "analyze") return progress >= 4 || ["Submitted", "UnderReview", "NeedsRevision", "Revised"].includes(missionStatus);
+  if (stepId === "review") return progress >= 4 && missionStatus !== "Assigned" && missionStatus !== "InProgress";
+  if (stepId === "finalize") return progress >= 5 || topicStatus === "Completed";
   return false;
 }
 
-export default function AnalysisWorkflowStepper({ currentStep, topicStatus, compact = false }) {
+export default function AnalysisWorkflowStepper({
+  currentStep,
+  topicStatus,
+  missionStatus,
+  compact = false,
+}) {
   const currentIdx = stepIndex(currentStep);
 
   return (
@@ -46,7 +77,7 @@ export default function AnalysisWorkflowStepper({ currentStep, topicStatus, comp
       }}
     >
       {WORKFLOW_STEPS.map((step, i) => {
-        const done = isStepComplete(step.id, topicStatus);
+        const done = isStepComplete(step.id, topicStatus, missionStatus);
         const active = step.id === currentStep;
         const upcoming = i > currentIdx && !done;
         const color = done ? "#22c55e" : active ? "#38bdf8" : upcoming ? "#64748b" : "#94a3b8";

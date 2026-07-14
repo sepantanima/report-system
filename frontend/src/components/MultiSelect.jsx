@@ -49,18 +49,21 @@ export default function MultiSelect({
   const colors = useMemo(() => {
     const isLight = theme ? theme.isDarkMode === false : !appIsDark;
     if (isLight) {
-      return {
-        bg: theme.card || DEFAULT_LIGHT.bg,
-        border: theme.border || DEFAULT_LIGHT.border,
-        text: theme.text || DEFAULT_LIGHT.text,
-        dropdownBg: theme.card || DEFAULT_LIGHT.dropdownBg,
-        inputBg: theme.bg || DEFAULT_LIGHT.inputBg,
-        chipBg: DEFAULT_LIGHT.chipBg,
-        chipBorder: DEFAULT_LIGHT.chipBorder,
-        chipText: DEFAULT_LIGHT.chipText,
-        activeBg: DEFAULT_LIGHT.activeBg,
-        activeText: DEFAULT_LIGHT.activeText,
-      };
+      if (theme) {
+        return {
+          bg: theme.card || DEFAULT_LIGHT.bg,
+          border: theme.border || DEFAULT_LIGHT.border,
+          text: theme.text || DEFAULT_LIGHT.text,
+          dropdownBg: theme.card || DEFAULT_LIGHT.dropdownBg,
+          inputBg: theme.bg || DEFAULT_LIGHT.inputBg,
+          chipBg: DEFAULT_LIGHT.chipBg,
+          chipBorder: DEFAULT_LIGHT.chipBorder,
+          chipText: DEFAULT_LIGHT.chipText,
+          activeBg: DEFAULT_LIGHT.activeBg,
+          activeText: DEFAULT_LIGHT.activeText,
+        };
+      }
+      return DEFAULT_LIGHT;
     }
     if (theme) {
       return {
@@ -133,7 +136,8 @@ export default function MultiSelect({
     if (remoteSearch) return options;
     const q = search.trim();
     if (!q) return options;
-    return options.filter((o) => String(o.label).includes(q));
+    const ql = q.toLowerCase();
+    return options.filter((o) => String(o.label).toLowerCase().includes(ql));
   }, [options, search, remoteSearch]);
 
   useEffect(() => {

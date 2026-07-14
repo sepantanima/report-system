@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Check, X, Sparkles, Copy, CheckCircle, Loader2, Star } from "lucide-react";
+import { Check, X, Sparkles, Copy, Loader2 } from "lucide-react";
 import { getNewsQuickActionFlags } from "../../utils/newsQuickActionFlags.js";
 import { pxToEm } from "../../utils/pageFontSize.js";
-import { NEWS_PRIORITIES } from "../../constants/newsMonitorMeta.js";
+import NewsPriorityConfirmSheet from "./NewsPriorityConfirmSheet.jsx";
+import NewsChiefActionButtons from "./NewsChiefActionButtons.jsx";
 
 export default function NewsCardQuickActions({
   item,
@@ -11,14 +12,17 @@ export default function NewsCardQuickActions({
   busy = false,
   onQuickVerdict,
   onFinalize,
+  onFinalizePublish,
+  onFinalizeBank,
+  onChiefReject,
   onToggleDuplicate,
-  onToggleImportant,
 }) {
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [showPrioritySheet, setShowPrioritySheet] = useState(false);
   const flags = getNewsQuickActionFlags(item, roles);
 
-  if (!flags.canVerdict && !flags.canFinalize && !flags.canToggleDuplicate && !flags.canSetPriority) {
+  if (!flags.canVerdict && !flags.canFinalize && !flags.canChiefPublish && !flags.canToggleDuplicate) {
     return null;
   }
 
@@ -43,12 +47,23 @@ export default function NewsCardQuickActions({
   });
 
   const isSuspicious = item.duplicate_status === "suspicious";
-  const priority = Number(item.priority || 3);
-  const isImportant = priority === 1 || priority === 2;
-  const importantMeta = NEWS_PRIORITIES[2];
+
+  const handleApproveConfirm = (priority) => {
+    setShowPrioritySheet(false);
+    onQuickVerdict?.(item.id, "approved", undefined, priority);
+  };
 
   return (
     <div onClick={stop} onKeyDown={stop} role="presentation">
+      <NewsPriorityConfirmSheet
+        open={showPrioritySheet}
+        onClose={() => !busy && setShowPrioritySheet(false)}
+        onConfirm={handleApproveConfirm}
+        theme={theme}
+        busy={busy}
+        initialPriority={item.priority}
+      />
+
       {showRejectBox ? (
         <div
           style={{
@@ -64,7 +79,7 @@ export default function NewsCardQuickActions({
           <input
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="دلیل رد (اختیاری)..."
+            placeholder="دلیل برگشت به فرستنده (اختیاری)..."
             maxLength={200}
             style={{
               width: "100%",
@@ -97,7 +112,7 @@ export default function NewsCardQuickActions({
               }}
               style={btnStyle("#ef4444", "rgba(239,68,68,0.15)")}
             >
-              تأیید رد
+              تأیید برگشت
             </button>
           </div>
         </div>
@@ -115,7 +130,7 @@ export default function NewsCardQuickActions({
                 type="button"
                 disabled={busy}
                 title="تأیید"
-                onClick={() => onQuickVerdict?.(item.id, "approved")}
+                onClick={() => setShowPrioritySheet(true)}
                 style={btnStyle("#22c55e", "rgba(34,197,94,0.15)")}
               >
                 <Check size={12} /> تأیید
@@ -123,11 +138,11 @@ export default function NewsCardQuickActions({
               <button
                 type="button"
                 disabled={busy}
-                title="رد"
+                title="برگشت به فرستنده — ایراد در خبررسانی، نه کذب محتوا"
                 onClick={() => setShowRejectBox(true)}
                 style={btnStyle("#ef4444", "rgba(239,68,68,0.12)")}
               >
-                <X size={12} /> رد
+                <X size={12} /> برگشت
               </button>
               <button
                 type="button"
@@ -157,34 +172,17 @@ export default function NewsCardQuickActions({
             </button>
           ) : null}
 
-          {flags.canSetPriority ? (
-            <button
-              type="button"
-              disabled={busy}
-              title={isImportant ? "برگشت به اهمیت عادی" : "علامت‌گذاری به‌عنوان مهم"}
-              onClick={() => onToggleImportant?.(item.id)}
-              style={btnStyle(
-                importantMeta.color,
-                isImportant ? `${importantMeta.color}33` : `${importantMeta.color}18`,
-                isImportant ? `1px solid ${importantMeta.color}` : undefined,
-              )}
-            >
-              <Star size={12} fill={isImportant ? importantMeta.color : "none"} />
-              {isImportant ? "لغو مهم" : "مهم"}
-            </button>
-          ) : null}
-
           {flags.canFinalize ? (
-            <button
-              type="button"
-              disabled={busy}
-              title="تأیید نهایی"
-              onClick={() => onFinalize?.(item.id)}
-              style={btnStyle("#22c55e", "#22c55e", "none")}
-            >
-              <CheckCircle size={12} color="#fff" />
-              <span style={{ color: "#fff" }}>تأیید نهایی</span>
-            </button>
+            <NewsChiefActionButtons
+              item={item}
+              theme={theme}
+              busy={busy}
+              compact
+              onFinalizeReturn={onFinalize}
+              onFinalizePublish={onFinalizePublish}
+              onFinalizeBank={onFinalizeBank}
+              onChiefReject={onChiefReject}
+            />
           ) : null}
         </div>
       )}

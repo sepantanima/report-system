@@ -5,16 +5,14 @@ import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 const STEPS = [
   { id: 1, label: "جستجو" },
   { id: 2, label: "انتخاب" },
-  { id: 3, label: "تحلیل و خروجی" },
 ];
 
 export default function NewsSmartAnalysisStepNav({
-  step, onStepChange, canGoToStep2, canGoToStep3, theme, isMobile, blocked = false,
+  step, onStepChange, canGoToStep2, theme, isMobile, blocked = false,
 }) {
   const canGo = (id) => {
     if (id === 1) return true;
     if (id === 2) return canGoToStep2;
-    if (id === 3) return canGoToStep3;
     return false;
   };
 
@@ -22,13 +20,9 @@ export default function NewsSmartAnalysisStepNav({
   const goNext = () => {
     if (blocked) return;
     if (step === 1 && canGoToStep2) onStepChange(2);
-    else if (step === 2 && canGoToStep3) onStepChange(3);
   };
 
-  const nextDisabled = blocked
-    || (step === 1 && !canGoToStep2)
-    || (step === 2 && !canGoToStep3)
-    || step === 3;
+  const nextDisabled = blocked || (step === 1 && !canGoToStep2) || step === 2;
 
   return (
     <div style={{
