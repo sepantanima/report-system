@@ -11,6 +11,8 @@ export const FORM_AI_NAMES = {
   ACTION_ANALYZE_RISK: "analyze_risk",
   NEWS_EDITORIAL_BATCH: "news_editorial_batch",
   ACTION_RUN_EDITORIAL: "run_editorial",
+  STRATEGY_COMMAND_OUTPUTS: "strategy_command_outputs",
+  ACTION_GENERATE_SOFT_WAR_ANNEX: "generate_soft_war_annex",
   SAMPLE_FORM: "sample_form",
   ACTION_SAMPLE_SUMMARIZE: "sample_summarize",
   ACTION_SAMPLE_SECURE: "sample_secure",
@@ -78,6 +80,17 @@ export const REGISTERED_FORM_AI_ACTIONS = [
         action_name: FORM_AI_NAMES.ACTION_RUN_EDITORIAL,
         label_fa: "پالایش و دبیری دسته‌ای",
         default_button_label_fa: "پالایش و دبیری هوشمند",
+      },
+    ],
+  },
+  {
+    form_name: FORM_AI_NAMES.STRATEGY_COMMAND_OUTPUTS,
+    label_fa: "خروجی‌های راهبردی مرکز فرماندهی",
+    actions: [
+      {
+        action_name: FORM_AI_NAMES.ACTION_GENERATE_SOFT_WAR_ANNEX,
+        label_fa: "تولید پیوست جنگ نرم",
+        default_button_label_fa: "تولید پیوست جنگ نرم",
       },
     ],
   },

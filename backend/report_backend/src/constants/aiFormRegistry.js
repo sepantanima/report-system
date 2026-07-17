@@ -20,6 +20,10 @@ export const REGISTERED_FORM_ACTION_KEYS = [
     actions: ["run_editorial"],
   },
   {
+    form_name: "strategy_command_outputs",
+    actions: ["generate_soft_war_annex"],
+  },
+  {
     form_name: "sample_form",
     actions: ["sample_summarize", "sample_secure"],
   },

@@ -22,6 +22,7 @@ import messagesRoutes from "./routes/messages.js";
 import adminMessageSettingsRoutes from "./routes/adminMessageSettings.js";
 import adminUserMessengerAccountsRoutes from "./routes/adminUserMessengerAccounts.js";
 import messengerRoutes from "./routes/messengerRoutes.js";
+import commandCenterRoutes from "./routes/commandCenter.js";
 import { getPdfEngineInfo } from "./services/newsReportPdf.js";
 
 const app = express();
@@ -94,6 +95,7 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/admin/message-settings", adminMessageSettingsRoutes);
 app.use("/api/admin", adminUserMessengerAccountsRoutes);
 app.use("/api/messenger", messengerRoutes);
+app.use("/api/command", commandCenterRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Report API running" });

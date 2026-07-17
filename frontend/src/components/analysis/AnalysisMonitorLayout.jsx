@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import ThemedDatePicker from "../../components/analysis/ThemedDatePicker.jsx";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -42,6 +42,7 @@ export default function AnalysisMonitorLayout({
   fillViewport = false,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const sidebarRef = useRef(null);
   const { isDarkMode } = useAppTheme();
   const { level: fontLevel, cycleFont, fontSizePx } = usePageFontSize();
@@ -73,6 +74,15 @@ export default function AnalysisMonitorLayout({
     if (onHelp) setShowHelp(true);
   };
 
+  const handleBack = () => {
+    const returnTo = location.state?.returnTo;
+    if (typeof returnTo === "string" && returnTo.startsWith("/")) {
+      navigate(returnTo);
+      return;
+    }
+    navigate(backTo);
+  };
+
   return (
     <div
       className="page-font-root"
@@ -94,7 +104,7 @@ export default function AnalysisMonitorLayout({
 
       <header className="v3-navbar" style={{ background: theme.card, borderBottom: `1px solid ${theme.border}` }}>
         <div className="v3-nav-row">
-          <button type="button" onClick={() => navigate(backTo)} className="v3-icon-btn"><ArrowRight size={18} /></button>
+          <button type="button" onClick={handleBack} className="v3-icon-btn"><ArrowRight size={18} /></button>
           <div className="v3-search-input" style={{ background: theme.inputBg, border: `1px solid ${theme.border}` }}>
             <Search size={16} />
             <input placeholder={searchPlaceholder} value={searchTerm} onChange={(e) => onSearchChange(e.target.value)} />

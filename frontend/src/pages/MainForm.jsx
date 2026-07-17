@@ -23,6 +23,10 @@ import {
   CheckCircle,
   BarChart3,
   Layers,
+  Crosshair,
+  Radio,
+  ScrollText,
+  FilePenLine,
 } from "lucide-react";
 import {
   decodeToken,
@@ -45,6 +49,7 @@ const ACTION_CATEGORIES = [
   { id: "field", title: "گزارشات میدانی", color: "#06b6d4" },
   { id: "analysis", title: "فرایند تحلیل", color: "#10b981" },
   { id: "news", title: "اخبار و پردازش", color: "#a855f7" },
+  { id: "command", title: "مرکز فرماندهی", color: "#e11d48" },
   { id: "system", title: "مدیریت و گزارشات", color: "#f59e0b" },
 ];
 
@@ -72,6 +77,10 @@ const CATEGORY_THEMES = {
   news: {
     base: "#a855f7",
     accents: ["#7e22ce", "#9333ea", "#a855f7", "#c084fc", "#8b5cf6", "#d8b4fe"],
+  },
+  command: {
+    base: "#e11d48",
+    accents: ["#9f1239", "#be123c", "#e11d48", "#fb7185", "#f43f5e", "#fda4af"],
   },
   system: {
     base: "#f59e0b",
@@ -312,6 +321,38 @@ const allActions = [
     permissions: ["analysis_missions", "analysis_review"],
     badgeKeys: ["my_missions", "review_queue"],
     category: "analysis",
+  },
+  {
+    id: 70,
+    title: "مرکز فرماندهی",
+    icon: <Crosshair size={24} />,
+    path: "/command",
+    permission: "command_center",
+    category: "command",
+  },
+  {
+    id: 71,
+    title: "تالار اخبار زنده",
+    icon: <Radio size={24} />,
+    path: "/command/live-news",
+    permission: "command_live_news",
+    category: "command",
+  },
+  {
+    id: 73,
+    title: "خروجی‌های راهبردی",
+    icon: <ScrollText size={24} />,
+    path: "/command/outputs",
+    permission: "command_outputs",
+    category: "command",
+  },
+  {
+    id: 74,
+    title: "پرامپت‌های راهبردی",
+    icon: <FilePenLine size={24} />,
+    path: "/command/prompts",
+    permission: "command_manage_prompts",
+    category: "command",
   },
 ];
 

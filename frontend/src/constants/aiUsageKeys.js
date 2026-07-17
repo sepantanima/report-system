@@ -3,6 +3,7 @@ export const AI_USAGE_KEYS = {
   NEWS_SUMMARIZE: "news.summarize",
   NEWS_SMART_ANALYSIS: "news.smart_analysis",
   NEWS_EDITORIAL: "news.editorial",
+  STRATEGY_COMMAND_OUTPUTS: "strategy.command_outputs",
   /** ردیف‌های نمونه در مهاجرت ۰۰۷ (tbl_ai_api_configs) */
   DEMO_SAMPLE: "demo.sample",
 };

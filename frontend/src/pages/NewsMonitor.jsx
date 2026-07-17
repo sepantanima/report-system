@@ -180,12 +180,12 @@ export default function NewsMonitor() {
 
   const loadStats = useCallback(async () => {
     try {
-      const data = await newsMonitorService.summaryStats(dateParams);
+      const data = await newsMonitorService.summaryStats(queryParams);
       setStats(data || {});
     } catch {
       setStats({});
     }
-  }, [dateParams]);
+  }, [queryParams]);
 
   const loadList = useCallback(async (keepSelection = true) => {
     const seq = ++loadSeqRef.current;
@@ -497,17 +497,44 @@ export default function NewsMonitor() {
     }
   };
 
-  const statBar = useMemo(() => [
-    { key: "total", label: "کل بازه", value: stats.total, color: "#38bdf8" },
-    { key: "relevant", label: "مرتبط", value: stats.relevant, color: "#22c55e" },
-    { key: "irrelevant", label: "غیرمرتبط", value: stats.irrelevant, color: "#94a3b8" },
-    { key: "unprocessed", label: "پالایش‌نشده", value: stats.unprocessed, color: "#f59e0b" },
-    { key: "duplicate", label: "تکراری", value: stats.duplicate, color: "#64748b" },
-    { key: "wf_pending", label: "صف دبیر", value: stats.wf_pending, color: "#64748b" },
-    { key: "wf_reviewed", label: "ارسال به سردبیر", value: stats.wf_reviewed, color: "#eab308" },
-    { key: "wf_finalized", label: "آماده انتشار", value: stats.wf_finalized, color: "#22c55e" },
-    { key: "wf_banked", label: "بانک انتظار", value: stats.wf_banked, color: "#0ea5e9" },
-  ], [stats]);
+  const roleLevel = getNewsRoleLevel(roles);
+  const statBar = useMemo(() => {
+    const wf = filters.workflow_status || "all";
+    const dupMode = filters.duplicate || "exclude";
+    const relMode = filters.relevance || "active";
+    const showAllWorkflow = wf === "all";
+    const isChiefView = roleLevel === "chief" || roleLevel === "admin";
+    const isEditorView = roleLevel === "editor" || roleLevel === "monitor" || roleLevel === "admin";
+    const pills = [
+      { key: "total", label: "در فیلتر", value: stats.total, color: "#38bdf8" },
+    ];
+    if (relMode !== "irrelevant") {
+      pills.push({ key: "relevant", label: "مرتبط", value: stats.relevant, color: "#22c55e" });
+    }
+    if (relMode === "all" || relMode === "irrelevant") {
+      pills.push({ key: "irrelevant", label: "غیرمرتبط", value: stats.irrelevant, color: "#94a3b8" });
+    }
+    if (canAiProcess || roleLevel === "editor" || roleLevel === "admin") {
+      pills.push({ key: "unprocessed", label: "پالایش‌نشده", value: stats.unprocessed, color: "#f59e0b" });
+    }
+    if (dupMode !== "exclude") {
+      pills.push({ key: "duplicate", label: "تکراری", value: stats.duplicate, color: "#64748b" });
+    }
+    // مراحل گردش‌کار فقط وقتی فیلتر «همه» است، یا نقش سردبیر/مدیر مراحل بعدی را ببیند
+    if (showAllWorkflow && isEditorView) {
+      pills.push({ key: "wf_pending", label: "صف دبیر", value: stats.wf_pending, color: "#64748b" });
+    }
+    if ((showAllWorkflow || wf === "reviewed") && isChiefView) {
+      pills.push({ key: "wf_reviewed", label: "ارسال به سردبیر", value: stats.wf_reviewed, color: "#eab308" });
+    }
+    if ((showAllWorkflow || wf === "finalized") && isChiefView) {
+      pills.push(
+        { key: "wf_finalized", label: "آماده انتشار", value: stats.wf_finalized, color: "#22c55e" },
+        { key: "wf_banked", label: "بانک انتظار", value: stats.wf_banked, color: "#0ea5e9" },
+      );
+    }
+    return pills;
+  }, [stats, filters.workflow_status, filters.duplicate, filters.relevance, roleLevel, canAiProcess]);
 
   const resetFilters = () => {
     setFilters(getInitialFilters(roles));

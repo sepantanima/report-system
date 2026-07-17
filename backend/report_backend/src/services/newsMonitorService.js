@@ -432,7 +432,7 @@ export async function listNewsMonitor(query = {}, userId = null) {
 }
 
 export async function getSummaryStats(query = {}) {
-  const params = [];
+  let params = [];
   let where = ` WHERE 1=1`;
 
   const fromKey = query.from_ref_key || jalaliDateToRefKeyStart(query.start_date);
@@ -445,6 +445,21 @@ export async function getSummaryStats(query = {}) {
     params.push(toKey);
     where += ` AND bk.ref_key <= $${params.length}`;
   }
+
+  // همان فیلترهای لیست مانیتور — آمار باید با نمای فرم هم‌خوان باشد
+  ({ params, where } = appendNewsMonitorFilters(params, where, query, { reviewDefault: "pending" }));
+
+  // پالایش‌نشده = همان معیار isEditorialCandidate در فرانت
+  const editorialCandidate = `(
+    COALESCE(${DS}, 'none') = 'none'
+    AND (
+      COALESCE(bk.editorial_state, 'pending') = 'pending'
+      OR (
+        COALESCE(bk.editorial_state, 'pending') = 'ai'
+        AND COALESCE(bk.relevance_status, 'unset') = 'unset'
+      )
+    )
+  )`;
 
   const sql = `
     ${NEWS_REF_KEY_CTE}
@@ -480,9 +495,7 @@ export async function getSummaryStats(query = {}) {
         WHERE COALESCE(bk.relevance_status, 'unset') = 'relevant' AND NOT ${DUP_FLAG}
       )::int AS relevance_confirmed,
       COUNT(*) FILTER (WHERE COALESCE(bk.relevance_status, 'unset') = 'irrelevant')::int AS irrelevant,
-      COUNT(*) FILTER (
-        WHERE COALESCE(bk.editorial_state, 'pending') = 'pending' AND NOT ${DUP_FLAG}
-      )::int AS unprocessed
+      COUNT(*) FILTER (WHERE ${editorialCandidate})::int AS unprocessed
     FROM base_key bk
     ${where}
   `;
@@ -494,6 +507,7 @@ export async function getSummaryStats(query = {}) {
     priority_instant: 0, priority_urgent: 0, relevant: 0, relevance_unset: 0,
     relevance_confirmed: 0, irrelevant: 0, unprocessed: 0,
   };
+
   return row;
 }
 

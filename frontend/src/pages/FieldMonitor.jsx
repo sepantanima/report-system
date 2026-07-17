@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 // هنگام کپی کردن این فایل به پروژه محلی خود، کافیست خطوط زیر را از حالت کامنت خارج کنید:
 //
 import api from "../api/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import PageToolbarButtons from "../components/common/PageToolbarButtons.jsx";
 import PageUserMenu from "../components/common/PageUserMenu.jsx";
@@ -106,6 +106,7 @@ const HelpCircleIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/
 
 export default function FieldMonitor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const sidebarRef = useRef(null); // رفرنس سایدبار فیلترها جهت بستن هوشمند با کلیک بیرون
   const { isDarkMode, setIsDarkMode } = useAppTheme();
   const { level: fontLevel, cycleFont, fontSizePx } = usePageFontSize();
@@ -466,7 +467,16 @@ export default function FieldMonitor() {
       {/* Header */}
       <header className="v3-navbar" style={{ background: theme.card, borderBottom: `1px solid ${theme.border}` }}>
         <div className="v3-nav-row">
-          <button onClick={() => navigate("/main")} className="v3-icon-btn"><ArrowRightIcon /></button>
+          <button
+            onClick={() => {
+              const returnTo = location.state?.returnTo;
+              if (typeof returnTo === "string" && returnTo.startsWith("/")) navigate(returnTo);
+              else navigate("/main");
+            }}
+            className="v3-icon-btn"
+          >
+            <ArrowRightIcon />
+          </button>
           <div className="v3-search-input" style={{ background: isDarkMode ? "rgba(0,0,0,0.2)" : "#fff", border: `1px solid ${theme.border}` }}>
             <SearchIcon /><input placeholder="جستجو در متن یا واحد..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>

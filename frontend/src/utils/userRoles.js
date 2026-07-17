@@ -12,6 +12,8 @@ export const ROLE_LABELS = {
   news_chief: "سردبیر اخبار",
   Field_admin: "مدیر میدانی",
   user: "کاربر واحد",
+  strategy_viewer: "ناظر راهبردی",
+  strategy_commander: "فرمانده راهبردی",
 };
 
 /** نگاشت برچسب فارسی یا نام‌های قدیمی به شناسه انگلیسی */
@@ -37,6 +39,8 @@ const ROLE_ALIASES = {
   "مدیر گزارشات میدانی": "Field_admin",
   "کاربر واحد": "user",
   "کاربر واحد (ثبت گزارش)": "user",
+  "ناظر راهبردی": "strategy_viewer",
+  "فرمانده راهبردی": "strategy_commander",
 };
 
 export const ROLE_PERMISSIONS = {
@@ -50,6 +54,16 @@ export const ROLE_PERMISSIONS = {
     "manage_field_entry_limits", "manage_news_entry_limits",
     "messages", "manage_announcements", "manage_message_settings",
     "manage_messenger_accounts",
+    "command_center", "command_live_news", "command_annotate", "command_kpi",
+    "command_outputs", "command_outputs_manage", "command_manage_prompts",
+  ],
+  strategy_viewer: [
+    "command_center", "command_live_news", "command_kpi", "command_outputs", "sys_settings", "messages",
+  ],
+  strategy_commander: [
+    "command_center", "command_live_news", "command_annotate", "command_kpi",
+    "command_outputs", "command_outputs_manage", "command_manage_prompts",
+    "sys_settings", "messages",
   ],
   analysis_manager: [
     "manage_users", "analysis_manage", "analysis_topic_approve", "analysis_propose", "analysis_review", "analysis_brief_submit", "sys_settings", "messages",

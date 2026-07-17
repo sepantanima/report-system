@@ -11,6 +11,7 @@ export default function DashboardWidget({
   onMoveUp,
   onMoveDown,
   actions,
+  badge,
   children,
 }) {
   return (
@@ -19,8 +20,9 @@ export default function DashboardWidget({
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           {icon}
           <strong style={{ fontSize: 11, color: theme.text }}>{title}</strong>
+          {badge}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
           {actions}
           {onMoveUp ? (
             <button type="button" title="بالا" onClick={onMoveUp} style={s.widgetCtrlBtn(theme)}>

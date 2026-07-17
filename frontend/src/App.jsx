@@ -24,6 +24,11 @@ import AnalysisTopicAssignDetail from "./pages/analysis/AnalysisTopicAssignDetai
 import AnalysisMissionManage from "./pages/analysis/AnalysisMissionManage";
 import AnalysisBriefSubmit from "./pages/analysis/AnalysisBriefSubmit";
 import AnalysisPermissionRoute from "./components/analysis/AnalysisPermissionRoute.jsx";
+import CommandPermissionRoute from "./components/command/CommandPermissionRoute.jsx";
+import CommandCenterHome from "./pages/command/CommandCenterHome.jsx";
+import CommandLiveNewsWall from "./pages/command/CommandLiveNewsWall.jsx";
+import CommandStrategicOutputs from "./pages/command/CommandStrategicOutputs.jsx";
+import CommandStrategyPrompts from "./pages/command/CommandStrategyPrompts.jsx";
 import PromptManagement from "./pages/PromptManagement.jsx";
 import AiApiManagement from "./pages/AiApiManagement.jsx";
 import AiFormActionsManagement from "./pages/AiFormActionsManagement.jsx";
@@ -137,6 +142,12 @@ function App() {
         <Route path="/analysis/brief-submit" element={<AnalysisPermissionRoute permission="analysis_brief_submit"><AnalysisBriefSubmit /></AnalysisPermissionRoute>} />
         <Route path="/analysis-manager" element={<Navigate to="/analysis/missions" replace />} />
         <Route path="/analysis-manager/mission/:id" element={<Navigate to="/analysis/mission/:id" replace />} />
+
+        <Route path="/command" element={<CommandPermissionRoute permission={["command_center", "command_kpi"]}><CommandCenterHome /></CommandPermissionRoute>} />
+        <Route path="/command/live-news" element={<CommandPermissionRoute permission="command_live_news"><CommandLiveNewsWall /></CommandPermissionRoute>} />
+        <Route path="/command/kpi" element={<Navigate to="/command" replace />} />
+        <Route path="/command/outputs" element={<CommandPermissionRoute permission="command_outputs"><CommandStrategicOutputs /></CommandPermissionRoute>} />
+        <Route path="/command/prompts" element={<CommandPermissionRoute permission="command_manage_prompts"><CommandStrategyPrompts /></CommandPermissionRoute>} />
 
         {/* هدایت خودکار مسیرهای اشتباه به صفحه ورود */}
         <Route path="*" element={<Navigate to="/" />} />

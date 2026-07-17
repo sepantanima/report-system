@@ -1,5 +1,6 @@
 // middleware/auth.js اصلاح شده
 import jwt from "jsonwebtoken";
+import { touchUserActivity } from "../services/userPresenceService.js";
 
 export default function auth(req, res, next) {
   if (req.method === "OPTIONS") {
@@ -22,6 +23,11 @@ export default function auth(req, res, next) {
 
     // حالا اطلاعات کاربر (id, username, unitcd, role) توی req.user هست
     req.user = decoded;
+    try {
+      if (decoded?.id) touchUserActivity(decoded.id);
+    } catch (presenceErr) {
+      console.warn("[auth] presence touch failed:", presenceErr.message);
+    }
     next();
   } catch (err) {
     console.error("JWT Error:", err.message);

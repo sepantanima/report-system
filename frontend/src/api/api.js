@@ -31,15 +31,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// برای تست در پروداکشن: لاگ دقیق خطا
 api.interceptors.response.use(
   (res) => res,
   (error) => {
+    const canceled =
+      error?.code === "ERR_CANCELED" ||
+      error?.name === "CanceledError" ||
+      error?.name === "AbortError" ||
+      error?.message === "canceled";
+    if (canceled) {
+      return Promise.reject(error);
+    }
     const status = error.response?.status;
     const msg = error.response?.data?.error;
     const code = error.response?.data?.code;
-    console.error("API Error Details:", status, error.config?.url, msg || "");
-    if (status === 401 && error.config?.url !== "/auth/login") {
+    const url = error.config?.url || "";
+    // همگام‌سازی چیدمان اختیاری است (localStorage کافی است)
+    const softLayoutFail =
+      status === 503 && String(url).includes("/command/dashboard/layout");
+    if (!softLayoutFail) {
+      console.error("API Error Details:", status, url, msg || "");
+    }
+    if (status === 401 && url !== "/auth/login") {
       const reason = code === "TOKEN_EXPIRED" ? "expired" : "invalid";
       clearSessionAndRedirectToLogin(reason);
     }

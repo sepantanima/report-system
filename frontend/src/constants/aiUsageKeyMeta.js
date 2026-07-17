@@ -23,6 +23,11 @@ export const AI_USAGE_KEY_OPTIONS = [
     where: "مدیریت اخبار → پالایش و دبیری هوشمند",
   },
   {
+    key: AI_USAGE_KEYS.STRATEGY_COMMAND_OUTPUTS,
+    labelFa: "خروجی‌های راهبردی — مرکز فرماندهی",
+    where: "مرکز فرماندهی → تولید پیوست جنگ نرم و خروجی‌ها",
+  },
+  {
     key: "demo.sample",
     labelFa: "نمونه آزمایشی",
     where: "فقط تست توسعه",

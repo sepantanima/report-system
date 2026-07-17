@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { UserPlus, Trash2, Edit, X, Search, CheckSquare, Square, ChevronDown, Key, HelpCircle } from "lucide-react";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
+import HelpModal from "../components/common/HelpModal.jsx";
 import { PAGE_ADMIN_PX } from "../constants/pageLayoutWidths.js";
 import MessengerAccountsPanel from "../components/settings/MessengerAccountsPanel.jsx";
 import { USER_ROLE_GUIDE_HELP } from "../content/userRoleGuideHelp.jsx";
 import { GENDER_OPTIONS, normalizeGender } from "../utils/userGreeting.js";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme, FORM_PAGE_MODAL_Z_INDEX } from "../theme/formPageTheme.js";
 
 // =========================================================================
 // 🌟 راهنمای ایمپورت در پروژه واقعی شما (جهت اتصال به دیتابیس و استایل‌ها):
@@ -67,6 +70,8 @@ const AVAILABLE_ROLES = [
   { id: "news_chief", label: "سردبیر اخبار" },
   { id: "Field_admin", label: "مدیر گزارشات میدانی" },
   { id: "user", label: "کاربر واحد (ثبت گزارش)" },
+  { id: "strategy_viewer", label: "ناظر راهبردی" },
+  { id: "strategy_commander", label: "فرمانده راهبردی" },
 ];
 
 // تابع فارسی‌سازی مقادیر عددی برای شمارنده‌ها
@@ -76,9 +81,36 @@ const toPersianDigits = (val) => {
 };
 
 export default function UserManagement() {
+  const { isDarkMode } = useAppTheme();
+  const theme = useMemo(() => getFormPageTheme(isDarkMode), [isDarkMode]);
+  const inputStyle = useMemo(() => ({
+    width: "100%",
+    height: "45px",
+    background: theme.inputBg,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+    padding: "0 10px",
+    borderRadius: "8px",
+    boxSizing: "border-box",
+    textAlign: "right",
+    fontFamily: "inherit",
+  }), [theme]);
+  const labelStyle = useMemo(() => ({
+    color: theme.muted,
+    fontSize: "12px",
+    textAlign: "right",
+  }), [theme]);
+  const messengerTheme = useMemo(() => ({
+    card: isDarkMode ? "rgba(15,23,42,0.5)" : "#f8fafc",
+    border: theme.border,
+    text: theme.text,
+    input: theme.inputBg,
+  }), [isDarkMode, theme]);
+
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showRoleGuide, setShowRoleGuide] = useState(false);
   const [editMode, setEditMode] = useState(false);
   
   // 🌟 استیت پویای کنترل نمایش فیلد پسورد در حالت ویرایش کاربر قدیمی
@@ -297,30 +329,15 @@ export default function UserManagement() {
         </span>
       )}
     >
-      {/* استایل‌های درونی و بلورین سازمانی تیره جهت ممانعت از ایجاد وابستگی خارجی */}
+      {/* استایل‌های تم‌آگاه برای جدول، مودال و دراپ‌داون */}
       <style>{`
-        .loginPage {
-          background: var(--bg-main);
-          min-height: 100vh;
-          display: flex;
-          justify-content: flex-start;
-          align-items: center;
-          position: relative;
-          overflow-x: hidden;
-          font-family: Tahoma, sans-serif;
-          box-sizing: border-box;
-          color: var(--text-main);
-        }
-        .loginCardWrap {
-          position: relative;
-          z-index: 10;
-        }
         .loginCard {
-          background: var(--bg-card);
+          background: ${theme.card};
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
-          border: 1px solid var(--border-color);
-          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+          border: 1px solid ${theme.border};
+          box-shadow: 0 8px 24px 0 rgba(0, 0, 0, ${isDarkMode ? "0.37" : "0.08"});
+          color: ${theme.text};
         }
         .input {
           transition: all 0.3s ease;
@@ -381,19 +398,19 @@ export default function UserManagement() {
           align-items: center; 
           gap: 10px; 
           padding: 12px; 
-          background: rgba(255,255,255,0.03); 
-          border: 1px solid rgba(255,255,255,0.1); 
+          background: ${isDarkMode ? "rgba(255,255,255,0.03)" : "#f8fafc"}; 
+          border: 1px solid ${theme.border}; 
           border-radius: 10px; 
           cursor: pointer; 
           transition: 0.2s; 
           user-select: none;
         }
         .checkbox-item:hover { 
-          background: rgba(255,255,255,0.08); 
+          background: ${isDarkMode ? "rgba(255,255,255,0.08)" : "#f1f5f9"}; 
         }
         .checkbox-item.active { 
           border-color: #00cec9; 
-          background: rgba(0, 206, 201, 0.05); 
+          background: rgba(0, 206, 201, 0.08); 
         }
 
         .custom-searchable-select {
@@ -403,11 +420,11 @@ export default function UserManagement() {
         .select-trigger-box {
           width: 100%;
           height: 52px;
-          background: rgba(15, 23, 42, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          background: ${theme.inputBg};
+          border: 1px solid ${theme.border};
           border-radius: 10px;
           padding: 0 14px;
-          color: #fff;
+          color: ${theme.text};
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -418,17 +435,16 @@ export default function UserManagement() {
         }
         .select-trigger-box:hover {
           border-color: rgba(0, 206, 201, 0.5);
-          background: rgba(20, 30, 50, 0.95);
         }
         .select-dropdown-panel {
           position: absolute;
           top: 58px;
           left: 0;
           width: 100%;
-          background: #0f172a;
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          background: ${theme.card};
+          border: 1px solid ${theme.border};
           border-radius: 10px;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+          box-shadow: 0 10px 25px rgba(0, 0, 0, ${isDarkMode ? "0.5" : "0.12"});
           z-index: 11000;
           overflow: hidden;
           display: flex;
@@ -437,10 +453,10 @@ export default function UserManagement() {
         .dropdown-search-input {
           width: 100%;
           height: 44px;
-          background: rgba(0, 0, 0, 0.2);
+          background: ${isDarkMode ? "rgba(0, 0, 0, 0.2)" : "#f8fafc"};
           border: none;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          color: #fff;
+          border-bottom: 1px solid ${theme.border};
+          color: ${theme.text};
           padding: 0 12px;
           box-sizing: border-box;
           outline: none;
@@ -456,7 +472,7 @@ export default function UserManagement() {
         }
         .option-item {
           padding: 12px 14px;
-          color: #cbd5e1;
+          color: ${theme.text};
           font-size: 12.5px;
           cursor: pointer;
           transition: all 0.15s;
@@ -481,15 +497,15 @@ export default function UserManagement() {
             <select
               value={contributorFilter}
               onChange={(e) => setContributorFilter(e.target.value)}
-              style={{ height: 42, borderRadius: 10, padding: "0 12px", background: "#1e293b", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", fontFamily: "inherit" }}
+              style={{ height: 42, borderRadius: 10, padding: "0 12px", background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, fontFamily: "inherit" }}
             >
               <option value="all">همه کاربران</option>
               <option value="contributors">دارای تحلیل کوتاه</option>
               <option value="suggested">پیشنهاد تحلیل‌گر</option>
             </select>
             <div style={{ position: "relative", flex: 1, maxWidth: "450px", minWidth: 200 }}>
-              <Search style={{ position: "absolute", right: "12px", top: "12px", opacity: 0.5, color: "#fff" }} size={18} />
-              <input className="input" style={{ width: "100%", paddingRight: "40px", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontSize: "13.5px" }} placeholder="جستجو بر اساس نام، یوزرنیم، نقش، نام واحد، وضعیت..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <Search style={{ position: "absolute", right: "12px", top: "12px", opacity: 0.5, color: theme.muted }} size={18} />
+              <input className="input" style={{ ...inputStyle, paddingRight: "40px", fontSize: "13.5px" }} placeholder="جستجو بر اساس نام، یوزرنیم، نقش، نام واحد، وضعیت..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <button onClick={() => { setEditMode(false); setFormData({ id: "", username: "", name: "", password: "", role: ["user"], unit_cd: "", gender: "male", active: true }); setUnitSearchQuery(""); setShowModal(true); }} className="submitBtn" style={{ width: "auto", padding: "0 20px", height: "45px", marginTop: 0, background: "#00cec9", border: "none", color: "#fff", borderRadius: "10px", fontWeight: "bold", display: "flex", alignItems: "center" }}><UserPlus size={18} style={{ marginLeft: "8px" }} /> کاربر جدید</button>
           </div>
@@ -497,9 +513,9 @@ export default function UserManagement() {
 
         {/* جدول نمایش کاربران */}
         <div className="loginCard" style={{ width: "100%", padding: "10px", overflowX: "auto", borderRadius: "20px" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", color: "#fff", direction: "rtl" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", color: theme.text, direction: "rtl" }}>
             <thead>
-              <tr style={{ borderBottom: "2px solid rgba(255,255,255,0.1)" }}>
+              <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
                 <th style={{ padding: "15px", textAlign: "right" }}>نام کاربر</th>
                 <th style={{ textAlign: "center" }}>واحد سازمانی</th>
                 <th style={{ textAlign: "center" }}>نقش‌های دسترسی</th>
@@ -511,7 +527,7 @@ export default function UserManagement() {
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>کاربری با مشخصات جستجو شده یافت نشد.</td>
+                  <td colSpan="6" style={{ textAlign: "center", padding: "20px", color: theme.muted }}>کاربری با مشخصات جستجو شده یافت نشد.</td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
@@ -527,14 +543,14 @@ export default function UserManagement() {
                   if (parsedRoles.length === 0) parsedRoles = ["user"];
 
                   return (
-                    <tr key={user.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <tr key={user.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
                       <td style={{ padding: "12px", textAlign: "right" }}>
-                        <b style={{ color: "#fff" }}>{user.name}</b> 
+                        <b style={{ color: theme.text }}>{user.name}</b> 
                         <br/>
-                        <span style={{ fontSize: "11px", color: "#64748b" }}>{user.username}</span>
+                        <span style={{ fontSize: "11px", color: theme.muted }}>{user.username}</span>
                       </td>
-                      <td style={{ textAlign: "center", color: "#e2e8f0" }}>
-                        {user.UnitShortName || <span style={{ color: "#475569" }}>فاقد واحد</span>}
+                      <td style={{ textAlign: "center", color: theme.text }}>
+                        {user.UnitShortName || <span style={{ color: theme.muted }}>فاقد واحد</span>}
                       </td>
                       <td style={{ textAlign: "center" }}>
                         <div className="role-chip-container">
@@ -578,20 +594,20 @@ export default function UserManagement() {
 
       {/* مودال تعریف/ویرایش کاربر (با فیلد رمز عبور جدید و بهبودیافته) */}
       {showModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000, padding: "20px" }}>
-          <div className="loginCard" style={{ width: "520px", maxHeight: "90vh", overflowY: "auto", padding: "35px", display: "flex", flexDirection: "column", gap: "15px", border: "1px solid rgba(255,255,255,0.1)", direction: "rtl", borderRadius: "20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#fff", marginBottom: "10px" }}>
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: isDarkMode ? "rgba(0,0,0,0.85)" : "rgba(15,23,42,0.45)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: FORM_PAGE_MODAL_Z_INDEX, padding: "20px" }}>
+          <div className="loginCard" style={{ width: "520px", maxHeight: "90vh", overflowY: "auto", padding: "35px", display: "flex", flexDirection: "column", gap: "15px", border: `1px solid ${theme.border}`, direction: "rtl", borderRadius: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", color: theme.text, marginBottom: "10px" }}>
               <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "bold" }}>{editMode ? "ویرایش مشخصات کاربر" : "تعریف کاربر جدید"}</h2>
               <X onClick={() => setShowModal(false)} style={{ cursor: "pointer", color: "#ff7675" }} />
             </div>
 
-            <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right" }}>نام و نام خانوادگی:</label>
-            <input className="input" style={{ width: "100%", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "0 10px", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontFamily: "inherit" }} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+            <label style={labelStyle}>نام و نام خانوادگی:</label>
+            <input className="input" style={inputStyle} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
 
-            <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right" }}>نام کاربری:</label>
-            <input className="input" style={{ width: "100%", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "0 10px", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontFamily: "inherit" }} value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
+            <label style={labelStyle}>نام کاربری:</label>
+            <input className="input" style={inputStyle} value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
 
-            <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right" }}>جنسیت (برای خطاب خوش‌آمدگویی):</label>
+            <label style={labelStyle}>جنسیت (برای خطاب خوش‌آمدگویی):</label>
             <div style={{ display: "flex", gap: "10px" }}>
               {GENDER_OPTIONS.map((opt) => (
                 <button
@@ -602,9 +618,9 @@ export default function UserManagement() {
                     flex: 1,
                     height: "42px",
                     borderRadius: "8px",
-                    border: formData.gender === opt.value ? "1px solid #00cec9" : "1px solid rgba(255,255,255,0.12)",
-                    background: formData.gender === opt.value ? "rgba(0,206,201,0.15)" : "rgba(255,255,255,0.05)",
-                    color: formData.gender === opt.value ? "#fff" : "#94a3b8",
+                    border: formData.gender === opt.value ? "1px solid #00cec9" : `1px solid ${theme.border}`,
+                    background: formData.gender === opt.value ? "rgba(0,206,201,0.15)" : theme.inputBg,
+                    color: formData.gender === opt.value ? theme.text : theme.muted,
                     fontFamily: "inherit",
                     fontWeight: "bold",
                     cursor: "pointer",
@@ -622,20 +638,20 @@ export default function UserManagement() {
                   <button 
                     onClick={() => setShowPassField(true)}
                     className="submitBtn" 
-                    style={{ height: "45px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fdcb6e", borderRadius: "8px", fontSize: "13px", fontWeight: "bold", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+                    style={{ height: "45px", background: theme.inputBg, border: `1px solid ${theme.border}`, color: "#d97706", borderRadius: "8px", fontSize: "13px", fontWeight: "bold", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
                   >
                     <Key size={14} /> تغییر کلمه عبور کاربر قدیمی
                   </button>
                 ) : (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                      <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right" }}>رمز عبور جدید:</label>
+                      <label style={labelStyle}>رمز عبور جدید:</label>
                       <span onClick={() => { setShowPassField(false); setFormData({ ...formData, password: "" }); }} style={{ color: "#f87171", fontSize: "11px", cursor: "pointer" }}>انصراف از تغییر رمز</span>
                     </div>
                     <input 
                       type="password"
                       className="input" 
-                      style={{ width: "100%", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "0 10px", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontFamily: "inherit" }} 
+                      style={inputStyle} 
                       placeholder="رمز عبور جدید را وارد کنید..."
                       value={formData.password} 
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
@@ -645,11 +661,11 @@ export default function UserManagement() {
               </div>
             ) : (
               <div>
-                <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right", display: "block", marginBottom: "6px" }}>رمز عبور اولیه کاربر:</label>
+                <label style={{ ...labelStyle, display: "block", marginBottom: "6px" }}>رمز عبور اولیه کاربر:</label>
                 <input 
                   type="password"
                   className="input" 
-                  style={{ width: "100%", height: "45px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "0 10px", borderRadius: "8px", boxSizing: "border-box", textAlign: "right", fontFamily: "inherit" }} 
+                  style={inputStyle} 
                   placeholder="******"
                   value={formData.password} 
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
@@ -659,8 +675,8 @@ export default function UserManagement() {
 
             {/* بخش انتخاب چندگانه نقش‌ها */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-              <label style={{ color: "#aaa", fontSize: "12px", textAlign: "right", margin: 0 }}>تخصیص نقش‌های دسترسی (چندنقشی):</label>
-              <button type="button" onClick={() => setShowRoleGuide(true)} style={{ background: "none", border: "none", color: "#38bdf8", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
+              <label style={{ ...labelStyle, margin: 0 }}>تخصیص نقش‌های دسترسی (چندنقشی):</label>
+              <button type="button" onClick={() => setShowRoleGuide(true)} style={{ background: "none", border: "none", color: "#0ea5e9", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
                 <HelpCircle size={13} /> راهنمای نقش‌ها
               </button>
             </div>
@@ -671,19 +687,19 @@ export default function UserManagement() {
                   className={`checkbox-item ${formData.role.includes(role.id) ? "active" : ""}`}
                   onClick={() => toggleRole(role.id)}
                 >
-                  {formData.role.includes(role.id) ? <CheckSquare size={18} color="#00cec9" /> : <Square size={18} color="#64748b" />}
-                  <span style={{ color: formData.role.includes(role.id) ? "#fff" : "#94a3b8", fontSize: "13px" }}>{role.label}</span>
+                  {formData.role.includes(role.id) ? <CheckSquare size={18} color="#00cec9" /> : <Square size={18} color={theme.muted} />}
+                  <span style={{ color: formData.role.includes(role.id) ? theme.text : theme.muted, fontSize: "13px" }}>{role.label}</span>
                 </div>
               ))}
             </div>
 
-            <label style={{ color: "#aaa", fontSize: "12px", marginTop: "10px", textAlign: "right" }}>واحد مربوطه (اختیاری):</label>
+            <label style={{ ...labelStyle, marginTop: "10px" }}>واحد مربوطه (اختیاری):</label>
             <div className="custom-searchable-select" ref={dropdownRef}>
               <div 
                 className="select-trigger-box" 
                 onClick={() => setIsUnitDropdownOpen(!isUnitDropdownOpen)}
               >
-                <span style={{ color: formData.unit_cd ? "#fff" : "#64748b" }}>
+                <span style={{ color: formData.unit_cd ? theme.text : theme.muted }}>
                   {selectedUnitLabel}
                 </span>
                 <ChevronDown size={18} style={{ opacity: 0.7, transform: isUnitDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s" }} />
@@ -710,7 +726,7 @@ export default function UserManagement() {
                       بدون واحد سازمانی (اختیاری)
                     </div>
                     {filteredUnits.length === 0 ? (
-                      <div style={{ padding: "12px", fontSize: "11px", color: "#64748b", textAlign: "center" }}>واحدی یافت نشد.</div>
+                      <div style={{ padding: "12px", fontSize: "11px", color: theme.muted, textAlign: "center" }}>واحدی یافت نشد.</div>
                     ) : (
                       filteredUnits.map((unit) => (
                         <div 
@@ -731,16 +747,11 @@ export default function UserManagement() {
             </div>
 
             {editMode && formData.id ? (
-              <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px dashed rgba(255,255,255,0.15)" }}>
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${theme.border}` }}>
                 <MessengerAccountsPanel
                   mode="admin"
                   userId={formData.id}
-                  theme={{
-                    card: "rgba(15,23,42,0.5)",
-                    border: "rgba(255,255,255,0.12)",
-                    text: "#f8fafc",
-                    input: "rgba(15,23,42,0.9)",
-                  }}
+                  theme={messengerTheme}
                   title="اکانت‌های پیام‌رسان این کاربر"
                   description="برای نگاشت sender اخبار دریافتی از بله/تلگرام/ایتا به این کاربر."
                 />
@@ -753,6 +764,15 @@ export default function UserManagement() {
           </div>
         </div>
       )}
+
+      <HelpModal
+        open={showRoleGuide}
+        onClose={() => setShowRoleGuide(false)}
+        title="راهنمای جامع نقش‌ها و مسئولیت‌ها"
+        maxWidth={720}
+      >
+        <USER_ROLE_GUIDE_HELP />
+      </HelpModal>
     </FormPageLayout>
   );
 }

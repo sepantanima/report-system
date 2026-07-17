@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { usePageFontSize } from "../../utils/pageFontSize.js";
@@ -28,13 +28,22 @@ export default function StandardFormHeader({
   sticky = true,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkMode } = useAppTheme();
   const { level: fontLevel, cycleFont } = usePageFontSize();
   const theme = getFormPageTheme(isDarkMode);
 
   const handleBack = () => {
-    if (onBack) onBack();
-    else navigate(backTo);
+    if (onBack) {
+      onBack();
+      return;
+    }
+    const returnTo = location.state?.returnTo;
+    if (typeof returnTo === "string" && returnTo.startsWith("/")) {
+      navigate(returnTo);
+      return;
+    }
+    navigate(backTo);
   };
 
   const titleBlock = (
