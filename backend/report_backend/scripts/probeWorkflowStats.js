@@ -56,8 +56,8 @@ async function main() {
 
     const listReviewed = await listNewsMonitor({ ...date, workflow_status: "reviewed", duplicate: "exclude", review_state: "all" });
     const listAll = await listNewsMonitor({ ...date, workflow_status: "all", duplicate: "exclude", review_state: "all" });
-    console.log("list reviewed", listReviewed.length, "list all", listAll.length);
-    console.log("list reviewed sample ws", listReviewed.slice(0, 3).map((r) => ({ id: r.id, ws: r.workflow_status, rs: r.review_state })));
+    console.log("list reviewed", listReviewed.items.length, "total", listReviewed.total, "list all", listAll.items.length, "total", listAll.total);
+    console.log("list reviewed sample ws", listReviewed.items.slice(0, 3).map((r) => ({ id: r.id, ws: r.workflow_status, rs: r.review_state })));
   } finally {
     await pool.end().catch(() => {});
   }

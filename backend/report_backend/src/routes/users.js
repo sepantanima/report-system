@@ -2,7 +2,21 @@ import express from "express";
 const router = express.Router();
 import pool from "../db.js";
 import bcrypt from "bcrypt";
-import auth from "../middleware/auth.js"; // میدل‌ور احراز هویت جهت شناسایی کاربر جاری
+import auth from "../middleware/auth.js";
+import { getBriefStatsForUsers } from "../services/analysisBriefSubmissionService.js";
+import {
+  createAccountForUser,
+  deleteAccount,
+  listAccountsForUser,
+  updateAccount,
+} from "../services/userMessengerAccountService.js";
+import { MESSENGER_PLATFORMS } from "../utils/senderResolveSql.js";
+
+import { pgUniqueViolationMessage } from "../utils/pgErrors.js";
+
+function normalizeGenderInput(value) {
+  return value === "female" ? "female" : "male";
+}
 
 // =========================================================================
 // 🌟 گام اول اصلاحی: روت‌های ثابت (مانند /profile یا /units) باید همیشه بالاتر از 
@@ -91,17 +105,75 @@ router.put("/profile", auth, async (req, res) => {
   }
 });
 
+// اکانت‌های پیام‌رسان کاربر جاری
+router.get("/me/messenger-accounts", auth, async (req, res) => {
+  try {
+    res.json(await listAccountsForUser(req.user.id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/me/messenger-platforms", auth, (_req, res) => {
+  res.json(MESSENGER_PLATFORMS);
+});
+
+router.post("/me/messenger-accounts", auth, async (req, res) => {
+  try {
+    const row = await createAccountForUser(req.user.id, req.body, { verified: false });
+    res.status(201).json(row);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put("/me/messenger-accounts/:id", auth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = await pool.query(
+      `SELECT id FROM tbl_user_messenger_accounts WHERE id = $1 AND user_id = $2`,
+      [id, req.user.id],
+    );
+    if (!existing.rows[0]) {
+      return res.status(404).json({ error: "اکانت یافت نشد." });
+    }
+    const row = await updateAccount(id, req.body, { admin: false });
+    res.json(row);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete("/me/messenger-accounts/:id", auth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await deleteAccount(id, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ۳. دریافت لیست کاربران با نام واحد (مختص ادمین کل)
 router.get("/", auth, async (req, res) => {
   try {
     const query = `
-      SELECT u.id, u.username, u.name, u.role, u.active, u.unit_cd, un."UnitShortName"
+      SELECT u.id, u.username, u.name, u.role, u.gender, u.active, u.unit_cd, un."UnitShortName"
       FROM tbl_users u
       LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
       ORDER BY u.id DESC
     `;
     const result = await pool.query(query);
-    res.json(result.rows);  
+    const rows = result.rows;
+    if (req.query.include_brief_stats === "true" && rows.length) {
+      const stats = await getBriefStatsForUsers(rows.map((u) => u.id));
+      return res.json(rows.map((u) => ({
+        ...u,
+        brief_submission_count: stats[u.id]?.submission_count || 0,
+        analyst_suggested: stats[u.id]?.analyst_suggested || false,
+      })));
+    }
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -109,28 +181,53 @@ router.get("/", auth, async (req, res) => {
 
 // ۴. افزودن کاربر جدید توسط ادمین (با هش کردن پسورد)
 router.post("/", auth, async (req, res) => {
-  const { username, name, password, role, unit_cd } = req.body;
+  const { username, name, password, role, unit_cd, gender } = req.body;
   try {
+    const uname = String(username ?? "").trim();
+    if (!uname) return res.status(400).json({ error: "نام کاربری الزامی است" });
+    const exists = await pool.query(`SELECT id FROM tbl_users WHERE username = $1`, [uname]);
+    if (exists.rows[0]) {
+      return res.status(400).json({ error: "این نام کاربری قبلاً ثبت شده است — نام دیگری انتخاب کنید" });
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const query = `
-      INSERT INTO tbl_users (username, name, password, role, unit_cd, active)
-      VALUES ($1, $2, $3, $4, $5, true) RETURNING *
+      INSERT INTO tbl_users (username, name, password, role, unit_cd, gender, active)
+      VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *
     `;
-    const result = await pool.query(query, [username, name, hashedPassword, role, unit_cd]);
+    const result = await pool.query(query, [
+      uname,
+      name,
+      hashedPassword,
+      role,
+      unit_cd,
+      normalizeGenderInput(gender),
+    ]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const pgMsg = pgUniqueViolationMessage(err);
+    res.status(pgMsg ? 400 : 500).json({ error: pgMsg || err.message });
   }
 });
 
 // ۵. ویرایش کاربر توسط ادمین (روت پارامتریک - به پایین‌ترین بخش روت‌ها منتقل شد)
 router.put("/:id", auth, async (req, res) => {
   const { id } = req.params;
-  const { username, name, role, unit_cd, active, password } = req.body;
+  const { username, name, role, unit_cd, active, password, gender } = req.body;
   
   try {
+    const uname = String(username ?? "").trim();
+    if (!uname) return res.status(400).json({ error: "نام کاربری الزامی است" });
+    const taken = await pool.query(
+      `SELECT id FROM tbl_users WHERE username = $1 AND id <> $2`,
+      [uname, id],
+    );
+    if (taken.rows[0]) {
+      return res.status(400).json({ error: "این نام کاربری قبلاً ثبت شده است — نام دیگری انتخاب کنید" });
+    }
+
     let query;
     let params;
 
@@ -140,21 +237,22 @@ router.put("/:id", auth, async (req, res) => {
       
       query = `
         UPDATE tbl_users 
-        SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, password=$6 
-        WHERE id=$7`;
-      params = [username, name, role, unit_cd, active, hashedPassword, id];
+        SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, password=$6, gender=$7
+        WHERE id=$8`;
+      params = [uname, name, role, unit_cd, active, hashedPassword, normalizeGenderInput(gender), id];
     } else {
       query = `
         UPDATE tbl_users 
-        SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5 
-        WHERE id=$6`;
-      params = [username, name, role, unit_cd, active, id];
+        SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, gender=$6
+        WHERE id=$7`;
+      params = [uname, name, role, unit_cd, active, normalizeGenderInput(gender), id];
     }
 
     await pool.query(query, params);
     res.json({ message: "بروزرسانی موفق" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const pgMsg = pgUniqueViolationMessage(err);
+    res.status(pgMsg ? 400 : 500).json({ error: pgMsg || err.message });
   }
 });
 

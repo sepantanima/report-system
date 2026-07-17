@@ -13,7 +13,11 @@ export const REGISTERED_FORM_ACTION_KEYS = [
   },
   {
     form_name: "news_smart_analysis",
-    actions: ["analyze_overview", "analyze_thematic", "analyze_trends", "analyze_risk"],
+    actions: ["analyze_overview", "analyze_thematic", "analyze_trends", "analyze_risk", "analyze_custom"],
+  },
+  {
+    form_name: "news_editorial_batch",
+    actions: ["run_editorial"],
   },
   {
     form_name: "sample_form",
@@ -33,4 +37,11 @@ export function isFieldManagementSummaryGenerateAction(formName, actionName) {
   const fn = String(formName || "").trim();
   const an = String(actionName || "").trim();
   return fn === "field_management_summary_create" && an === "generate_summary";
+}
+
+/** پالایش هوشمند اخبار — بدنهٔ پرامپت فقط سیاست دبیری؛ بقیه در سرور مونتاژ می‌شود */
+export function isNewsEditorialRunAction(formName, actionName) {
+  const fn = String(formName || "").trim();
+  const an = String(actionName || "").trim();
+  return fn === "news_editorial_batch" && an === "run_editorial";
 }

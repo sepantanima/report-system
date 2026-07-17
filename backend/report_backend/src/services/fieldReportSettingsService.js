@@ -6,6 +6,8 @@ import {
   formatQuotaErrorMessage,
   quotaExceeded,
 } from "../utils/dailyQuotaUtils.js";
+import { clampThreshold, VALID_DUPLICATE_SCOPES } from "../utils/duplicateCheckScope.js";
+import { getPublicDuplicateSettings } from "./duplicateCheckService.js";
 
 let settingsTableExists = null;
 
@@ -28,34 +30,75 @@ export function isSubjectToFieldDailyLimit(user) {
   return roles.includes("user");
 }
 
-export async function getFieldReportSettings() {
-  if (!(await checkSettingsTable())) {
-    return { max_submissions_per_day: DEFAULT_DAILY_SUBMISSION_LIMIT };
-  }
-  const r = await pool.query(`SELECT * FROM tbl_field_report_settings WHERE id = 1`);
-  const row = r.rows[0];
+function mapFieldReportRow(row) {
+  const scope = String(row?.duplicate_check_scope ?? "today").trim();
   return {
     max_submissions_per_day: row?.max_submissions_per_day ?? DEFAULT_DAILY_SUBMISSION_LIMIT,
+    duplicate_check_enabled: row?.duplicate_check_enabled !== false,
+    duplicate_check_scope: VALID_DUPLICATE_SCOPES.has(scope) ? scope : "today",
+    duplicate_similarity_threshold: clampThreshold(row?.duplicate_similarity_threshold ?? 70),
     updated_at: row?.updated_at ?? null,
     updated_by: row?.updated_by ?? null,
   };
+}
+
+export async function getFieldReportSettings() {
+  if (!(await checkSettingsTable())) {
+    return mapFieldReportRow(null);
+  }
+  const r = await pool.query(`SELECT * FROM tbl_field_report_settings WHERE id = 1`);
+  return mapFieldReportRow(r.rows[0]);
+}
+
+export async function getFieldEntryPublicSettings() {
+  const s = await getFieldReportSettings();
+  return getPublicDuplicateSettings(s);
 }
 
 export async function updateFieldReportSettings(body, userId) {
   if (!(await checkSettingsTable())) {
     throw new Error("جدول تنظیمات گزارش میدانی وجود ندارد — مایگریشن 031 را اجرا کنید");
   }
-  const raw = body?.max_submissions_per_day;
-  if (raw === undefined) return getFieldReportSettings();
-  const limit = parseInt(raw, 10);
-  if (!Number.isFinite(limit) || limit < 0) {
-    throw new Error("حداکثر ثبت روزانه باید عدد صفر یا بزرگ‌تر باشد (۰ = بدون محدودیت)");
+
+  const current = await getFieldReportSettings();
+  let limit = current.max_submissions_per_day;
+  if (body?.max_submissions_per_day !== undefined) {
+    const parsed = parseInt(body.max_submissions_per_day, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      throw new Error("حداکثر ثبت روزانه باید عدد صفر یا بزرگ‌تر باشد (۰ = بدون محدودیت)");
+    }
+    limit = parsed;
   }
+
+  let dupEnabled = current.duplicate_check_enabled;
+  if (body?.duplicate_check_enabled !== undefined) {
+    dupEnabled = !!body.duplicate_check_enabled;
+  }
+
+  let dupScope = current.duplicate_check_scope;
+  if (body?.duplicate_check_scope !== undefined) {
+    const scope = String(body.duplicate_check_scope).trim();
+    if (!VALID_DUPLICATE_SCOPES.has(scope)) {
+      throw new Error("بازه بررسی تکراری نامعتبر است");
+    }
+    dupScope = scope;
+  }
+
+  let dupThreshold = current.duplicate_similarity_threshold;
+  if (body?.duplicate_similarity_threshold !== undefined) {
+    dupThreshold = clampThreshold(body.duplicate_similarity_threshold);
+  }
+
   await pool.query(
     `UPDATE tbl_field_report_settings
-     SET max_submissions_per_day = $1, updated_by = $2, updated_at = CURRENT_TIMESTAMP
+     SET max_submissions_per_day = $1,
+         duplicate_check_enabled = $2,
+         duplicate_check_scope = $3,
+         duplicate_similarity_threshold = $4,
+         updated_by = $5,
+         updated_at = CURRENT_TIMESTAMP
      WHERE id = 1`,
-    [limit, userId ?? null],
+    [limit, dupEnabled, dupScope, dupThreshold, userId ?? null],
   );
   return getFieldReportSettings();
 }

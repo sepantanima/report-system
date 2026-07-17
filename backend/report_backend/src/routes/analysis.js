@@ -16,8 +16,13 @@ import {
   assertDeadlineNotPast,
   validateVersionPayload,
   validateAssignmentPayload,
+  TOPIC_ASSIGNMENT_AGG_SQL,
+  missionActiveStatusSql,
 } from "../utils/analysisHelpers.js";
 import { generateAnalysisPdf } from "../services/pdfExport.js";
+import analysisBriefSubmissionsRoutes from "./analysisBriefSubmissions.js";
+import { notifyUserSafe, notifyAnalysisManagers, ANALYSIS_NOTIFY } from "../services/analysisNotificationService.js";
+import { maybeAutoCompleteTopic } from "../services/topicCompletionService.js";
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +42,24 @@ const MANAGER_ROLES = ["admin", "analysis_manager", "Field_admin"];
 const TOPIC_APPROVER_ROLES = ["admin", "analysis_manager", "topic_approver", "Field_admin"];
 const REVIEWER_ROLES = ["admin", "analysis_manager", "Field_admin", "mentor"];
 const ANALYST_ROLES = ["admin", "analysis_manager", "analyst"];
+
+async function getTopicTitle(client, topicId) {
+  const r = await client.query("SELECT title FROM tbl_analysis_topics WHERE id = $1", [topicId]);
+  return r.rows[0]?.title || "محور";
+}
+
+async function getAssignmentNotifyInfo(client, assignmentId) {
+  const r = await client.query(
+    `SELECT a.analyst_id, a.mentor_id, t.title AS topic_title
+     FROM tbl_analysis_assignments a
+     JOIN tbl_analysis_topics t ON a.topic_id = t.id
+     WHERE a.id = $1`,
+    [assignmentId],
+  );
+  return r.rows[0] || null;
+}
+
+router.use("/brief-submissions", analysisBriefSubmissionsRoutes);
 
 const CREATOR_EDIT_STATUSES = ["Draft", "Submitted", "UnderReview", "Rejected"];
 const APPROVER_EDIT_STATUSES = ["Submitted", "UnderReview"];
@@ -66,11 +89,7 @@ router.get("/topics", async (req, res) => {
            u.name as creator_name,
            un."UnitShortName" as unit_name,
            un."StateName" as state_name,
-           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id) as assignment_count,
-           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id) as assignment_total,
-           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status IN ('Assigned','InProgress','Submitted','UnderReview','NeedsRevision')) as assignment_active,
-           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status = 'FinalApproved') as assignment_done,
-           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status IN ('Cancelled','Archived')) as assignment_cancelled,
+           ${TOPIC_ASSIGNMENT_AGG_SQL.trim()},
            (SELECT h.comment FROM tbl_analysis_status_history h
             WHERE h.entity_type = 'topic' AND h.entity_id = t.id AND h.new_status = 'UnderReview'
             ORDER BY h.created_at DESC LIMIT 1) as last_return_comment,
@@ -108,7 +127,7 @@ router.get("/topics", async (req, res) => {
     paramCount++;
   }
   if (includeInactive !== "true" && !status) {
-    queryText += ` AND t.status NOT IN ('Closed','Rejected')`;
+    queryText += ` AND t.status NOT IN ('Closed','Rejected','Completed')`;
   }
   if (status) {
     queryText += ` AND t.status = $${paramCount}`;
@@ -153,7 +172,8 @@ router.get("/topics/summary/stats", async (req, res) => {
       COUNT(*) FILTER (WHERE status = 'Approved')::int as approved,
       COUNT(*) FILTER (WHERE status = 'Assigned')::int as assigned,
       COUNT(*) FILTER (WHERE status = 'Rejected')::int as rejected,
-      COUNT(*) FILTER (WHERE suggested_deadline IS NOT NULL AND suggested_deadline < CURRENT_DATE AND status NOT IN ('Closed','Rejected'))::int as overdue
+      COUNT(*) FILTER (WHERE suggested_deadline IS NOT NULL AND suggested_deadline < CURRENT_DATE AND status IN ('Approved','Assigned'))::int as overdue,
+      COUNT(*) FILTER (WHERE status = 'Completed')::int as completed
     FROM tbl_analysis_topics t
     WHERE t.deleted_at IS NULL
   `;
@@ -204,7 +224,9 @@ router.get("/assignments/summary/stats", requireRole(...MANAGER_ROLES), async (r
 router.get("/topics/:id", async (req, res) => {
   try {
     const topicRes = await pool.query(
-      `SELECT t.*, u.name as creator_name FROM tbl_analysis_topics t
+      `SELECT t.*, u.name as creator_name,
+              ${TOPIC_ASSIGNMENT_AGG_SQL.trim()}
+       FROM tbl_analysis_topics t
        LEFT JOIN tbl_users u ON t.creator_id = u.id
        WHERE t.id = $1 AND t.deleted_at IS NULL`,
       [req.params.id]
@@ -242,18 +264,22 @@ router.post("/topics", requireRole("admin", "analysis_manager", "Field_admin", "
   const deadlineErr = assertDeadlineNotPast(deadlineGregorian);
   if (deadlineErr) return res.status(400).json({ error: deadlineErr });
 
+  const canDirectApprove = hasAnyRole(req.user, [...MANAGER_ROLES, ...TOPIC_APPROVER_ROLES]);
+  const initialStatus = canDirectApprove ? "Approved" : "Submitted";
+  const createComment = canDirectApprove ? "ثبت محور تصویب‌شده توسط مدیر/تصویب‌کننده" : "ثبت پیشنهاد موضوع";
+
   try {
     const row = await withTransaction(async (client) => {
       const topicCode = await generateTopicCode(client);
       const result = await client.query(
         `INSERT INTO tbl_analysis_topics
          (topic_code, title, description, domain, keywords, priority, importance_reason, suggested_deadline, creator_id, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Submitted') RETURNING *`,
-        [topicCode, title, description, domain, keywords, priority || "medium", importance_reason, deadlineGregorian, req.user.id]
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [topicCode, title, description, domain, keywords, priority || "medium", importance_reason, deadlineGregorian, req.user.id, initialStatus]
       );
       await logStatusChange(client, {
-        entityType: "topic", entityId: result.rows[0].id, oldStatus: null, newStatus: "Submitted",
-        changedBy: req.user.id, comment: "ثبت موضوع جدید",
+        entityType: "topic", entityId: result.rows[0].id, oldStatus: null, newStatus: initialStatus,
+        changedBy: req.user.id, comment: createComment,
       });
       await logActivity(client, { userId: req.user.id, action: "create", entityType: "topic", entityId: result.rows[0].id, details: { title } });
       return result.rows[0];
@@ -281,7 +307,7 @@ router.patch("/topics/:id", requireRole("admin", "analysis_manager", "Field_admi
     const isCreator = t.creator_id === req.user.id;
     const canEditAsCreator = isCreator && CREATOR_EDIT_STATUSES.includes(t.status);
     const canEditAsApprover = hasAnyRole(req.user, TOPIC_APPROVER_ROLES) && APPROVER_EDIT_STATUSES.includes(t.status);
-    const canEditAsManager = hasAnyRole(req.user, MANAGER_ROLES);
+    const canEditAsManager = hasAnyRole(req.user, MANAGER_ROLES) && ["Approved", "Assigned"].includes(t.status);
     if (!canEditAsCreator && !canEditAsApprover && !canEditAsManager) {
       return res.status(400).json({ error: "ویرایش در این وضعیت مجاز نیست" });
     }
@@ -329,6 +355,8 @@ router.post("/topics/:id/review", requireRole(...TOPIC_APPROVER_ROLES), async (r
   if (!newStatus) return res.status(400).json({ error: "تصمیم نامعتبر" });
 
   try {
+    const topicRow = await pool.query("SELECT creator_id, title FROM tbl_analysis_topics WHERE id = $1", [req.params.id]);
+    const topic = topicRow.rows[0];
     await withTransaction(async (client) => {
       const oldRes = await client.query("SELECT status FROM tbl_analysis_topics WHERE id = $1", [req.params.id]);
       await client.query("UPDATE tbl_analysis_topics SET status=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2", [newStatus, req.params.id]);
@@ -338,7 +366,73 @@ router.post("/topics/:id/review", requireRole(...TOPIC_APPROVER_ROLES), async (r
       });
       await logActivity(client, { userId: req.user.id, action: decision, entityType: "topic", entityId: req.params.id });
     });
+    if (topic?.creator_id) {
+      const title = topic.title || "محور";
+      if (decision === "approve") {
+        notifyUserSafe(req.user, topic.creator_id, "تصویب محور", ANALYSIS_NOTIFY.topicApproved(title));
+      } else if (decision === "reject") {
+        notifyUserSafe(req.user, topic.creator_id, "رد محور", ANALYSIS_NOTIFY.topicRejected(title));
+      } else if (decision === "needs_info") {
+        notifyUserSafe(req.user, topic.creator_id, "برگشت محور", ANALYSIS_NOTIFY.topicNeedsInfo(title));
+      }
+    }
     res.json({ message: "نتیجه بررسی ثبت شد", status: newStatus });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/topics/:id/complete", requireRole(...MANAGER_ROLES), async (req, res) => {
+  const { comment } = req.body || {};
+  try {
+    const topicRow = await pool.query(
+      "SELECT id, status, creator_id, title FROM tbl_analysis_topics WHERE id=$1 AND deleted_at IS NULL",
+      [req.params.id],
+    );
+    if (!topicRow.rows[0]) return res.status(404).json({ error: "موضوع یافت نشد" });
+    const t = topicRow.rows[0];
+    if (!["Approved", "Assigned"].includes(t.status)) {
+      return res.status(400).json({ error: "فقط محورهای تصویب‌شده یا در حال ارجاع قابل اتمام هستند" });
+    }
+
+    const assignRes = await pool.query(
+      `SELECT COUNT(*) FILTER (WHERE ${missionActiveStatusSql()})::int AS active
+       FROM tbl_analysis_assignments WHERE topic_id = $1`,
+      [req.params.id],
+    );
+    const activeAssignments = assignRes.rows[0]?.active ?? 0;
+
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE tbl_analysis_topics SET status='Completed', completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=$1`,
+        [req.params.id],
+      );
+      await logStatusChange(client, {
+        entityType: "topic",
+        entityId: req.params.id,
+        oldStatus: t.status,
+        newStatus: "Completed",
+        changedBy: req.user.id,
+        comment: comment || "تکمیل موضوع توسط مدیر",
+      });
+      await logActivity(client, {
+        userId: req.user.id,
+        action: "complete",
+        entityType: "topic",
+        entityId: req.params.id,
+      });
+    });
+
+    if (t.creator_id) {
+      notifyUserSafe(
+        req.user,
+        t.creator_id,
+        "اتمام محور",
+        `محور «${t.title || "محور"}» توسط مدیر تحلیل بسته شد؛ ارجاع‌های در جریان ادامه می‌یابند اما ارجاع جدید ثبت نمی‌شود.`,
+      );
+    }
+
+    res.json({ message: "محور با موفقیت بسته شد", status: "Completed" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -375,11 +469,70 @@ router.post("/topics/:id/archive", async (req, res) => {
     if (!existing.rows[0]) return res.status(404).json({ error: "موضوع یافت نشد" });
     const t = existing.rows[0];
     const isCreator = t.creator_id === req.user.id;
-    const canArchive = hasAnyRole(req.user, [...MANAGER_ROLES, ...TOPIC_APPROVER_ROLES])
-      || (isCreator && ["Draft", "Rejected", "Submitted"].includes(t.status));
-    if (!canArchive) return res.status(403).json({ error: "دسترسی غیرمجاز" });
+    const isPrivileged = hasAnyRole(req.user, [...MANAGER_ROLES, ...TOPIC_APPROVER_ROLES]);
+
+    const assignRes = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE ${missionActiveStatusSql()})::int AS active,
+         COUNT(*) FILTER (WHERE status = 'FinalApproved')::int AS done,
+         COUNT(*) FILTER (WHERE status NOT IN ('Cancelled','Archived'))::int AS total
+       FROM tbl_analysis_assignments WHERE topic_id = $1`,
+      [req.params.id],
+    );
+    const { active: activeAssignments, done: doneAssignments, total: totalAssignments } = assignRes.rows[0] || { active: 0, done: 0, total: 0 };
+    const cancelAssignments = req.body?.cancelAssignments === true;
+
+    let canArchive = isPrivileged;
+    if (!canArchive && isCreator) {
+      if (["Draft", "Rejected", "Submitted", "UnderReview"].includes(t.status)) {
+        canArchive = true;
+      } else if (t.status === "Approved" && totalAssignments === 0) {
+        canArchive = true;
+      } else if (t.status === "Assigned") {
+        if (totalAssignments > 0 && activeAssignments === 0 && doneAssignments === totalAssignments) {
+          canArchive = true;
+        } else if (activeAssignments > 0 && cancelAssignments) {
+          canArchive = true;
+        }
+      }
+    }
+    if (!canArchive) {
+      if (isCreator && t.status === "Assigned" && activeAssignments > 0) {
+        return res.status(409).json({
+          error: "این محور ارجاع فعال دارد. برای بایگانی باید لغو ارجاع‌ها تأیید شود.",
+          code: "ACTIVE_ASSIGNMENTS",
+          activeAssignments,
+        });
+      }
+      return res.status(403).json({ error: "دسترسی غیرمجاز" });
+    }
+
     await withTransaction(async (client) => {
-      await client.query("UPDATE tbl_analysis_topics SET deleted_at=CURRENT_TIMESTAMP, status='Closed', updated_at=CURRENT_TIMESTAMP WHERE id=$1", [req.params.id]);
+      if (activeAssignments > 0 && cancelAssignments) {
+        const activeRows = await client.query(
+          `SELECT id, status FROM tbl_analysis_assignments
+           WHERE topic_id = $1 AND ${missionActiveStatusSql()}`,
+          [req.params.id],
+        );
+        for (const row of activeRows.rows) {
+          await client.query(
+            "UPDATE tbl_analysis_assignments SET status='Cancelled', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+            [row.id],
+          );
+          await logStatusChange(client, {
+            entityType: "assignment",
+            entityId: row.id,
+            oldStatus: row.status,
+            newStatus: "Cancelled",
+            changedBy: req.user.id,
+            comment: req.body?.comment || "لغو به‌دلیل بایگانی محور",
+          });
+        }
+      }
+      await client.query(
+        "UPDATE tbl_analysis_topics SET deleted_at=CURRENT_TIMESTAMP, status='Closed', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+        [req.params.id],
+      );
       await logStatusChange(client, {
         entityType: "topic", entityId: req.params.id, oldStatus: t.status, newStatus: "Closed",
         changedBy: req.user.id, comment: req.body?.comment || "بایگانی",
@@ -398,11 +551,70 @@ router.delete("/topics/:id", async (req, res) => {
     if (!existing.rows[0]) return res.status(404).json({ error: "موضوع یافت نشد" });
     const t = existing.rows[0];
     const isCreator = t.creator_id === req.user.id;
-    const canArchive = hasAnyRole(req.user, [...MANAGER_ROLES, ...TOPIC_APPROVER_ROLES])
-      || (isCreator && ["Draft", "Rejected", "Submitted"].includes(t.status));
-    if (!canArchive) return res.status(403).json({ error: "دسترسی غیرمجاز" });
+    const isPrivileged = hasAnyRole(req.user, [...MANAGER_ROLES, ...TOPIC_APPROVER_ROLES]);
+    const cancelAssignments = req.query?.cancelAssignments === "true";
+
+    const assignRes = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE ${missionActiveStatusSql()})::int AS active,
+         COUNT(*) FILTER (WHERE status = 'FinalApproved')::int AS done,
+         COUNT(*) FILTER (WHERE status NOT IN ('Cancelled','Archived'))::int AS total
+       FROM tbl_analysis_assignments WHERE topic_id = $1`,
+      [req.params.id],
+    );
+    const { active: activeAssignments, done: doneAssignments, total: totalAssignments } = assignRes.rows[0] || { active: 0, done: 0, total: 0 };
+
+    let canArchive = isPrivileged;
+    if (!canArchive && isCreator) {
+      if (["Draft", "Rejected", "Submitted", "UnderReview"].includes(t.status)) {
+        canArchive = true;
+      } else if (t.status === "Approved" && totalAssignments === 0) {
+        canArchive = true;
+      } else if (t.status === "Assigned") {
+        if (totalAssignments > 0 && activeAssignments === 0 && doneAssignments === totalAssignments) {
+          canArchive = true;
+        } else if (activeAssignments > 0 && cancelAssignments) {
+          canArchive = true;
+        }
+      }
+    }
+    if (!canArchive) {
+      if (isCreator && t.status === "Assigned" && activeAssignments > 0) {
+        return res.status(409).json({
+          error: "این محور ارجاع فعال دارد. برای حذف باید لغو ارجاع‌ها تأیید شود.",
+          code: "ACTIVE_ASSIGNMENTS",
+          activeAssignments,
+        });
+      }
+      return res.status(403).json({ error: "دسترسی غیرمجاز" });
+    }
+
     await withTransaction(async (client) => {
-      await client.query("UPDATE tbl_analysis_topics SET deleted_at=CURRENT_TIMESTAMP, status='Closed', updated_at=CURRENT_TIMESTAMP WHERE id=$1", [req.params.id]);
+      if (activeAssignments > 0 && cancelAssignments) {
+        const activeRows = await client.query(
+          `SELECT id, status FROM tbl_analysis_assignments
+           WHERE topic_id = $1 AND ${missionActiveStatusSql()}`,
+          [req.params.id],
+        );
+        for (const row of activeRows.rows) {
+          await client.query(
+            "UPDATE tbl_analysis_assignments SET status='Cancelled', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+            [row.id],
+          );
+          await logStatusChange(client, {
+            entityType: "assignment",
+            entityId: row.id,
+            oldStatus: row.status,
+            newStatus: "Cancelled",
+            changedBy: req.user.id,
+            comment: "لغو به‌دلیل حذف محور",
+          });
+        }
+      }
+      await client.query(
+        "UPDATE tbl_analysis_topics SET deleted_at=CURRENT_TIMESTAMP, status='Closed', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+        [req.params.id],
+      );
       await logStatusChange(client, {
         entityType: "topic", entityId: req.params.id, oldStatus: t.status, newStatus: "Closed",
         changedBy: req.user.id, comment: "بایگانی",
@@ -477,7 +689,7 @@ router.patch("/policies/:id/active", requireRole(...MANAGER_ROLES), async (req, 
 // ===================== ASSIGNMENTS =====================
 
 router.get("/assignments", async (req, res) => {
-  const { analystId, managerId, mentorId, stateName, unitCode, status, includeInactive, forReview } = req.query;
+  const { analystId, managerId, mentorId, stateName, unitCode, status, includeInactive, forReview, topicId } = req.query;
   let queryText = `
     SELECT a.*, t.title as topic_title, t.topic_code, t.description as topic_desc,
            u_mentor.name as mentor_name, u_analyst.name as analyst_realname,
@@ -513,6 +725,7 @@ router.get("/assignments", async (req, res) => {
   if (stateName) { queryText += ` AND un."StateName" = $${paramCount}`; queryParams.push(stateName); paramCount++; }
   if (unitCode) { queryText += ` AND u_analyst.unit_cd = $${paramCount}`; queryParams.push(unitCode); paramCount++; }
   if (status) { queryText += ` AND a.status = $${paramCount}`; queryParams.push(status); paramCount++; }
+  if (topicId) { queryText += ` AND a.topic_id = $${paramCount}`; queryParams.push(topicId); paramCount++; }
   if (includeInactive !== "true" && !status) {
     queryText += ` AND a.status NOT IN ('Cancelled','Archived')`;
   }
@@ -575,10 +788,29 @@ router.post("/assignments", requireRole(...MANAGER_ROLES), async (req, res) => {
 
   try {
     const row = await withTransaction(async (client) => {
-      const topicRes = await client.query("SELECT status FROM tbl_analysis_topics WHERE id=$1 AND deleted_at IS NULL", [topic_id]);
-      if (!topicRes.rows[0]) throw new Error("TOPIC_NOT_FOUND");
-      if (!["Approved", "Assigned"].includes(topicRes.rows[0].status)) {
+      const topicRes = await client.query(
+        "SELECT status, deleted_at, suggested_deadline FROM tbl_analysis_topics WHERE id=$1",
+        [topic_id],
+      );
+      if (!topicRes.rows[0] || topicRes.rows[0].deleted_at) throw new Error("TOPIC_NOT_FOUND");
+      const topicStatus = topicRes.rows[0].status;
+      const topicDeadline = topicRes.rows[0].suggested_deadline;
+      if (topicStatus === "Completed") {
+        throw new Error("TOPIC_COMPLETED");
+      }
+      if (["Closed", "Rejected"].includes(topicStatus)) {
+        throw new Error("TOPIC_NOT_ASSIGNABLE");
+      }
+      if (!["Approved", "Assigned"].includes(topicStatus)) {
         throw new Error("TOPIC_NOT_APPROVED");
+      }
+      if (topicDeadline) {
+        const dlErr = assertDeadlineNotPast(
+          typeof topicDeadline === "string"
+            ? topicDeadline.slice(0, 10)
+            : topicDeadline,
+        );
+        if (dlErr) throw new Error("TOPIC_DEADLINE_PASSED");
       }
 
       const assignResult = await client.query(
@@ -594,10 +826,21 @@ router.post("/assignments", requireRole(...MANAGER_ROLES), async (req, res) => {
       await logActivity(client, { userId: req.user.id, action: "create", entityType: "assignment", entityId: assignResult.rows[0].id });
       return assignResult.rows[0];
     });
+    const topicTitle = await getTopicTitle(pool, topic_id);
+    notifyUserSafe(req.user, analyst_id, "مأموریت تحلیل", ANALYSIS_NOTIFY.assignmentCreated(topicTitle));
     res.status(201).json(row);
   } catch (err) {
     if (err.message === "TOPIC_NOT_FOUND") return res.status(404).json({ error: "موضوع یافت نشد" });
+    if (err.message === "TOPIC_COMPLETED") {
+      return res.status(400).json({ error: "این محور بسته شده است و ارجاع جدید امکان‌پذیر نیست" });
+    }
+    if (err.message === "TOPIC_NOT_ASSIGNABLE") {
+      return res.status(400).json({ error: "محورهای بایگانی، حذف‌شده، رد‌شده یا لغو‌شده قابل ارجاع نیستند" });
+    }
     if (err.message === "TOPIC_NOT_APPROVED") return res.status(400).json({ error: "فقط محورهای تصویب‌شده قابل ارجاع هستند" });
+    if (err.message === "TOPIC_DEADLINE_PASSED") {
+      return res.status(400).json({ error: "مهلت این محور تمام شده است. ابتدا مهلت را در مدیریت محورها تمدید کنید." });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -851,9 +1094,17 @@ router.post("/versions/:id/submit", requireRole(...ANALYST_ROLES), async (req, r
         newStatus: "Submitted", changedBy: req.user.id,
       });
       await logActivity(client, { userId: req.user.id, action: "submit", entityType: "version", entityId: targetVersion.id });
-      return targetVersion;
+      return { targetVersion, assignment_id: v.assignment_id, mentor_id: null };
     });
-    res.json(row);
+    const info = await getAssignmentNotifyInfo(pool, row.assignment_id);
+    if (info) {
+      if (info.mentor_id) {
+        notifyUserSafe(req.user, info.mentor_id, "تحلیل ارسال شد", ANALYSIS_NOTIFY.analysisSubmitted(info.topic_title));
+      } else {
+        notifyAnalysisManagers(req.user, "تحلیل ارسال شد", ANALYSIS_NOTIFY.analysisSubmitted(info.topic_title));
+      }
+    }
+    res.json(row.targetVersion);
   } catch (err) {
     if (err.message === "NOT_FOUND") return res.status(404).json({ error: "نسخه یافت نشد" });
     if (err.message === "FORBIDDEN") return res.status(403).json({ error: "دسترسی غیرمجاز" });
@@ -989,15 +1240,21 @@ router.patch("/versions/:id/request-revision", requireRole(...REVIEWER_ROLES), a
       );
       await client.query("UPDATE tbl_analysis_versions SET status='ReturnedForRevision', is_locked=false WHERE id=$1", [version_id]);
       const vRes = await client.query(
-        `SELECT an.assignment_id FROM tbl_analysis_versions v JOIN tbl_analysis_analyses an ON v.analysis_id=an.id WHERE v.id=$1`,
+        `SELECT an.assignment_id, an.analyst_id FROM tbl_analysis_versions v JOIN tbl_analysis_analyses an ON v.analysis_id=an.id WHERE v.id=$1`,
         [version_id]
       );
       if (vRes.rows[0]) {
         await client.query("UPDATE tbl_analysis_assignments SET status='NeedsRevision' WHERE id=$1", [vRes.rows[0].assignment_id]);
       }
-      return fb.rows[0];
+      return { feedback: fb.rows[0], assignment_id: vRes.rows[0]?.assignment_id, analyst_id: vRes.rows[0]?.analyst_id };
     });
-    res.json(row);
+    if (row.assignment_id) {
+      const info = await getAssignmentNotifyInfo(pool, row.assignment_id);
+      if (info?.analyst_id) {
+        notifyUserSafe(req.user, info.analyst_id, "نیازمند اصلاح", ANALYSIS_NOTIFY.needsRevision(info.topic_title));
+      }
+    }
+    res.json(row.feedback);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1100,20 +1357,38 @@ router.post("/versions/:id/scores", requireRole(...REVIEWER_ROLES, ...MANAGER_RO
 router.post("/analyses/:id/approve-final", requireRole(...MANAGER_ROLES), async (req, res) => {
   const { version_id, manager_note } = req.body;
   try {
+    const ctx = await pool.query(
+      `SELECT an.analyst_id, a.id AS assignment_id
+       FROM tbl_analysis_analyses an
+       JOIN tbl_analysis_assignments a ON an.assignment_id = a.id
+       WHERE an.id = $1`,
+      [req.params.id],
+    );
+    const analystId = ctx.rows[0]?.analyst_id;
+    const assignmentId = ctx.rows[0]?.assignment_id;
+    let topicId = null;
+
     await withTransaction(async (client) => {
       await client.query("UPDATE tbl_analysis_versions SET status='Final', is_locked=true WHERE id=$1", [version_id]);
       await client.query(
         "UPDATE tbl_analysis_analyses SET final_version_id=$1, status='FinalApproved', updated_at=CURRENT_TIMESTAMP WHERE id=$2",
         [version_id, req.params.id]
       );
-      const assignRes = await client.query(
-        "SELECT assignment_id FROM tbl_analysis_analyses WHERE id=$1", [req.params.id]
-      );
-      if (assignRes.rows[0]) {
-        await client.query("UPDATE tbl_analysis_assignments SET status='FinalApproved' WHERE id=$1", [assignRes.rows[0].assignment_id]);
+      if (assignmentId) {
+        await client.query("UPDATE tbl_analysis_assignments SET status='FinalApproved' WHERE id=$1", [assignmentId]);
+        const topicRes = await client.query("SELECT topic_id FROM tbl_analysis_assignments WHERE id=$1", [assignmentId]);
+        topicId = topicRes.rows[0]?.topic_id ?? null;
+        if (topicId) {
+          await maybeAutoCompleteTopic(client, topicId, req.user.id);
+        }
       }
       await logActivity(client, { userId: req.user.id, action: "approve_final", entityType: "analysis", entityId: req.params.id, details: { version_id, manager_note } });
     });
+
+    if (assignmentId && analystId) {
+      const info = await getAssignmentNotifyInfo(pool, assignmentId);
+      notifyUserSafe(req.user, analystId, "تایید نهایی", ANALYSIS_NOTIFY.finalApproved(info?.topic_title || "محور"));
+    }
     res.json({ message: "تحلیل تایید نهایی شد" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1481,7 +1756,11 @@ router.get("/status-history/:entityType/:entityId", async (req, res) => {
 router.get("/users/analysts", requireRole(...MANAGER_ROLES), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, username, name, role FROM tbl_users WHERE active=true ORDER BY name`
+      `SELECT u.id, u.username, u.name, u.role, un."UnitShortName" AS unit_name
+       FROM tbl_users u
+       LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
+       WHERE u.active = true
+       ORDER BY u.name`
     );
     const users = result.rows.filter((u) => parseUserRoles(u.role).includes("analyst"));
     if (!users.length) {
@@ -1496,13 +1775,81 @@ router.get("/users/analysts", requireRole(...MANAGER_ROLES), async (req, res) =>
 router.get("/users/mentors", requireRole(...MANAGER_ROLES), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, username, name, role FROM tbl_users WHERE active=true ORDER BY name`
+      `SELECT u.id, u.username, u.name, u.role, un."UnitShortName" AS unit_name
+       FROM tbl_users u
+       LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
+       WHERE u.active = true
+       ORDER BY u.name`
     );
     const users = result.rows.filter((u) => parseUserRoles(u.role).includes("mentor"));
     if (!users.length) {
       return res.json({ users: [], message: "کاربری با نقش راهنما در سامانه یافت نشد" });
     }
     res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/menu-badges", async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: "احراز هویت نشده" });
+  }
+
+  const roles = parseUserRoles(req.user?.role);
+  const badges = {
+    my_missions: 0,
+    approve_topics: 0,
+    review_queue: 0,
+  };
+
+  try {
+    const queries = [];
+
+    if (roles.includes("analyst") || hasAnyRole(req.user, MANAGER_ROLES)) {
+      queries.push(
+        pool.query(
+          `SELECT COUNT(*)::int AS cnt
+           FROM tbl_analysis_assignments a
+           JOIN tbl_analysis_topics t ON a.topic_id = t.id AND t.deleted_at IS NULL
+           WHERE a.analyst_id = $1
+             AND a.status IN ('Assigned','InProgress','NeedsRevision')`,
+          [userId],
+        ).then((r) => { badges.my_missions = r.rows[0]?.cnt || 0; }),
+      );
+    }
+
+    if (hasAnyRole(req.user, TOPIC_APPROVER_ROLES)) {
+      queries.push(
+        pool.query(
+          `SELECT COUNT(*)::int AS cnt
+           FROM tbl_analysis_topics t
+           WHERE t.deleted_at IS NULL
+             AND t.status IN ('Submitted','UnderReview')`,
+        ).then((r) => { badges.approve_topics = r.rows[0]?.cnt || 0; }),
+      );
+    }
+
+    if (hasAnyRole(req.user, REVIEWER_ROLES)) {
+      let reviewQ = `
+        SELECT COUNT(*)::int AS cnt
+        FROM tbl_analysis_assignments a
+        JOIN tbl_analysis_topics t ON a.topic_id = t.id AND t.deleted_at IS NULL
+        WHERE a.status IN ('Submitted','UnderReview','NeedsRevision')
+      `;
+      const reviewParams = [];
+      if (roles.includes("mentor") && !hasAnyRole(req.user, MANAGER_ROLES)) {
+        reviewQ += ` AND a.mentor_id = $1`;
+        reviewParams.push(userId);
+      }
+      queries.push(
+        pool.query(reviewQ, reviewParams).then((r) => { badges.review_queue = r.rows[0]?.cnt || 0; }),
+      );
+    }
+
+    await Promise.all(queries);
+    res.json(badges);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

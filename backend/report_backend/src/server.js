@@ -20,6 +20,7 @@ import adminFieldReportSettingsRoutes from "./routes/adminFieldReportSettings.js
 import adminNewsEntrySettingsRoutes from "./routes/adminNewsEntrySettings.js";
 import messagesRoutes from "./routes/messages.js";
 import adminMessageSettingsRoutes from "./routes/adminMessageSettings.js";
+import adminUserMessengerAccountsRoutes from "./routes/adminUserMessengerAccounts.js";
 import messengerRoutes from "./routes/messengerRoutes.js";
 import { getPdfEngineInfo } from "./services/newsReportPdf.js";
 
@@ -91,6 +92,7 @@ app.use("/api/admin/field-report", adminFieldReportSettingsRoutes);
 app.use("/api/admin/news-entry", adminNewsEntrySettingsRoutes);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/admin/message-settings", adminMessageSettingsRoutes);
+app.use("/api/admin", adminUserMessengerAccountsRoutes);
 app.use("/api/messenger", messengerRoutes);
 
 app.get("/", (req, res) => {

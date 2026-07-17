@@ -1,7 +1,7 @@
 import { isRegisteredFormAction } from "./aiFormRegistry.js";
 
 /** استراتژی‌های مونتاژ؛ مقدار جدید فقط unified_v1 — بقیه برای ردیف‌های قدیمی دیتابیس */
-export const AI_ASSEMBLY_STRATEGIES = ["unified_v1", "labeled_fields", "field_management_summary_v1"];
+export const AI_ASSEMBLY_STRATEGIES = ["unified_v1", "labeled_fields", "field_management_summary_v1", "news_editorial_v1"];
 
 export const FORM_AI_NAMES = {
   FIELD_MANAGEMENT_SUMMARY_CREATE: "field_management_summary_create",

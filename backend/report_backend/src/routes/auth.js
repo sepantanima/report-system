@@ -12,7 +12,7 @@ router.post("/login", async (req, res) => {
     // ۱. کوئری اصلاح شده: فیلدها از جدول کاربر و استان از جدول واحدها
     const query = `
       SELECT 
-        u.id, u.username, u.name, u.password, u.role, u.active, u.unit_cd,
+        u.id, u.username, u.name, u.password, u.role, u.gender, u.active, u.unit_cd,
         un."StateName", un."UnitShortName"
       FROM tbl_users u
       LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
@@ -41,10 +41,11 @@ router.post("/login", async (req, res) => {
       { 
         id: user.id, 
         username: user.username, 
-        name: user.name, 
-        unitcd: user.unit_cd,        // کد واحد
-        unitName: user.UnitShortName, // نام واحد (اختیاری برای نمایش)
-        statename: user.StateName ,    // نام استان از جدول tbl_units
+        name: user.name,
+        gender: user.gender === "female" ? "female" : "male",
+        unitcd: user.unit_cd,
+        unitName: user.UnitShortName,
+        statename: user.StateName,
         role: user.role
       }, 
       process.env.JWT_SECRET || "mysecretkey",
@@ -59,6 +60,7 @@ router.post("/login", async (req, res) => {
       unitcd: user.unit_cd,
       userName: user.username,
       name: user.name,
+      gender: user.gender === "female" ? "female" : "male",
     });
   } catch (err) {
     console.error("❌ Error:", err.message);

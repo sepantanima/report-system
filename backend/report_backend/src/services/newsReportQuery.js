@@ -1,13 +1,16 @@
 import pool from "../db.js";
+import { mergeReportWorkflowFilterDefaults } from "../constants/newsReportDefaults.js";
 import { stripHtml } from "./newsTextUtils.js";
+import { resolveRowReportRef } from "./newsReportRefService.js";
 import { NEWS_REF_KEY_CTE } from "./newsMonitorService.js";
 import { buildAnalyticsWhere } from "./newsAnalyticsService.js";
-import { sqlNewsDuplicateStatus, sqlNewsReviewState, sqlNewsWorkflow } from "./newsDbEnums.js";
+import { sqlNewsDuplicateStatus, sqlNewsReviewState, sqlNewsWorkflow, sqlNewsPublishStatus } from "./newsDbEnums.js";
 import { statusLabel } from "./newsReportFormat.js";
 
 const WS = sqlNewsWorkflow();
 const RS = sqlNewsReviewState();
 const DS = sqlNewsDuplicateStatus();
+const PS = sqlNewsPublishStatus();
 
 const MAX_ROWS = 2000;
 const DEFAULT_PAGE_SIZE = 20;
@@ -31,6 +34,30 @@ function normalizeStringArray(v) {
     return [];
   }
   return v.map((x) => String(x ?? "").trim()).filter(Boolean);
+}
+
+export function mergeReportWorkflowFilters(filters = {}, workflowDefaults = null) {
+  const merged = mergeDefaultFilters(filters);
+  const defs = mergeReportWorkflowFilterDefaults(workflowDefaults);
+
+  if (merged.duplicate == null && defs.duplicate) merged.duplicate = defs.duplicate;
+  if (merged.is_deleted == null && defs.is_deleted != null) merged.is_deleted = defs.is_deleted;
+
+  const hasStatuses = Boolean(merged.status) || (Array.isArray(merged.statuses) && merged.statuses.length);
+  if (!hasStatuses && defs.statuses?.length) merged.statuses = [...defs.statuses];
+
+  const importance = normalizeIntArray(merged.importance ?? merged.priorities);
+  if (importance.length) {
+    merged.importance = importance;
+    delete merged.priorities;
+  } else if (defs.priorities?.length) {
+    merged.importance = [...defs.priorities];
+  }
+
+  const quality = normalizeIntArray(merged.quality ?? merged.qualities ?? merged.priority);
+  if (!quality.length && defs.qualities?.length) merged.quality = [...defs.qualities];
+
+  return merged;
 }
 
 export function mergeDefaultFilters(filters = {}) {
@@ -91,7 +118,10 @@ function extendWhereForArrays(base, filters = {}) {
   if (statuses.length > 1) {
     const parts = statuses.map((s) => {
       if (s === "published") {
-        return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${DS} = 'none'`;
+        return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${PS} = 'ready' AND ${DS} = 'none'`;
+      }
+      if (s === "banked") {
+        return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${PS} = 'banked' AND ${DS} = 'none'`;
       }
       if (s === "approved") return `${RS} = 'approved'`;
       if (s === "rejected") return `${RS} = 'rejected'`;
@@ -121,6 +151,11 @@ function extendWhereForArrays(base, filters = {}) {
       where += ` AND bk.id = ANY($${params.length}::int[])`;
     }
   }
+  if (filters.is_deleted === true) {
+    // base_key CTE excludes deleted rows; explicit include requires direct tbl_news access (not supported in v1)
+  } else if (filters.is_deleted === false) {
+    where += ` AND COALESCE(bk.is_deleted, false) = false`;
+  }
   return { where, params, joins };
 }
 
@@ -147,19 +182,27 @@ async function attachCategories(rows) {
       catMap.get(c.news_id).push(c.title_fa);
     }
   }
-  return rows.map((row, i) => ({
-    ...row,
-    row_num: i + 1,
-    categories: catMap.get(row.id) || [],
-    status_label: statusLabel(row),
-    short_text: stripHtml(row.cleaned_text || row.raw_text || row.summary || "").slice(0, 120),
-  }));
+  return rows.map((row, i) => {
+    const ref = resolveRowReportRef(row);
+    return {
+      ...row,
+      ref_date: ref.ref_date || row.ref_date,
+      ref_hm: ref.ref_hm || row.ref_hm,
+      ref_key: ref.ref_key || row.ref_key,
+      row_num: i + 1,
+      categories: catMap.get(row.id) || [],
+      status_label: statusLabel(row),
+      short_text: stripHtml(row.cleaned_text || row.raw_text || row.summary || "").slice(0, 120),
+    };
+  });
 }
 
 const SELECT_COLS = `
   bk.id, bk.ref_date, bk.ref_hm, bk.ref_key, bk.source, bk.sender,
-  bk.priority, bk.quality, bk.review_state, bk.workflow_status,
+  bk.priority, bk.quality, bk.review_state, bk.workflow_status, bk.publish_status,
   bk.summary, bk.cleaned_text, bk.raw_text, bk.source_date_jalali, bk.source_time_hm,
+  bk.relay_date_jalali, bk.relay_time_hm, bk.report_ref_date_jalali, bk.report_ref_time_hm,
+  bk.created_at,
   obs.name AS observer_name, un."UnitShortName" AS unit_name
 `;
 

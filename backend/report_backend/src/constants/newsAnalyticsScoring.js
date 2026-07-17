@@ -1,5 +1,7 @@
 /** ضرایب امتیازدهی داشبورد تحلیلی اخبار */
 
+import { NEWS_PRIORITIES, NEWS_QUALITY } from "./newsMonitorMeta.js";
+
 export const PRIORITY_WEIGHT = { 1: 4, 2: 3, 3: 2, 4: 1 };
 export const QUALITY_WEIGHT = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 4 };
 
@@ -64,25 +66,19 @@ export function speedBonusFromHours(avgHours) {
   return Math.max(0, 1 - capped / 48);
 }
 
-export const PRIORITY_LABELS = {
-  1: "خیلی مهم",
-  2: "مهم",
-  3: "عادی",
-  4: "فاقد اهمیت",
-};
+export const PRIORITY_LABELS = Object.fromEntries(
+  Object.entries(NEWS_PRIORITIES).map(([k, v]) => [k, v.label]),
+);
 
-export const QUALITY_LABELS = {
-  1: "ضعیف",
-  2: "متوسط",
-  3: "متوسط",
-  4: "خوب",
-  5: "عالی",
-};
+export const QUALITY_LABELS = Object.fromEntries(
+  Object.entries(NEWS_QUALITY).map(([k, v]) => [k, v.label]),
+);
 
 export const STATUS_LABELS = {
   registered: "ثبت شده",
   in_review: "در حال بررسی",
   approved: "تأیید شده",
-  rejected: "رد شده",
-  published: "منتشر شده",
+  rejected: "برگشت به فرستنده",
+  published: "آماده انتشار",
+  banked: "بانک انتظار",
 };

@@ -49,6 +49,10 @@ const CATALOG = {
   "news_smart_analysis|analyze_thematic": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
   "news_smart_analysis|analyze_trends": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
   "news_smart_analysis|analyze_risk": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
+  "news_smart_analysis|analyze_custom": { serverVarsMeta: SMART_ANALYSIS_SERVER_VARS },
+  "news_editorial_batch|run_editorial": {
+    serverVarsMeta: [],
+  },
 };
 
 export function catalogKey(formName, actionName) {

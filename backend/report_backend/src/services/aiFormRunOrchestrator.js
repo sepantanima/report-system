@@ -10,6 +10,7 @@ function defaultUsageKeyForForm(formName) {
   if (formName === "field_management_summary_create") return AI_USAGE_KEYS.FIELD_MANAGEMENT_SUMMARY;
   if (formName === "news_monitor_manage") return AI_USAGE_KEYS.NEWS_SUMMARIZE;
   if (formName === "news_smart_analysis") return AI_USAGE_KEYS.NEWS_SMART_ANALYSIS;
+  if (formName === "news_editorial_batch") return AI_USAGE_KEYS.NEWS_EDITORIAL;
   return null;
 }
 

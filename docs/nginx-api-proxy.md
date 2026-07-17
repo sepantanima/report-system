@@ -33,6 +33,17 @@ server {
 
 سپس: `sudo nginx -t && sudo systemctl reload nginx`
 
+## انتشار اخبار (n8n)
+
+برای ingest/انتشار خودکار، فقط اخباری را بردارید که:
+
+- `workflow_status = 'finalized'`
+- `is_approved = 1`
+- `publish_status = 'ready'`
+- `duplicate_status = 'none'`
+
+اخبار با `publish_status = 'banked'` در بانک انتظار هستند و به‌صورت خودکار منتشر نمی‌شوند؛ از گزارش‌ساز یا انتخاب دستی قابل افزودن‌اند.
+
 ## موقت (بدون nginx)
 
 در `frontend` فایل `.env.production` بسازید:

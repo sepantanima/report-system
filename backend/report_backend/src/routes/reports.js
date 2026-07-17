@@ -12,12 +12,16 @@ import auth from "../middleware/auth.js";
 import requireRole from "../middleware/requireRole.js";
 import managementSummaryRoutes from "./managementSummaryRoutes.js";
 import { executeFormAiAction } from "../services/aiFormRunOrchestrator.js";
+import { buildAiRunHttpError } from "../utils/aiErrorDiagnostics.js";
 import { listActiveActionsForForm } from "../services/aiFormActionService.js";
 import { validateFormActionName, validateFormDataObject } from "../constants/aiFormActions.js";
 import {
   assertFieldSubmissionAllowed,
   getFieldDailyQuotaForUser,
+  getFieldEntryPublicSettings,
 } from "../services/fieldReportSettingsService.js";
+import { assertFieldReportDuplicateAllowed } from "../services/duplicateCheckService.js";
+import { isDuplicateCheckError, sendDuplicateCheckResponse } from "../utils/duplicateCheckErrors.js";
 import { nowJalaliDate } from "../services/newsTextUtils.js";
 
 const router = Router();
@@ -153,6 +157,14 @@ router.get("/daily-quota", auth, async (req, res) => {
   }
 });
 
+router.get("/entry-settings", auth, async (req, res) => {
+  try {
+    res.json(await getFieldEntryPublicSettings());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // لیست گزارشات برگشت‌خورده کاربر با مپ فیلدهای جدید
 router.get("/rejected-list", auth, async (req, res) => {
   const { id, unitcd } = req.user;
@@ -209,6 +221,12 @@ router.post("/", auth, async (req, res) => {
   try {
     await assertFieldSubmissionAllowed(req.user, date);
 
+    await assertFieldReportDuplicateAllowed(req.body, {
+      title: String(title ?? "").trim(),
+      text: String(text ?? "").trim(),
+      date: date || nowJalaliDate(),
+    });
+
     const now = new Date();
     const timeNumeric = parseInt(
       now.getHours().toString() + now.getMinutes().toString().padStart(2, "0"),
@@ -247,6 +265,7 @@ router.post("/", auth, async (req, res) => {
     await pool.query(query, values);
     res.status(201).json({ success: true });
   } catch (err) {
+    if (isDuplicateCheckError(err)) return sendDuplicateCheckResponse(res, err);
     const status = String(err.message || "").includes("سقف ثبت روزانه") ? 400 : 500;
     res.status(status).json({ error: err.message });
   }
@@ -635,7 +654,8 @@ router.post("/ai/run", auth, fieldMgmtAiRoles, async (req, res) => {
     });
     res.json(data);
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    const { status, body } = buildAiRunHttpError(e);
+    res.status(status).json(body);
   }
 });
 

@@ -8,6 +8,9 @@ import {
   updateAiConfig,
   deleteAiConfig,
   getRawConfigForTest,
+  findSortOrderConflict,
+  formatSortConflictError,
+  moveAiConfigSort,
 } from "../services/aiApiConfigService.js";
 import { validateAiApiConfigBody } from "../constants/promptFieldLimits.js";
 import { invokeLlmSingleRow } from "../services/llmInvoke.js";
@@ -56,10 +59,28 @@ router.post("/", auth, requireRole("admin"), async (req, res) => {
     if (err) return res.status(400).json({ error: err });
     const pe = await assertProviderSlugAllowed(req.body.provider_type);
     if (pe) return res.status(400).json({ error: pe });
+    const conflict = await findSortOrderConflict(req.body.usage_key, req.body.sort_order);
+    if (conflict) {
+      return res.status(400).json({
+        error: formatSortConflictError(conflict, req.body.usage_key, parseInt(req.body.sort_order, 10) || 0),
+        conflict_id: conflict.id,
+        conflict,
+      });
+    }
     const id = await insertAiConfig(req.body, req.user?.id);
     res.status(201).json({ success: true, id });
   } catch (e) {
-    if (e.code === "23505") return res.status(400).json({ error: "ترتیب یا کاربرد تکراری است" });
+    if (e.code === "23505") {
+      const conflict = await findSortOrderConflict(req.body?.usage_key, req.body?.sort_order);
+      if (conflict) {
+        return res.status(400).json({
+          error: formatSortConflictError(conflict, req.body.usage_key, parseInt(req.body.sort_order, 10) || 0),
+          conflict_id: conflict.id,
+          conflict,
+        });
+      }
+      return res.status(400).json({ error: "ترتیب تکراری برای همین کاربرد — ردیف دیگری با همین usage_key و sort_order وجود دارد." });
+    }
     res.status(500).json({ error: e.message });
   }
 });
@@ -73,11 +94,51 @@ router.put("/:id", auth, requireRole("admin"), async (req, res) => {
       const pe = await assertProviderSlugAllowed(req.body.provider_type);
       if (pe) return res.status(400).json({ error: pe });
     }
+    const cur = await getAiConfigById(id);
+    if (!cur) return res.status(404).json({ error: "یافت نشد" });
+    const nextUsage = req.body.usage_key !== undefined ? String(req.body.usage_key).trim() : cur.usage_key;
+    const nextSort = req.body.sort_order !== undefined ? parseInt(req.body.sort_order, 10) || 0 : cur.sort_order;
+    const conflict = await findSortOrderConflict(nextUsage, nextSort, id);
+    if (conflict) {
+      return res.status(400).json({
+        error: formatSortConflictError(conflict, nextUsage, nextSort),
+        conflict_id: conflict.id,
+        conflict,
+      });
+    }
     const n = await updateAiConfig(id, req.body, req.user?.id);
     if (!n) return res.status(404).json({ error: "یافت نشد" });
     res.json({ success: true });
   } catch (e) {
-    if (e.code === "23505") return res.status(400).json({ error: "ترتیب یا کاربرد تکراری است" });
+    if (e.code === "23505") {
+      const id = parseInt(req.params.id, 10);
+      const cur = await getAiConfigById(id);
+      const nextUsage = req.body.usage_key !== undefined ? String(req.body.usage_key).trim() : cur?.usage_key;
+      const nextSort = req.body.sort_order !== undefined ? parseInt(req.body.sort_order, 10) || 0 : cur?.sort_order;
+      const conflict = nextUsage != null ? await findSortOrderConflict(nextUsage, nextSort, id) : null;
+      if (conflict) {
+        return res.status(400).json({
+          error: formatSortConflictError(conflict, nextUsage, nextSort),
+          conflict_id: conflict.id,
+          conflict,
+        });
+      }
+      return res.status(400).json({ error: "ترتیب تکراری برای همین کاربرد — ردیف دیگری با همین usage_key و sort_order وجود دارد." });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/:id/move", auth, requireRole("admin"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "شناسه نامعتبر" });
+    const direction = req.body?.direction === "up" ? "up" : req.body?.direction === "down" ? "down" : null;
+    if (!direction) return res.status(400).json({ error: "direction باید up یا down باشد" });
+    const result = await moveAiConfigSort(id, direction, req.user?.id);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ success: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

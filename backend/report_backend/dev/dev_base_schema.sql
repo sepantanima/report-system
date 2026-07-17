@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS tbl_users (
   name VARCHAR(255),
   password VARCHAR(255) NOT NULL,
   role VARCHAR(128) NOT NULL DEFAULT 'user',
+  gender VARCHAR(16) NOT NULL DEFAULT 'male',
   active BOOLEAN NOT NULL DEFAULT true,
   unit_cd INTEGER
 );
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS tbl_unit_events (
   news_ts VARCHAR(32),
   sender_id VARCHAR(64),
   sender_name VARCHAR(255),
+  sender_platform VARCHAR(16),
   province VARCHAR(255),
   hash_key VARCHAR(64),
   priority INTEGER DEFAULT 1,
@@ -64,6 +66,8 @@ CREATE TABLE IF NOT EXISTS tbl_news (
   summary TEXT,
   source VARCHAR(255),
   sender VARCHAR(255),
+  sender_external_id VARCHAR(64),
+  sender_platform VARCHAR(16),
   source_platform VARCHAR(64),
   source_url TEXT,
   source_date_jalali VARCHAR(10),
@@ -78,11 +82,13 @@ CREATE TABLE IF NOT EXISTS tbl_news (
   observer_username VARCHAR(128),
   observer_first_name VARCHAR(255),
   workflow_status VARCHAR(16) DEFAULT 'new',
+  publish_status VARCHAR(16) NOT NULL DEFAULT 'none',
   is_approved INTEGER DEFAULT 0,
   status INTEGER DEFAULT 0,
   duplicate_status VARCHAR(16) DEFAULT 'none',
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  monitor_note VARCHAR(100)
 );
 
 -- Report types lookup
@@ -90,4 +96,35 @@ CREATE TABLE IF NOT EXISTS tbl_report_types (
   id SERIAL PRIMARY KEY,
   title_fa VARCHAR(255),
   type_code VARCHAR(64)
+);
+
+CREATE TABLE IF NOT EXISTS tbl_user_messenger_accounts (
+  id                SERIAL PRIMARY KEY,
+  user_id           INTEGER NOT NULL REFERENCES tbl_users(id) ON DELETE CASCADE,
+  platform          VARCHAR(16) NOT NULL,
+  external_id       VARCHAR(64),
+  external_username VARCHAR(128),
+  display_name      VARCHAR(255),
+  is_verified       BOOLEAN NOT NULL DEFAULT false,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_uma_platform CHECK (platform IN ('bale', 'telegram', 'eitaa')),
+  CONSTRAINT chk_uma_has_identity CHECK (
+    NULLIF(trim(COALESCE(external_id, '')), '') IS NOT NULL
+    OR NULLIF(trim(COALESCE(external_username, '')), '') IS NOT NULL
+    OR NULLIF(trim(COALESCE(display_name, '')), '') IS NOT NULL
+  )
+);
+
+CREATE TABLE IF NOT EXISTS tbl_news_sender_source_markers (
+  id                  SERIAL PRIMARY KEY,
+  sender_text         VARCHAR(255) NOT NULL,
+  sender_key          VARCHAR(255) NOT NULL,
+  platform            VARCHAR(16) NOT NULL DEFAULT 'bale',
+  source_label        VARCHAR(255) NOT NULL,
+  marked_by_user_id   INTEGER REFERENCES tbl_users(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_nssm_platform CHECK (platform IN ('bale', 'telegram', 'eitaa')),
+  CONSTRAINT uq_nssm_platform_sender UNIQUE (platform, sender_key)
 );

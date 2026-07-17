@@ -4,6 +4,7 @@ import requireRole from "../middleware/requireRole.js";
 import { listActiveActionsForForm } from "../services/aiFormActionService.js";
 import { validateFormActionName, validateFormDataObject } from "../constants/aiFormActions.js";
 import { NEWS_SMART_ANALYSIS_FORM } from "../constants/newsSmartAnalysisMeta.js";
+import { buildAiRunHttpError } from "../utils/aiErrorDiagnostics.js";
 import {
   runSmartAnalysisAiWithFallback,
   saveSmartAnalysis,
@@ -22,10 +23,25 @@ import {
   upsertPackAnalysis,
   getPackFrozenNews,
   deletePack,
+  deletePackCustomAnalysis,
 } from "../services/newsSmartAnalysisPackService.js";
+import { getCustomPromptPolicy } from "../services/newsSmartCustomPromptPolicyService.js";
+import { customPromptPolicyHintFa } from "../constants/newsSmartCustomPromptPolicy.js";
 
 const router = Router();
 const smartAnalysisRoles = requireRole("admin", "news_editor", "news_chief");
+
+router.get("/smart-analysis/custom-prompt-policy", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    const policy = await getCustomPromptPolicy();
+    res.json({
+      ...policy,
+      hint_fa: customPromptPolicyHintFa(policy),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get("/smart-analysis/ai/form-actions", auth, smartAnalysisRoles, async (req, res) => {
   try {
@@ -68,7 +84,8 @@ router.post("/smart-analysis/ai/run", auth, smartAnalysisRoles, async (req, res)
 
     res.json(data);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    const { status, body } = buildAiRunHttpError(err);
+    res.status(status).json(body);
   }
 });
 
@@ -130,6 +147,18 @@ router.put("/smart-analysis/packs/:id/analyses/:type", auth, smartAnalysisRoles,
       req.user?.id ?? null,
     );
     res.json(row);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete("/smart-analysis/packs/:id/analyses/:type", auth, smartAnalysisRoles, async (req, res) => {
+  try {
+    res.json(await deletePackCustomAnalysis(
+      parseInt(req.params.id, 10),
+      req.params.type,
+      req.user,
+    ));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

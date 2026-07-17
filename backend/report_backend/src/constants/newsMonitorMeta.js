@@ -1,5 +1,5 @@
 export const NEWS_PRIORITIES = {
-  1: { label: "خیلی مهم", color: "#dc2626" },
+  1: { label: "فوری", color: "#dc2626" },
   2: { label: "مهم", color: "#f59e0b" },
   3: { label: "عادی", color: "#64748b" },
   4: { label: "فاقد اهمیت", color: "#94a3b8" },
@@ -16,7 +16,7 @@ export const NEWS_QUALITY = {
 export const NEWS_REVIEW_STATES = {
   pending: { label: "بدون حکم", color: "#64748b" },
   approved: { label: "تأیید", color: "#22c55e" },
-  rejected: { label: "رد", color: "#ef4444" },
+  rejected: { label: "برگشت به فرستنده", color: "#ef4444" },
   rumor: { label: "شایعه", color: "#a855f7" },
 };
 
@@ -27,15 +27,36 @@ export const NEWS_WORKFLOW_STATES = {
   finalized: { label: "آماده انتشار", color: "#22c55e" },
 };
 
+export const NEWS_PUBLISH_STATUSES = {
+  none: { label: "—", color: "#64748b" },
+  ready: { label: "آماده انتشار", color: "#22c55e" },
+  banked: { label: "بانک انتظار", color: "#0ea5e9" },
+};
+
 export const DUPLICATE_STATUSES = {
   none: { label: "—", color: "#64748b" },
   suspicious: { label: "مشکوک به تکرار", color: "#f59e0b" },
   confirmed: { label: "تکراری تأییدشده", color: "#94a3b8" },
 };
 
+export const NEWS_RELEVANCE_STATUSES = {
+  unset: { label: "نامشخص", color: "#64748b" },
+  relevant: { label: "مرتبط", color: "#22c55e" },
+  irrelevant: { label: "غیرمرتبط", color: "#94a3b8" },
+};
+
+export const NEWS_EDITORIAL_STATES = {
+  pending: { label: "پالایش‌نشده", color: "#f59e0b" },
+  manual: { label: "پالایش دستی", color: "#38bdf8" },
+  ai: { label: "پالایش AI", color: "#a855f7" },
+};
+
 export const VALID_REVIEW_STATES = new Set(Object.keys(NEWS_REVIEW_STATES));
 export const VALID_WORKFLOW_STATES = new Set(Object.keys(NEWS_WORKFLOW_STATES));
+export const VALID_PUBLISH_STATUSES = new Set(Object.keys(NEWS_PUBLISH_STATUSES));
 export const VALID_DUPLICATE_STATUSES = new Set(Object.keys(DUPLICATE_STATUSES));
+export const VALID_RELEVANCE_STATUSES = new Set(Object.keys(NEWS_RELEVANCE_STATUSES));
+export const VALID_EDITORIAL_STATES = new Set(Object.keys(NEWS_EDITORIAL_STATES));
 
 /** n8n گاهی enum را با کوتیشن اضافی ذخیره می‌کند: 'pending' */
 export function normalizeDbEnum(value, fallback = "") {
@@ -102,4 +123,14 @@ export function clampQuality(v) {
 
 export function duplicateStatusToLegacyFlag(status) {
   return status != null && status !== "none";
+}
+
+export function clampRelevanceStatus(v, fallback = "unset") {
+  const s = normalizeDbEnum(v, fallback);
+  return VALID_RELEVANCE_STATUSES.has(s) ? s : fallback;
+}
+
+export function clampEditorialState(v, fallback = "pending") {
+  const s = normalizeDbEnum(v, fallback);
+  return VALID_EDITORIAL_STATES.has(s) ? s : fallback;
 }
