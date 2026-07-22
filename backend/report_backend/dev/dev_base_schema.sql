@@ -21,10 +21,10 @@ CREATE TABLE IF NOT EXISTS tbl_users (
   username VARCHAR(128) UNIQUE NOT NULL,
   name VARCHAR(255),
   password VARCHAR(255) NOT NULL,
-  role VARCHAR(128) NOT NULL DEFAULT 'user',
   gender VARCHAR(16) NOT NULL DEFAULT 'male',
   active BOOLEAN NOT NULL DEFAULT true,
-  unit_cd INTEGER
+  unit_cd INTEGER,
+  permission_version INT NOT NULL DEFAULT 1
 );
 
 -- Field report events

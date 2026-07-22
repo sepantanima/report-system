@@ -1,10 +1,6 @@
 import pool from "../db.js";
-import { parseUserRoles, hasAnyRole } from "../middleware/requireRole.js";
-import {
-  ROLE_PERMISSIONS,
-  LEGACY_ROLE_TO_TEMPLATE,
-} from "../constants/rbacSeed.js";
-import { legacyRoleToTemplate } from "./rbacSeedService.js";
+import { hasAnyRole } from "../middleware/requireRole.js";
+import { ROLE_PERMISSIONS } from "../constants/rbacSeed.js";
 
 const cache = new Map();
 const CACHE_TTL_MS = 60_000;
@@ -39,21 +35,6 @@ async function getGlobalPermissionVersion() {
   } catch {
     return 1;
   }
-}
-
-function legacyPermissionsFromRole(roleField) {
-  const roles = parseUserRoles(roleField).map(legacyRoleToTemplate);
-  const perms = new Set();
-  for (const role of roles) {
-    if (role === "admin" || roles.includes("admin")) {
-      (ROLE_PERMISSIONS.system_admin || ROLE_PERMISSIONS.admin || []).forEach((p) => perms.add(p));
-    }
-    (ROLE_PERMISSIONS[role] || []).forEach((p) => perms.add(p));
-  }
-  if (!perms.size && ROLE_PERMISSIONS.user) {
-    ROLE_PERMISSIONS.user.forEach((p) => perms.add(p));
-  }
-  return [...perms];
 }
 
 async function loadFromDb(userId) {
@@ -108,15 +89,15 @@ async function loadFromDb(userId) {
   }
 }
 
-export async function getEffectivePermissions(userId, legacyRoleField = null) {
+export async function getEffectivePermissions(userId) {
   const cached = getCached(userId);
   if (cached) return cached;
 
   let data = await loadFromDb(userId);
   if (!data) {
     data = {
-      permissions: legacyPermissionsFromRole(legacyRoleField),
-      roleTemplates: parseUserRoles(legacyRoleField).map(legacyRoleToTemplate),
+      permissions: ROLE_PERMISSIONS.user ? [...ROLE_PERMISSIONS.user] : [],
+      roleTemplates: ["user"],
       permission_version: await getGlobalPermissionVersion(),
     };
   }
@@ -125,8 +106,8 @@ export async function getEffectivePermissions(userId, legacyRoleField = null) {
   return data;
 }
 
-export async function userHasPermission(userId, permission, legacyRoleField = null) {
-  const { permissions } = await getEffectivePermissions(userId, legacyRoleField);
+export async function userHasPermission(userId, permission) {
+  const { permissions } = await getEffectivePermissions(userId);
   if (permissions.includes(permission)) return true;
   if (permissions.includes("rbac.manage") && permission !== "rbac.manage") {
     return permissions.some((p) => p === permission);
@@ -134,8 +115,8 @@ export async function userHasPermission(userId, permission, legacyRoleField = nu
   return false;
 }
 
-export async function userHasAnyPermission(userId, permissionList, legacyRoleField = null) {
-  const { permissions } = await getEffectivePermissions(userId, legacyRoleField);
+export async function userHasAnyPermission(userId, permissionList) {
+  const { permissions } = await getEffectivePermissions(userId);
   const set = new Set(permissions);
   return permissionList.some((p) => set.has(p));
 }
@@ -143,18 +124,17 @@ export async function userHasAnyPermission(userId, permissionList, legacyRoleFie
 /** Bridge: check permission or legacy role list */
 export async function checkAccess(req, { permission, permissions, roles }) {
   const userId = req.user?.id;
-  const legacyRole = req.user?.role;
 
   if (userId) {
-    if (permission && (await userHasPermission(userId, permission, legacyRole))) return true;
-    if (permissions?.length && (await userHasAnyPermission(userId, permissions, legacyRole))) return true;
+    if (permission && (await userHasPermission(userId, permission))) return true;
+    if (permissions?.length && (await userHasAnyPermission(userId, permissions))) return true;
   }
 
   if (roles?.length && hasAnyRole(req.user, roles)) return true;
   if (permission || permissions?.length) {
-    const legacy = legacyPermissionsFromRole(legacyRole);
-    if (permission && legacy.includes(permission)) return true;
-    if (permissions?.some((p) => legacy.includes(p))) return true;
+    const jwtPerms = req.user?.permissions || [];
+    if (permission && jwtPerms.includes(permission)) return true;
+    if (permissions?.some((p) => jwtPerms.includes(p))) return true;
   }
   return false;
 }

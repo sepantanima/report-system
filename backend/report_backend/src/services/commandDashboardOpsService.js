@@ -8,6 +8,7 @@ import {
   fieldReportListScopeSql,
   fieldReportTypeJoinSql,
 } from "./instanceScopeService.js";
+import { userRoleTextExpr } from "../utils/userRoleSql.js";
 
 async function safeCount(sql, params = []) {
   try {
@@ -86,7 +87,7 @@ export async function buildRolesPerformance(range) {
           JOIN tbl_users u ON u.id = a.user_id
           JOIN tbl_news n ON n.id = a.news_id
           WHERE a.created_at::date >= $1::date AND a.created_at::date <= $2::date
-            AND u.role::text ILIKE '%' || $3 || '%'
+            AND ${userRoleTextExpr("u")} ILIKE '%' || $3 || '%'
             AND ${instanceNewsSql("n")}
           UNION
           SELECT NULLIF(e.sender_id, '')::int AS uid
@@ -96,7 +97,7 @@ export async function buildRolesPerformance(range) {
           WHERE e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
             AND (e.is_deleted = false OR e.is_deleted IS NULL)
             AND e.sender_id ~ '^[0-9]+$'
-            AND u.role::text ILIKE '%' || $3 || '%'
+            AND ${userRoleTextExpr("u")} ILIKE '%' || $3 || '%'
             ${fieldReportListScopeSql("e", "rt_scope")}
         ) x WHERE uid IS NOT NULL
         `,
@@ -109,7 +110,7 @@ export async function buildRolesPerformance(range) {
            JOIN tbl_users u ON u.id = a.user_id
            JOIN tbl_news n ON n.id = a.news_id
            WHERE a.created_at::date >= $1::date AND a.created_at::date <= $2::date
-             AND u.role::text ILIKE '%' || $3 || '%'
+             AND ${userRoleTextExpr("u")} ILIKE '%' || $3 || '%'
              AND ${instanceNewsSql("n")})
           +
           (SELECT COUNT(*)::int FROM tbl_unit_events e
@@ -117,7 +118,7 @@ export async function buildRolesPerformance(range) {
            JOIN tbl_users u ON u.id::text = e.sender_id
            WHERE e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
              AND (e.is_deleted = false OR e.is_deleted IS NULL)
-             AND u.role::text ILIKE '%' || $3 || '%'
+             AND ${userRoleTextExpr("u")} ILIKE '%' || $3 || '%'
              ${fieldReportListScopeSql("e", "rt_scope")})
         )::int AS c
         `,

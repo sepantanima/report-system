@@ -1761,17 +1761,21 @@ router.get("/status-history/:entityType/:entityId", async (req, res) => {
 router.get("/users/analysts", requireRole(...MANAGER_ROLES), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.username, u.name, u.role, un."UnitShortName" AS unit_name
+      `SELECT u.id, u.username, u.name, un."UnitShortName" AS unit_name
        FROM tbl_users u
        LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
        WHERE u.active = true
+         AND EXISTS (
+           SELECT 1 FROM tbl_user_role_assignments ura
+           JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+           WHERE ura.user_id = u.id AND ura.active = TRUE AND rt.code = 'analyst'
+         )
        ORDER BY u.name`
     );
-    const users = result.rows.filter((u) => parseUserRoles(u.role).includes("analyst"));
-    if (!users.length) {
+    if (!result.rows.length) {
       return res.json({ users: [], message: "کاربری با نقش تحلیل‌گر در سامانه یافت نشد" });
     }
-    res.json(users);
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1780,22 +1784,25 @@ router.get("/users/analysts", requireRole(...MANAGER_ROLES), async (req, res) =>
 router.get("/users/mentors", requireRole(...MANAGER_ROLES), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.username, u.name, u.role, un."UnitShortName" AS unit_name
+      `SELECT u.id, u.username, u.name, un."UnitShortName" AS unit_name
        FROM tbl_users u
        LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
        WHERE u.active = true
+         AND EXISTS (
+           SELECT 1 FROM tbl_user_role_assignments ura
+           JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+           WHERE ura.user_id = u.id AND ura.active = TRUE AND rt.code = 'mentor'
+         )
        ORDER BY u.name`
     );
-    const users = result.rows.filter((u) => parseUserRoles(u.role).includes("mentor"));
-    if (!users.length) {
+    if (!result.rows.length) {
       return res.json({ users: [], message: "کاربری با نقش راهنما در سامانه یافت نشد" });
     }
-    res.json(users);
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 router.get("/menu-badges", async (req, res) => {
   const userId = req.user?.id;
   if (!userId) {

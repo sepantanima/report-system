@@ -8,6 +8,7 @@ import {
   fieldReportListScopeSql,
   fieldReportTypeJoinSql,
 } from "./instanceScopeService.js";
+import { userRoleTextExpr, userRoleTextSelect } from "../utils/userRoleSql.js";
 export {
   getUnitDrilldown,
   getUserDrilldown,
@@ -191,7 +192,7 @@ export async function getCommandKpiOverview() {
   ]);
 
   const roleActivity = await safeRows(`
-    SELECT u.id, u.name, u.username, u.role,
+    SELECT u.id, u.name, u.username, ${userRoleTextSelect("u")},
            COALESCE(n.cnt, 0)::int AS news_actions_today
     FROM tbl_users u
     LEFT JOIN LATERAL (
@@ -319,7 +320,7 @@ async function countActiveUsers(from, to, role) {
   let roleSql = "";
   if (role) {
     params.push(role);
-    roleSql = ` AND u.role::text ILIKE '%' || $${params.length} || '%'`;
+    roleSql = ` AND ${userRoleTextExpr("u")} ILIKE '%' || $${params.length} || '%'`;
   }
   return safeCount(
     `
@@ -340,7 +341,7 @@ async function countActiveUsers(from, to, role) {
         AND (e.is_deleted = false OR e.is_deleted IS NULL)
         AND e.sender_id ~ '^[0-9]+$'
         ${fieldReportListScopeSql("e", "rt_scope")}
-      ${role ? `AND u.role::text ILIKE '%' || $3 || '%'` : ""}
+      ${role ? `AND ${userRoleTextExpr("u")} ILIKE '%' || $3 || '%'` : ""}
     ) x
     WHERE uid IS NOT NULL
     `,

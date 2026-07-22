@@ -5,6 +5,7 @@ import {
   fieldReportListScopeSql,
   fieldReportTypeJoinSql,
 } from "./instanceScopeService.js";
+import { userRoleTextExpr, userRoleTextSelect } from "../utils/userRoleSql.js";
 
 const ACTIVE_USER = `u.active IS DISTINCT FROM false`;
 
@@ -27,7 +28,7 @@ async function resolveSingleTarget(targetType, targetValue) {
     }
     case "role": {
       const r = await pool.query(
-        `SELECT id FROM tbl_users u WHERE ${ACTIVE_USER} AND u.role::text ILIKE $1`,
+        `SELECT id FROM tbl_users u WHERE ${ACTIVE_USER} AND ${userRoleTextExpr("u")} ILIKE $1`,
         [`%${targetValue}%`],
       );
       return r.rows.map((x) => x.id);
@@ -57,9 +58,9 @@ async function resolveSingleTarget(targetType, targetValue) {
         `SELECT DISTINCT u.id FROM tbl_users u
          WHERE ${ACTIVE_USER}
            AND (
-             u.role::text ILIKE '%news_monitor%'
-             OR u.role::text ILIKE '%news_editor%'
-             OR u.role::text ILIKE '%news_chief%'
+             ${userRoleTextExpr("u")} ILIKE '%news_monitor%'
+             OR ${userRoleTextExpr("u")} ILIKE '%news_editor%'
+             OR ${userRoleTextExpr("u")} ILIKE '%news_chief%'
              OR EXISTS (
                SELECT 1 FROM tbl_news n
                JOIN tbl_news_category_links cl ON cl.news_id = n.id
@@ -77,8 +78,8 @@ async function resolveSingleTarget(targetType, targetValue) {
         `SELECT DISTINCT u.id FROM tbl_users u
          WHERE ${ACTIVE_USER}
            AND (
-             u.role::text ILIKE '%user%'
-             OR u.role::text ILIKE '%Field_admin%'
+             ${userRoleTextExpr("u")} ILIKE '%user%'
+             OR ${userRoleTextExpr("u")} ILIKE '%Field_admin%'
            )
            AND EXISTS (
              SELECT 1 FROM tbl_unit_events e

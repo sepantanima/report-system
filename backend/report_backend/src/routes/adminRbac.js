@@ -8,8 +8,8 @@ import {
   PERMISSION_DESCRIPTIONS,
   getDefaultPermissionsForRole,
 } from "../constants/rbacSeed.js";
-import { legacyRoleToTemplate } from "../services/rbacSeedService.js";
-import { parseUserRoles, serializeUserRoles } from "../middleware/requireRole.js";
+import { legacyRoleToTemplate, backfillAssignmentsFromLegacyRole } from "../services/rbacSeedService.js";
+import { parseUserRoles } from "../middleware/requireRole.js";
 import { resolveAnalystRoleSuggestions } from "../services/analysisBriefSubmissionService.js";
 
 const router = Router();
@@ -206,8 +206,6 @@ router.put("/users/:userId/assignments", async (req, res) => {
         [userId, rt.id],
       );
     }
-    const legacyRole = serializeUserRoles(roleCodes);
-    await pool.query(`UPDATE tbl_users SET role = $1 WHERE id = $2`, [legacyRole, userId]);
     if (roleCodes.includes("analyst")) {
       await resolveAnalystRoleSuggestions(userId);
     }
@@ -246,19 +244,11 @@ router.put("/users/:userId/grants", async (req, res) => {
 router.post("/sync-from-legacy/:userId", async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10);
-    const u = await pool.query(`SELECT role FROM tbl_users WHERE id = $1`, [userId]);
-    if (!u.rows[0]) return res.status(404).json({ error: "کاربر یافت نشد" });
-    const codes = parseUserRoles(u.rows[0].role).map(legacyRoleToTemplate);
-    const roles = await pool.query(`SELECT id, code FROM tbl_role_templates WHERE code = ANY($1::text[])`, [codes]);
-    for (const rt of roles.rows) {
-      await pool.query(
-        `INSERT INTO tbl_user_role_assignments (user_id, role_template_id, active)
-         VALUES ($1,$2,TRUE) ON CONFLICT (user_id, role_template_id) DO UPDATE SET active = TRUE`,
-        [userId, rt.id],
-      );
-    }
+    const exists = await pool.query(`SELECT id FROM tbl_users WHERE id = $1`, [userId]);
+    if (!exists.rows[0]) return res.status(404).json({ error: "کاربر یافت نشد" });
+    const backfill = await backfillAssignmentsFromLegacyRole(pool);
     invalidateUserPermissionCache(userId);
-    res.json({ synced: codes });
+    res.json({ synced: true, backfill });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

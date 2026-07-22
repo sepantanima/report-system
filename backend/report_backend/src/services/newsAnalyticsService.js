@@ -7,6 +7,7 @@ import {
   jalaliDateToRefKeyEnd,
 } from "./newsMonitorService.js";
 import { instanceNewsAndSql } from "./instanceScopeService.js";
+import { userRoleTextExpr, userRoleTextSelect } from "../utils/userRoleSql.js";
 import {
   computeMonitorScore,
   computeEditorScore,
@@ -187,21 +188,21 @@ export async function getAnalyticsFiltersMeta() {
       SELECT DISTINCT u.id, u.name, u.username
       FROM tbl_users u
       WHERE u.active IS DISTINCT FROM false
-        AND (u.role::text ILIKE '%news_monitor%' OR u.role::text ILIKE '%admin%')
+        AND (${userRoleTextExpr("u")} ILIKE '%news_monitor%' OR ${userRoleTextExpr("u")} ILIKE '%admin%')
       ORDER BY u.name LIMIT 300
     `),
     pool.query(`
       SELECT DISTINCT u.id, u.name, u.username
       FROM tbl_users u
       WHERE u.active IS DISTINCT FROM false
-        AND (u.role::text ILIKE '%news_editor%' OR u.role::text ILIKE '%news_chief%' OR u.role::text ILIKE '%admin%')
+        AND (${userRoleTextExpr("u")} ILIKE '%news_editor%' OR ${userRoleTextExpr("u")} ILIKE '%news_chief%' OR ${userRoleTextExpr("u")} ILIKE '%admin%')
       ORDER BY u.name LIMIT 300
     `),
     pool.query(`
       SELECT DISTINCT u.id, u.name, u.username
       FROM tbl_users u
       WHERE u.active IS DISTINCT FROM false
-        AND (u.role::text ILIKE '%news_chief%' OR u.role::text ILIKE '%admin%')
+        AND (${userRoleTextExpr("u")} ILIKE '%news_chief%' OR ${userRoleTextExpr("u")} ILIKE '%admin%')
       ORDER BY u.name LIMIT 100
     `),
   ]);
@@ -378,19 +379,19 @@ export async function getUnitParticipation(filters, scope) {
              un."UnitShortName" AS unit_name,
              COUNT(DISTINCT bk.id)::int AS news_count,
              COUNT(DISTINCT obs.id) FILTER (
-               WHERE obs.role::text ILIKE '%news_monitor%'
+               WHERE ${userRoleTextExpr("obs")} ILIKE '%news_monitor%'
              )::int AS monitor_count,
              COUNT(DISTINCT ed.id) FILTER (
-               WHERE ed.role::text ILIKE '%news_editor%'
+               WHERE ${userRoleTextExpr("ed")} ILIKE '%news_editor%'
              )::int AS editor_count,
              COUNT(DISTINCT ch.id) FILTER (
-               WHERE ch.role::text ILIKE '%news_chief%'
+               WHERE ${userRoleTextExpr("ch")} ILIKE '%news_chief%'
              )::int AS chief_count
       FROM base_key bk
       ${joins}
       LEFT JOIN tbl_units un ON un."UnitCode" = obs.unit_cd
-      LEFT JOIN tbl_users ed ON ed.unit_cd = un."UnitCode" AND ed.role::text ILIKE '%news_editor%'
-      LEFT JOIN tbl_users ch ON ch.unit_cd = un."UnitCode" AND ch.role::text ILIKE '%news_chief%'
+      LEFT JOIN tbl_users ed ON ed.unit_cd = un."UnitCode" AND ${userRoleTextExpr("ed")} ILIKE '%news_editor%'
+      LEFT JOIN tbl_users ch ON ch.unit_cd = un."UnitCode" AND ${userRoleTextExpr("ch")} ILIKE '%news_chief%'
       ${where}
       GROUP BY un."UnitCode", un."UnitShortName"
       HAVING COUNT(DISTINCT bk.id) > 0

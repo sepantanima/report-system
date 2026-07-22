@@ -15,6 +15,54 @@ function legacyRoleToTemplate(role) {
   return r;
 }
 
+async function hasLegacyRoleColumn(db) {
+  const r = await db.query(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'tbl_users' AND column_name = 'role'
+     LIMIT 1`,
+  );
+  return r.rows.length > 0;
+}
+
+/** One-time / pre-072: copy tbl_users.role → assignments for users without active roles */
+export async function backfillAssignmentsFromLegacyRole(db) {
+  if (!(await hasLegacyRoleColumn(db))) {
+    return { updated: 0, skipped: 0 };
+  }
+
+  const roleRows = await db.query("SELECT id, code FROM tbl_role_templates");
+  const roleByCode = Object.fromEntries(roleRows.rows.map((r) => [r.code, r.id]));
+  const users = await db.query("SELECT id, role FROM tbl_users");
+  let updated = 0;
+  let skipped = 0;
+
+  for (const user of users.rows) {
+    const hasAssignment = await db.query(
+      `SELECT 1 FROM tbl_user_role_assignments WHERE user_id = $1 AND active = TRUE LIMIT 1`,
+      [user.id],
+    );
+    if (hasAssignment.rows.length) {
+      skipped++;
+      continue;
+    }
+
+    const roles = parseUserRoles(user.role).map(legacyRoleToTemplate);
+    const unique = [...new Set(roles.filter((r) => roleByCode[r]))];
+    if (!unique.length && roleByCode.user) unique.push("user");
+    for (const rc of unique) {
+      await db.query(
+        `INSERT INTO tbl_user_role_assignments (user_id, role_template_id, active)
+         VALUES ($1, $2, TRUE)
+         ON CONFLICT (user_id, role_template_id) DO UPDATE SET active = TRUE`,
+        [user.id, roleByCode[rc]],
+      );
+    }
+    updated++;
+  }
+
+  return { updated, skipped };
+}
+
 export async function seedRbacFromConstants(db) {
   const allPermCodes = new Set();
   for (const perms of Object.values(ROLE_PERMISSIONS)) {
@@ -64,20 +112,8 @@ export async function seedRbacFromConstants(db) {
     }
   }
 
-  // Migrate existing users from tbl_users.role
-  const users = await db.query("SELECT id, role FROM tbl_users WHERE active = TRUE");
-  for (const user of users.rows) {
-    const roles = parseUserRoles(user.role).map(legacyRoleToTemplate);
-    const unique = [...new Set(roles.filter((r) => roleByCode[r]))];
-    if (!unique.length && roleByCode.user) unique.push("user");
-    for (const rc of unique) {
-      await db.query(
-        `INSERT INTO tbl_user_role_assignments (user_id, role_template_id, active)
-         VALUES ($1, $2, TRUE)
-         ON CONFLICT (user_id, role_template_id) DO UPDATE SET active = TRUE`,
-        [user.id, roleByCode[rc]],
-      );
-    }
+  if (await hasLegacyRoleColumn(db)) {
+    await backfillAssignmentsFromLegacyRole(db);
   }
 
   await db.query("UPDATE tbl_rbac_meta SET permission_version = permission_version + 1, updated_at = NOW() WHERE id = 1");

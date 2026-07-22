@@ -4,7 +4,7 @@ import pool from "../db.js";
 import bcrypt from "bcrypt";
 import auth from "../middleware/auth.js";
 import requirePermission from "../middleware/requirePermission.js";
-import { parseUserRoles, serializeUserRoles } from "../middleware/requireRole.js";
+import { parseUserRoles } from "../middleware/requireRole.js";
 import { legacyRoleToTemplate } from "../services/rbacSeedService.js";
 import { invalidateUserPermissionCache, bumpPermissionVersion } from "../services/rbacService.js";
 import { getBriefStatsForUsers, resolveAnalystRoleSuggestions, countPendingAnalystRoleSuggestions } from "../services/analysisBriefSubmissionService.js";
@@ -16,6 +16,7 @@ import {
   updateAccount,
 } from "../services/userMessengerAccountService.js";
 import { MESSENGER_PLATFORMS } from "../utils/senderResolveSql.js";
+import { userRoleTextSelect } from "../utils/userRoleSql.js";
 
 import { pgUniqueViolationMessage } from "../utils/pgErrors.js";
 
@@ -84,7 +85,7 @@ router.put("/profile", auth, async (req, res) => {
         UPDATE tbl_users 
         SET name = $1, password = $2 
         WHERE id = $3 
-        RETURNING id, username, name, role
+        RETURNING id, username, name
       `;
       params = [name.trim(), hashedPassword, userId];
     } else {
@@ -93,7 +94,7 @@ router.put("/profile", auth, async (req, res) => {
         UPDATE tbl_users 
         SET name = $1 
         WHERE id = $2 
-        RETURNING id, username, name, role
+        RETURNING id, username, name
       `;
       params = [name.trim(), userId];
     }
@@ -219,7 +220,8 @@ router.get("/analyst-suggestion-count", auth, requirePermission("manage_users", 
 router.get("/", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (req, res) => {
   try {
     const query = `
-      SELECT u.id, u.username, u.name, u.role, u.gender, u.active, u.unit_cd, un."UnitShortName",
+      SELECT u.id, u.username, u.name, u.gender, u.active, u.unit_cd, un."UnitShortName",
+             ${userRoleTextSelect("u")},
              COALESCE(
                (SELECT json_agg(rt.code ORDER BY rt.code)
                 FROM tbl_user_role_assignments ura
@@ -263,17 +265,15 @@ router.post("/", auth, requirePermission("manage_users", { legacyRoles: ["admin"
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const roleCodes = parseUserRoles(role).map(legacyRoleToTemplate);
-    const serializedRole = serializeUserRoles(roleCodes);
 
     const query = `
-      INSERT INTO tbl_users (username, name, password, role, unit_cd, gender, active)
-      VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *
+      INSERT INTO tbl_users (username, name, password, unit_cd, gender, active)
+      VALUES ($1, $2, $3, $4, $5, true) RETURNING *
     `;
     const result = await pool.query(query, [
       uname,
       name,
       hashedPassword,
-      serializedRole,
       unit_cd,
       normalizeGenderInput(gender),
     ]);
@@ -309,7 +309,6 @@ router.put("/:id", auth, requirePermission("manage_users", { legacyRoles: ["admi
     }
 
     const roleCodes = parseUserRoles(role).map(legacyRoleToTemplate);
-    const serializedRole = serializeUserRoles(roleCodes);
 
     let query;
     let params;
@@ -320,15 +319,15 @@ router.put("/:id", auth, requirePermission("manage_users", { legacyRoles: ["admi
       
       query = `
         UPDATE tbl_users 
-        SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, password=$6, gender=$7
-        WHERE id=$8`;
-      params = [uname, name, serializedRole, unit_cd, active, hashedPassword, normalizeGenderInput(gender), id];
+        SET username=$1, name=$2, unit_cd=$3, active=$4, password=$5, gender=$6
+        WHERE id=$7`;
+      params = [uname, name, unit_cd, active, hashedPassword, normalizeGenderInput(gender), id];
     } else {
       query = `
         UPDATE tbl_users 
-        SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, gender=$6
-        WHERE id=$7`;
-      params = [uname, name, serializedRole, unit_cd, active, normalizeGenderInput(gender), id];
+        SET username=$1, name=$2, unit_cd=$3, active=$4, gender=$5
+        WHERE id=$6`;
+      params = [uname, name, unit_cd, active, normalizeGenderInput(gender), id];
     }
 
     await pool.query(query, params);

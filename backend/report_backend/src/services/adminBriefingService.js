@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import pool from "../db.js";
 import { getOrgCode, getInstanceMode } from "./instanceConfig.js";
+import { userRoleTextSelect } from "../utils/userRoleSql.js";
 
 async function getLastBriefingAt() {
   const r = await pool.query(
@@ -18,8 +19,8 @@ export async function previewAdminBriefing() {
   const since = await getLastBriefingAt();
 
   const users = await pool.query(
-    `SELECT id, username, name, role, unit_cd, active
-     FROM tbl_users ORDER BY id DESC LIMIT 200`,
+    `SELECT u.id, u.username, u.name, u.unit_cd, u.active, ${userRoleTextSelect("u")}
+     FROM tbl_users u ORDER BY u.id DESC LIMIT 200`,
   ).catch(() => ({ rows: [] }));
 
   const assignments = await pool.query(

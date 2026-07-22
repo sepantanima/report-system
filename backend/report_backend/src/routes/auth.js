@@ -6,14 +6,21 @@ import auth from "../middleware/auth.js";
 import { getEffectivePermissions } from "../services/rbacService.js";
 import { hubSyncCapabilities } from "../services/instanceScopeService.js";
 import { getOrgCode, getOrgRole, getInstanceMode } from "../services/instanceConfig.js";
+import { serializeUserRoles } from "../middleware/requireRole.js";
+import { userRoleTextSelect, userRoleCodesJsonSelect } from "../utils/userRoleSql.js";
 
 const router = Router();
 
+const USER_SELECT = `
+  u.id, u.username, u.name, u.password, u.gender, u.active, u.unit_cd,
+  un."StateName", un."UnitShortName",
+  ${userRoleTextSelect("u")},
+  ${userRoleCodesJsonSelect("u")}
+`;
+
 async function buildAuthPayload(user) {
-  const { permissions, roleTemplates, permission_version } = await getEffectivePermissions(
-    user.id,
-    user.role,
-  );
+  const { permissions, roleTemplates, permission_version } = await getEffectivePermissions(user.id);
+  const templates = roleTemplates?.length ? roleTemplates : ["user"];
   return {
     id: user.id,
     username: user.username,
@@ -22,8 +29,8 @@ async function buildAuthPayload(user) {
     unitcd: user.unit_cd,
     unitName: user.UnitShortName,
     statename: user.StateName,
-    role: user.role,
-    role_templates: roleTemplates,
+    role: serializeUserRoles(templates),
+    role_templates: templates,
     permissions,
     permission_version,
     org_code: getOrgCode(),
@@ -37,9 +44,7 @@ router.post("/login", async (req, res) => {
 
   try {
     const query = `
-      SELECT 
-        u.id, u.username, u.name, u.password, u.role, u.gender, u.active, u.unit_cd,
-        un."StateName", un."UnitShortName"
+      SELECT ${USER_SELECT}
       FROM tbl_users u
       LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
       WHERE u.username = $1
@@ -72,7 +77,7 @@ router.post("/login", async (req, res) => {
 
     res.json({
       token,
-      role: user.role,
+      role: authPayload.role,
       role_templates: authPayload.role_templates,
       permissions: authPayload.permissions,
       permission_version: authPayload.permission_version,
@@ -93,8 +98,10 @@ router.post("/login", async (req, res) => {
 router.get("/me", auth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.username, u.name, u.role, u.gender, u.active, u.unit_cd,
-              un."StateName", un."UnitShortName"
+      `SELECT u.id, u.username, u.name, u.gender, u.active, u.unit_cd,
+              un."StateName", un."UnitShortName",
+              ${userRoleTextSelect("u")},
+              ${userRoleCodesJsonSelect("u")}
        FROM tbl_users u
        LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
        WHERE u.id = $1`,

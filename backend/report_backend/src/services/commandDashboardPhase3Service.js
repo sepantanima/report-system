@@ -7,6 +7,7 @@ import {
   fieldReportListScopeSql,
   fieldReportTypeJoinSql,
 } from "./instanceScopeService.js";
+import { userRoleTextExpr, userRoleTextSelect } from "../utils/userRoleSql.js";
 
 async function safeCount(sql, params = []) {
   try {
@@ -43,7 +44,7 @@ export async function buildUsersLeaderboard(range) {
       u.id,
       u.name,
       u.username,
-      u.role,
+      ${userRoleTextSelect("u")},
       un."UnitShortName" AS unit_name,
       un."UnitCode" AS unit_id,
       u.last_activity,
@@ -269,7 +270,7 @@ export async function getUserDrilldown(userId, range) {
 
   const user = (
     await safeRows(
-      `SELECT u.id, u.name, u.username, u.role, un."UnitShortName" AS unit_name, un."UnitCode" AS unit_id
+      `SELECT u.id, u.name, u.username, ${userRoleTextSelect("u")}, un."UnitShortName" AS unit_name, un."UnitCode" AS unit_id
        FROM tbl_users u
        LEFT JOIN tbl_units un ON un."UnitCode" = u.unit_cd
        WHERE u.id = $1`,
