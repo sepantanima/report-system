@@ -1,7 +1,7 @@
 -- Migration 072: tbl_users.role removed — tbl_user_role_assignments is source of truth
 -- Run backfill via runMigration072.js before applying this file.
 
-ALTER TABLE tbl_users DROP COLUMN IF EXISTS role;
+ALTER TABLE tbl_users DROP COLUMN IF EXISTS role CASCADE;
 
 UPDATE tbl_rbac_meta
 SET permission_version = permission_version + 1,

@@ -203,8 +203,9 @@ export async function getUnitDrilldown(unitId, range) {
 
   const [users, reports, newsActions, openAnalysis] = await Promise.all([
     safeRows(
-      `SELECT id, name, username, role FROM tbl_users
-       WHERE unit_cd::text = $1 AND active IS NOT FALSE
+      `SELECT u.id, u.name, u.username, ${userRoleTextSelect("u")}
+       FROM tbl_users u
+       WHERE u.unit_cd::text = $1 AND u.active IS NOT FALSE
        ORDER BY name NULLS LAST LIMIT 40`,
       [uid],
     ),

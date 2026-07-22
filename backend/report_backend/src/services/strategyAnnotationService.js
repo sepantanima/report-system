@@ -1,5 +1,4 @@
 import pool from "../db.js";
-import { parseUserRoles } from "../middleware/requireRole.js";
 import { notifyUserSafe } from "./analysisNotificationService.js";
 import { nowJalaliDate, subtractJalaliDays } from "./newsTextUtils.js";
 import {
@@ -353,12 +352,20 @@ async function resolveNotifyUserIds(notifyRoles = [], notifyUserIds = []) {
   );
   const roles = (notifyRoles || []).map((r) => String(r).trim()).filter(Boolean);
   if (roles.length) {
-    const users = await pool.query(`SELECT id, role FROM tbl_users WHERE active IS NOT FALSE`);
+    const codes = [...new Set(
+      roles.flatMap((r) => (r === "admin" ? ["admin", "system_admin"] : [r])),
+    )];
+    const users = await pool.query(
+      `SELECT DISTINCT u.id
+       FROM tbl_users u
+       JOIN tbl_user_role_assignments ura ON ura.user_id = u.id AND ura.active = TRUE
+       JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+       WHERE u.active IS NOT FALSE
+         AND rt.code = ANY($1::text[])`,
+      [codes],
+    );
     for (const row of users.rows) {
-      const userRoles = parseUserRoles(row.role);
-      if (roles.some((r) => userRoles.includes(r) || userRoles.includes("admin"))) {
-        ids.add(row.id);
-      }
+      ids.add(row.id);
     }
   }
   return [...ids];

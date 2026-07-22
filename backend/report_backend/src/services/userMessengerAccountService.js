@@ -15,11 +15,6 @@ import {
   fieldReportListScopeSql,
   fieldReportTypeJoinSql,
 } from "./instanceScopeService.js";
-import {
-  instanceNewsAndSql,
-  fieldReportListScopeSql,
-  fieldReportTypeJoinSql,
-} from "./instanceScopeService.js";
 
 function mapAccountRow(row) {
   if (!row) return null;

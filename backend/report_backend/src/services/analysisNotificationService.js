@@ -1,5 +1,4 @@
 import pool from "../db.js";
-import { parseUserRoles } from "../middleware/requireRole.js";
 import { createDirectMessage } from "./messageService.js";
 
 const MANAGER_ROLES = ["admin", "analysis_manager", "Field_admin"];
@@ -14,13 +13,15 @@ export function notifyUserSafe(senderUser, recipientId, title, body) {
 }
 
 export async function getAnalysisManagerIds(client = pool) {
-  const r = await client.query(`SELECT id, role FROM tbl_users WHERE active IS NOT FALSE`);
-  return r.rows
-    .filter((row) => {
-      const roles = parseUserRoles(row.role);
-      return roles.includes("analysis_manager") || roles.includes("admin");
-    })
-    .map((row) => row.id);
+  const r = await client.query(
+    `SELECT DISTINCT u.id
+     FROM tbl_users u
+     JOIN tbl_user_role_assignments ura ON ura.user_id = u.id AND ura.active = TRUE
+     JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+     WHERE u.active IS NOT FALSE
+       AND rt.code IN ('analysis_manager', 'system_admin', 'admin')`,
+  );
+  return r.rows.map((row) => row.id);
 }
 
 export function notifyAnalysisManagers(senderUser, title, body) {
