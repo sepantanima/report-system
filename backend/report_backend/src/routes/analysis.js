@@ -40,8 +40,15 @@ const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 const MANAGER_ROLES = ["admin", "analysis_manager", "Field_admin"];
 const TOPIC_APPROVER_ROLES = ["admin", "analysis_manager", "topic_approver", "Field_admin"];
+const TOPIC_PROPOSER_WRITE_ROLES = ["admin", "analysis_manager", "Field_admin", "topic_proposer", "user"];
 const REVIEWER_ROLES = ["admin", "analysis_manager", "Field_admin", "mentor"];
 const ANALYST_ROLES = ["admin", "analysis_manager", "analyst"];
+
+function isStandaloneTopicProposer(user) {
+  const roles = parseUserRoles(user?.role);
+  const canPropose = roles.includes("topic_proposer") || roles.includes("user");
+  return canPropose && !hasAnyRole(user, MANAGER_ROLES) && !hasAnyRole(user, TOPIC_APPROVER_ROLES);
+}
 
 async function getTopicTitle(client, topicId) {
   const r = await client.query("SELECT title FROM tbl_analysis_topics WHERE id = $1", [topicId]);
@@ -104,8 +111,7 @@ router.get("/topics", async (req, res) => {
   const queryParams = [];
   let paramCount = 1;
 
-  const roles = parseUserRoles(req.user?.role);
-  if (roles.includes("topic_proposer") && !hasAnyRole(req.user, MANAGER_ROLES) && !hasAnyRole(req.user, TOPIC_APPROVER_ROLES)) {
+  if (isStandaloneTopicProposer(req.user)) {
     queryText += ` AND t.creator_id = $${paramCount}`;
     queryParams.push(req.user.id);
     paramCount++;
@@ -179,8 +185,7 @@ router.get("/topics/summary/stats", async (req, res) => {
   `;
   const params = [];
   let i = 1;
-  const roles = parseUserRoles(req.user?.role);
-  if (roles.includes("topic_proposer") && !hasAnyRole(req.user, MANAGER_ROLES) && !hasAnyRole(req.user, TOPIC_APPROVER_ROLES)) {
+  if (isStandaloneTopicProposer(req.user)) {
     q += ` AND t.creator_id = $${i}`;
     params.push(req.user.id);
     i++;
@@ -252,7 +257,7 @@ router.get("/topics/:id", async (req, res) => {
   }
 });
 
-router.post("/topics", requireRole("admin", "analysis_manager", "Field_admin", "topic_proposer"), async (req, res) => {
+router.post("/topics", requireRole(...TOPIC_PROPOSER_WRITE_ROLES), async (req, res) => {
   const { title, description, domain, keywords, priority, importance_reason, suggested_deadline } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: "محور الزامی است" });
   const fieldErr = validateTopicPayload(req.body);
@@ -290,7 +295,7 @@ router.post("/topics", requireRole("admin", "analysis_manager", "Field_admin", "
   }
 });
 
-router.patch("/topics/:id", requireRole("admin", "analysis_manager", "Field_admin", "topic_proposer"), async (req, res) => {
+router.patch("/topics/:id", requireRole(...TOPIC_PROPOSER_WRITE_ROLES), async (req, res) => {
   const { title, description, domain, keywords, priority, importance_reason, suggested_deadline } = req.body;
   const fieldErr = validateTopicPayload(req.body);
   if (fieldErr) return res.status(400).json({ error: fieldErr });
@@ -438,7 +443,7 @@ router.post("/topics/:id/complete", requireRole(...MANAGER_ROLES), async (req, r
   }
 });
 
-router.post("/topics/:id/resubmit", requireRole("admin", "analysis_manager", "Field_admin", "topic_proposer"), async (req, res) => {
+router.post("/topics/:id/resubmit", requireRole(...TOPIC_PROPOSER_WRITE_ROLES), async (req, res) => {
   try {
     const existing = await pool.query("SELECT * FROM tbl_analysis_topics WHERE id=$1 AND deleted_at IS NULL", [req.params.id]);
     if (!existing.rows[0]) return res.status(404).json({ error: "موضوع یافت نشد" });

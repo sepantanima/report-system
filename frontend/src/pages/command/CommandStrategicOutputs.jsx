@@ -1,19 +1,83 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ScrollText, Plus, Sparkles, Send } from "lucide-react";
+import { ArrowRight, Download, Loader2, Printer, ScrollText } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
-import { getSessionRoles, hasPermission } from "../../utils/userRoles.js";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import commandCenterService from "../../services/commandCenterService.js";
+import { rangeFromPreset } from "../../components/command/dashboard/dashboardDateUtils.js";
+import { strategyContentToDisplayHtml, STRATEGY_HTML_BODY_CSS } from "../../utils/strategyContentFormat.js";
 
-const STATUS_LABEL = { draft: "پیش‌نویس", published: "منتشرشده", archived: "بایگانی" };
+const TABS = [
+  { id: "strategy", title: "تحلیل‌های راهبردی", empty: "خروجی راهبردی تأیید/منتشرشده‌ای در این بازه وجود ندارد." },
+  { id: "analyses", title: "تحلیل‌ها", empty: "هنوز تحلیلی برای نمایش در اتاق فرمان در این بازه ثبت نشده است." },
+  { id: "briefs", title: "تحلیل‌های کوتاه", empty: "تحلیل کوتاهی برای نمایش در اتاق فرمان در این بازه انتخاب نشده است." },
+];
+
+const LIBRARY_RANGE_PRESETS = [
+  { id: "today", label: "روز" },
+  { id: "week", label: "هفته" },
+  { id: "month", label: "ماه" },
+  { id: "quarter", label: "فصل" },
+  { id: "year", label: "سال" },
+];
+
+function formatWhen(value) {
+  if (!value) return "—";
+  try {
+    return toPersianDigits(
+      new Date(value).toLocaleString("fa-IR", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    );
+  } catch {
+    return "—";
+  }
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text || ""], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function printHtmlDocument(title, html) {
+  const win = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+  if (!win) return;
+  const safeTitle = String(title || "").replace(/</g, "&lt;");
+  const body = strategyContentToDisplayHtml(html);
+  win.document.write(`<!doctype html><html lang="fa" dir="rtl"><head>
+    <meta charset="utf-8"/>
+    <title>${safeTitle}</title>
+    <style>
+      body{font-family:Tahoma,Vazirmatn,Arial,sans-serif;line-height:1.9;padding:24px;color:#111}
+      h1{font-size:20px;margin:0 0 16px}
+      img{max-width:100%}
+      ${STRATEGY_HTML_BODY_CSS}
+    </style>
+  </head><body>
+    <h1>${safeTitle}</h1>
+    <div class="strategy-html-body">${body || "<p>—</p>"}</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => {
+    try { win.print(); } catch { /* ignore */ }
+  }, 250);
+}
 
 export default function CommandStrategicOutputs() {
   const navigate = useNavigate();
   const { isDarkMode } = useAppTheme();
-  const roles = getSessionRoles();
-  const canManage = hasPermission(roles, "command_outputs_manage");
-
   const theme = useMemo(() => ({
     bg: isDarkMode ? "#0f172a" : "#f8fafc",
     card: isDarkMode ? "#1e293b" : "#ffffff",
@@ -21,290 +85,326 @@ export default function CommandStrategicOutputs() {
     text: isDarkMode ? "#f1f5f9" : "#0f172a",
     muted: isDarkMode ? "#94a3b8" : "#64748b",
     accent: "#e11d48",
+    soft: isDarkMode ? "rgba(225,29,72,0.15)" : "#fff1f2",
   }), [isDarkMode]);
 
-  const [types, setTypes] = useState({});
-  const [items, setItems] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showGenerate, setShowGenerate] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    output_type: "soft_war_annex",
-    title: "",
-    content_text: "",
-  });
-  const [genForm, setGenForm] = useState({
-    title: "",
-    period_label: "",
-    source_summary: "",
-    extra_notes: "",
-    previous_output_id: "",
-  });
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
-  const reload = async () => {
-    setLoading(true);
+  const [tab, setTab] = useState("strategy");
+  const [library, setLibrary] = useState({ analyses: [], briefs: [], strategy: [] });
+  const [selected, setSelected] = useState(null);
+  const [rangePreset, setRangePreset] = useState("today");
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const range = rangeFromPreset(rangePreset) || rangeFromPreset("today");
+        const data = await commandCenterService.listLibrary({
+          from: range.from,
+          to: range.to,
+          preset: rangePreset,
+        });
+        if (cancelled) return;
+        setLibrary({
+          analyses: Array.isArray(data?.analyses) ? data.analyses : [],
+          briefs: Array.isArray(data?.briefs) ? data.briefs : [],
+          strategy: Array.isArray(data?.strategy) ? data.strategy : [],
+        });
+        setSelected(null);
+        setError("");
+      } catch (e) {
+        if (!cancelled) setError(e?.response?.data?.error || e.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [rangePreset]);
+
+  const items = library[tab] || [];
+  const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
+
+  const openItem = async (kind, id) => {
+    setDetailLoading(true);
+    setError("");
     try {
-      const [meta, list] = await Promise.all([
-        commandCenterService.outputMeta(),
-        commandCenterService.listOutputs(),
-      ]);
-      setTypes(meta?.types || {});
-      setItems(Array.isArray(list?.items) ? list.items : []);
-      setError("");
+      const item = await commandCenterService.getLibraryItem(kind, id);
+      setSelected(item);
     } catch (e) {
       setError(e?.response?.data?.error || e.message);
+      setSelected(null);
     } finally {
-      setLoading(false);
+      setDetailLoading(false);
     }
   };
 
-  useEffect(() => { reload(); }, []);
-
-  const openDetail = async (id) => {
-    try {
-      const row = await commandCenterService.getOutput(id);
-      setSelected(row);
-    } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    }
-  };
-
-  const createManual = async () => {
-    setBusy(true);
-    try {
-      const row = await commandCenterService.createOutput(createForm);
-      setShowCreate(false);
-      setCreateForm({ output_type: "soft_war_annex", title: "", content_text: "" });
-      await reload();
-      setSelected(row);
-    } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const generateAi = async () => {
-    setBusy(true);
-    try {
-      const data = await commandCenterService.generateSoftWarAnnex({
-        ...genForm,
-        previous_output_id: genForm.previous_output_id || undefined,
-      });
-      setShowGenerate(false);
-      await reload();
-      setSelected(data.output);
-    } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const publish = async () => {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      const data = await commandCenterService.publishOutput(selected.id, []);
-      setSelected(data.output);
-      await reload();
-    } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cj = selected?.content_json || {};
+  const bodyHtml = strategyContentToDisplayHtml(
+    selected?.html || selected?.text || "",
+  );
 
   return (
-    <div style={{ minHeight: "100vh", background: theme.bg, color: theme.text, direction: "rtl" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 14px 48px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => navigate("/command")}
-              style={{ background: "transparent", border: `1px solid ${theme.border}`, color: theme.text, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontFamily: "inherit" }}
-            >
-              <ArrowRight size={16} style={{ verticalAlign: "middle" }} /> مرکز فرماندهی
-            </button>
-            <ScrollText size={22} color={theme.accent} />
-            <h1 style={{ margin: 0, fontSize: 20 }}>خروجی‌های راهبردی</h1>
-          </div>
-          {canManage ? (
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowCreate(true)} style={btn(theme)}>
-                <Plus size={14} /> پیش‌نویس دستی
-              </button>
-              <button type="button" onClick={() => setShowGenerate(true)} style={{ ...btn(theme), background: theme.accent, color: "#fff", borderColor: theme.accent }}>
-                <Sparkles size={14} /> تولید پیوست جنگ نرم
-              </button>
+    <div style={{ minHeight: "100vh", background: theme.bg, color: theme.text, padding: "16px 18px 40px", direction: "rtl" }}>
+      <style>{STRATEGY_HTML_BODY_CSS}</style>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => navigate("/command")}
+            style={{
+              background: theme.card, border: `1px solid ${theme.border}`, color: theme.text,
+              borderRadius: 8, width: 38, height: 38, display: "grid", placeItems: "center", cursor: "pointer",
+            }}
+            aria-label="بازگشت"
+          >
+            <ArrowRight size={18} />
+          </button>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 18 }}>
+              <ScrollText size={20} color={theme.accent} />
+              کتابخانه خروجی‌های اتاق فرمان
             </div>
-          ) : null}
+            <div style={{ color: theme.muted, fontSize: 12, marginTop: 4 }}>
+              مشاهده، چاپ و دریافت خروجی — بدون امکان ویرایش یا انتشار
+            </div>
+          </div>
         </div>
 
-        {error ? <div style={{ color: "#ef4444", marginBottom: 12 }}>{error}</div> : null}
-        {loading ? <div style={{ color: theme.muted }}>در حال بارگذاری…</div> : null}
+        {error ? (
+          <div style={{
+            background: theme.soft, border: `1px solid ${theme.accent}`, color: theme.text,
+            borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 13,
+          }}>
+            {error}
+          </div>
+        ) : null}
 
-        <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 1.1fr" : "1fr", gap: 14 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {items.map((item) => (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          {LIBRARY_RANGE_PRESETS.map((p) => {
+            const active = p.id === rangePreset;
+            return (
               <button
-                key={item.id}
+                key={p.id}
                 type="button"
-                onClick={() => openDetail(item.id)}
+                onClick={() => setRangePreset(p.id)}
                 style={{
-                  textAlign: "right",
-                  background: selected?.id === item.id ? "rgba(225,29,72,0.08)" : theme.card,
-                  border: `1px solid ${theme.border}`,
-                  borderRadius: 10,
-                  padding: 12,
-                  cursor: "pointer",
+                  background: active ? theme.soft : theme.card,
                   color: theme.text,
+                  border: `1px solid ${active ? theme.accent : theme.border}`,
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  cursor: "pointer",
                   fontFamily: "inherit",
+                  fontWeight: active ? 700 : 600,
+                  fontSize: 12,
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: 13 }}>{item.title}</div>
-                <div style={{ fontSize: 11, color: theme.muted, marginTop: 4 }}>
-                  {types[item.output_type] || item.output_type}
-                  {" · "}
-                  {STATUS_LABEL[item.status] || item.status}
-                  {" · "}
-                  {item.created_at ? toPersianDigits(new Date(item.created_at).toLocaleDateString("fa-IR")) : ""}
-                </div>
+                {p.label}{p.id === "today" ? " (پیش‌فرض)" : ""}
               </button>
-            ))}
-            {!loading && !items.length ? (
-              <div style={{ color: theme.muted, padding: 20 }}>خروجی‌ای ثبت نشده است</div>
-            ) : null}
-          </div>
+            );
+          })}
+        </div>
 
-          {selected ? (
-            <div style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                <div>
-                  <h2 style={{ margin: "0 0 6px", fontSize: 16 }}>{selected.title}</h2>
-                  <div style={{ fontSize: 12, color: theme.muted }}>
-                    {types[selected.output_type] || selected.output_type} · {STATUS_LABEL[selected.status] || selected.status}
-                  </div>
-                </div>
-                {canManage && selected.status === "draft" ? (
-                  <button type="button" disabled={busy} onClick={publish} style={{ ...btn(theme), background: "#22c55e", color: "#fff", borderColor: "#22c55e" }}>
-                    <Send size={14} /> انتشار
-                  </button>
-                ) : null}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {TABS.map((t) => {
+            const active = t.id === tab;
+            const count = (library[t.id] || []).length;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setTab(t.id); setSelected(null); }}
+                style={{
+                  background: active ? theme.accent : theme.card,
+                  color: active ? "#fff" : theme.text,
+                  border: `1px solid ${active ? theme.accent : theme.border}`,
+                  borderRadius: 999,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                {t.title}
+                <span style={{ opacity: 0.85, marginRight: 6 }}>({toPersianDigits(count)})</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: (selected || detailLoading) && !isMobile
+            ? "minmax(240px, 1fr) minmax(0, 1.3fr)"
+            : "1fr",
+          gap: 14,
+          alignItems: "start",
+          width: "100%",
+          minWidth: 0,
+        }}>
+          {(!isMobile || !(selected || detailLoading)) ? (
+          <div style={{
+            background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 14, overflow: "hidden", minWidth: 0,
+          }}>
+            {loading ? (
+              <div style={{ padding: 28, display: "flex", gap: 8, alignItems: "center", color: theme.muted }}>
+                <Loader2 size={16} className="spin" /> در حال بارگذاری…
               </div>
+            ) : items.length === 0 ? (
+              <div style={{ padding: 24, color: theme.muted, fontSize: 13 }}>{activeTab.empty}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {items.map((row) => {
+                  const kind = tab === "analyses" ? "analysis" : tab === "briefs" ? "brief" : "strategy";
+                  const isActive = selected?.kind === kind && selected?.id === row.id;
+                  return (
+                    <button
+                      key={`${kind}-${row.id}`}
+                      type="button"
+                      onClick={() => openItem(kind, row.id)}
+                      style={{
+                        textAlign: "right",
+                        background: isActive ? theme.soft : "transparent",
+                        border: "none",
+                        borderBottom: `1px solid ${theme.border}`,
+                        color: theme.text,
+                        padding: "14px 16px",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        width: "100%",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, wordBreak: "break-word" }}>{row.title || "بدون عنوان"}</div>
+                      <div
+                        className="strategy-card-preview"
+                        style={{ color: theme.muted, fontSize: 12, lineHeight: 1.7, maxHeight: 72, overflow: "hidden" }}
+                        dangerouslySetInnerHTML={{
+                          __html: strategyContentToDisplayHtml(row.preview_html || row.preview || "") || "<span>بدون پیش‌نمایش</span>",
+                        }}
+                      />
+                      <div style={{ color: theme.muted, fontSize: 11, marginTop: 8 }}>{formatWhen(row.sort_at)}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          ) : null}
 
-              {selected.output_type === "soft_war_annex" ? (
-                <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 14 }}>
-                  <Section title="سیاست‌ها" body={cj.policies || ""} theme={theme} />
-                  <Section title="راهکارهای اجرایی" body={cj.executive_solutions || ""} theme={theme} />
-                  <Section title="اقدامات لازم" body={cj.required_actions || ""} theme={theme} />
-                  {!cj.policies && selected.content_text ? (
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.8, fontFamily: "inherit" }}>{selected.content_text}</pre>
-                  ) : null}
+          {(selected || detailLoading) ? (
+            <div style={{
+              background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 16,
+              position: isMobile ? "static" : "sticky", top: 12, minWidth: 0, width: "100%", boxSizing: "border-box", overflow: "hidden",
+            }}>
+              {detailLoading ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", color: theme.muted, padding: 20 }}>
+                  <Loader2 size={16} /> در حال دریافت محتوا…
                 </div>
-              ) : (
-                <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.8, fontFamily: "inherit", marginTop: 14 }}>
-                  {selected.content_text || "—"}
-                </pre>
-              )}
+              ) : selected ? (
+                <>
+                  {isMobile ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelected(null)}
+                      style={{
+                        ...actionBtn(theme),
+                        marginBottom: 10,
+                      }}
+                    >
+                      <ArrowRight size={14} /> بازگشت به فهرست
+                    </button>
+                  ) : null}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                    <div style={{ minWidth: 0, flex: "1 1 140px" }}>
+                      <div style={{ fontWeight: 800, fontSize: 16, wordBreak: "break-word" }}>{selected.title}</div>
+                      <div style={{ color: theme.muted, fontSize: 12, marginTop: 4 }}>
+                        {selected.kind === "analysis" ? "تحلیل"
+                          : selected.kind === "brief" ? "تحلیل کوتاه"
+                            : "تحلیل راهبردی"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => printHtmlDocument(selected.title, bodyHtml)}
+                        style={actionBtn(theme)}
+                      >
+                        <Printer size={14} /> چاپ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadTextFile(
+                          `${selected.title || "output"}.txt`,
+                          selected.text || "",
+                        )}
+                        style={actionBtn(theme)}
+                      >
+                        <Download size={14} /> دریافت متن
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadTextFile(
+                          `${selected.title || "output"}.html`,
+                          `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"/><title>${String(selected.title || "").replace(/</g, "")}</title><style>body{font-family:Tahoma,Vazirmatn,sans-serif;line-height:1.9;padding:24px;color:#111}${STRATEGY_HTML_BODY_CSS}</style></head><body><h1>${String(selected.title || "").replace(/</g, "")}</h1><div class="strategy-html-body">${bodyHtml}</div></body></html>`,
+                        )}
+                        style={actionBtn(theme)}
+                      >
+                        <Download size={14} /> دریافت HTML
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className="strategy-html-body"
+                    style={{
+                      borderTop: `1px solid ${theme.border}`,
+                      paddingTop: 12,
+                      lineHeight: 1.9,
+                      fontSize: 14,
+                      maxHeight: "70vh",
+                      overflow: "auto",
+                      wordBreak: "break-word",
+                      overflowWrap: "anywhere",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: bodyHtml || "<p style='opacity:.7'>—</p>" }}
+                  />
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>
-
-        {showCreate ? (
-          <Modal title="پیش‌نویس خروجی" onClose={() => setShowCreate(false)} theme={theme}>
-            <label style={labelStyle}>نوع</label>
-            <select
-              value={createForm.output_type}
-              onChange={(e) => setCreateForm((f) => ({ ...f, output_type: e.target.value }))}
-              style={inputStyle(theme)}
-            >
-              {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <label style={labelStyle}>عنوان</label>
-            <input value={createForm.title} onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))} style={inputStyle(theme)} />
-            <label style={labelStyle}>متن</label>
-            <textarea rows={8} value={createForm.content_text} onChange={(e) => setCreateForm((f) => ({ ...f, content_text: e.target.value }))} style={inputStyle(theme)} />
-            <button type="button" disabled={busy} onClick={createManual} style={{ ...btn(theme), marginTop: 10, background: theme.accent, color: "#fff", borderColor: theme.accent }}>
-              ذخیره
-            </button>
-          </Modal>
-        ) : null}
-
-        {showGenerate ? (
-          <Modal title="تولید پیوست جنگ نرم با هوش‌افزار" onClose={() => setShowGenerate(false)} theme={theme}>
-            <label style={labelStyle}>عنوان</label>
-            <input value={genForm.title} onChange={(e) => setGenForm((f) => ({ ...f, title: e.target.value }))} style={inputStyle(theme)} placeholder="اختیاری" />
-            <label style={labelStyle}>برچسب دوره</label>
-            <input value={genForm.period_label} onChange={(e) => setGenForm((f) => ({ ...f, period_label: e.target.value }))} style={inputStyle(theme)} placeholder="مثلاً هفته اول تیر ۱۴۰۵" />
-            <label style={labelStyle}>خلاصه منابع / ورودی</label>
-            <textarea rows={5} value={genForm.source_summary} onChange={(e) => setGenForm((f) => ({ ...f, source_summary: e.target.value }))} style={inputStyle(theme)} />
-            <label style={labelStyle}>یادداشت اضافی</label>
-            <textarea rows={3} value={genForm.extra_notes} onChange={(e) => setGenForm((f) => ({ ...f, extra_notes: e.target.value }))} style={inputStyle(theme)} />
-            <label style={labelStyle}>نسخه قبلی برای غنی‌سازی (شناسه)</label>
-            <input value={genForm.previous_output_id} onChange={(e) => setGenForm((f) => ({ ...f, previous_output_id: e.target.value }))} style={inputStyle(theme)} placeholder="اختیاری" />
-            <button type="button" disabled={busy} onClick={generateAi} style={{ ...btn(theme), marginTop: 10, background: theme.accent, color: "#fff", borderColor: theme.accent }}>
-              {busy ? "در حال تولید…" : "تولید"}
-            </button>
-          </Modal>
-        ) : null}
       </div>
     </div>
   );
 }
 
-function Section({ title, body, theme }) {
-  if (!body) return null;
-  return (
-    <div>
-      <div style={{ fontWeight: 700, fontSize: 13, color: theme.accent, marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 13, lineHeight: 1.85, whiteSpace: "pre-wrap" }}>{body}</div>
-    </div>
-  );
+function actionBtn(theme) {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+    borderRadius: 8,
+    padding: "7px 10px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: 12,
+    fontWeight: 600,
+  };
 }
-
-function Modal({ title, onClose, theme, children }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-      <div style={{ background: theme.card, color: theme.text, borderRadius: 12, border: `1px solid ${theme.border}`, width: "min(520px, 100%)", maxHeight: "90vh", overflow: "auto", padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-          <strong>{title}</strong>
-          <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", color: theme.muted, cursor: "pointer", fontSize: 18 }}>×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-const labelStyle = { display: "block", fontSize: 12, margin: "8px 0 4px" };
-const inputStyle = (theme) => ({
-  width: "100%",
-  padding: 8,
-  borderRadius: 8,
-  border: `1px solid ${theme.border}`,
-  background: theme.bg,
-  color: theme.text,
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-});
-const btn = (theme) => ({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  background: "transparent",
-  border: `1px solid ${theme.border}`,
-  color: theme.text,
-  borderRadius: 8,
-  padding: "7px 12px",
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: 12,
-  fontWeight: 600,
-});

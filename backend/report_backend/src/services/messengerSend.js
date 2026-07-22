@@ -72,8 +72,11 @@ async function dispatchDocument(engine, ctx, filePath, fileName, caption) {
   }
 }
 
-export async function sendMessengerText(channelConfigId, text) {
+export async function sendMessengerText(channelConfigId, text, options = {}) {
   const ctx = await getSendContext(channelConfigId);
+  if (options.parseMode) {
+    ctx.extra = { ...(ctx.extra || {}), parse_mode: options.parseMode };
+  }
   const data = await dispatchText(ctx.template.engine, ctx, text);
   return { messageId: extractMessageId(data), raw: data };
 }

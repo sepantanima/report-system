@@ -1,11 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Radio, ScrollText, FilePenLine } from "lucide-react";
+import { Radio, ScrollText, FilePenLine, Wand2 } from "lucide-react";
 import { getSessionRoles, hasPermission } from "../../../utils/userRoles.js";
 
 const LINKS = [
   { path: "/command/live-news", permission: "command_live_news", title: "تالار اخبار زنده", icon: Radio },
-  { path: "/command/outputs", permission: "command_outputs", title: "خروجی‌های راهبردی", icon: ScrollText },
+  { path: "/command/outputs", permission: "command_outputs", title: "کتابخانه خروجی‌ها", icon: ScrollText },
+  { path: "/command/strategy-manage", permission: "command_outputs_manage", title: "مدیریت تحلیل راهبردی", icon: Wand2 },
   { path: "/command/prompts", permission: "command_manage_prompts", title: "پرامپت‌های راهبردی", icon: FilePenLine },
 ];
 

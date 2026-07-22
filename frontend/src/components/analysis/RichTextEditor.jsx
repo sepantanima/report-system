@@ -28,7 +28,7 @@ function useIsMobile() {
   return mobile;
 }
 
-function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColors, setShowColors, applyColor }) {
+function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColors, setShowColors, applyColor, applyFontSize }) {
   const btn = (cmd, title, children, onClick = () => exec(cmd)) => (
     <button
       type="button"
@@ -67,45 +67,73 @@ function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColo
           <Heading3 />
         </button>
       )}
-      {!isMobile && (
-        <div style={{ position: "relative" }}>
-          <button
-            type="button"
-            className={`rich-text-toolbar-btn${showColors ? " active" : ""}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setShowColors((v) => !v)}
-            title="رنگ متن"
+      <button
+        type="button"
+        className="rich-text-toolbar-btn"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => applyFontSize("2")}
+        title="قلم کوچک"
+        style={{ fontSize: pxToEm(11), fontWeight: 700 }}
+      >
+        ت
+      </button>
+      <button
+        type="button"
+        className="rich-text-toolbar-btn"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => applyFontSize("4")}
+        title="قلم متوسط"
+        style={{ fontSize: pxToEm(14), fontWeight: 700 }}
+      >
+        ت
+      </button>
+      <button
+        type="button"
+        className="rich-text-toolbar-btn"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => applyFontSize("6")}
+        title="قلم بزرگ"
+        style={{ fontSize: pxToEm(18), fontWeight: 700 }}
+      >
+        ت
+      </button>
+      <div style={{ position: "relative" }}>
+        <button
+          type="button"
+          className={`rich-text-toolbar-btn${showColors ? " active" : ""}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setShowColors((v) => !v)}
+          title="رنگ متن"
+        >
+          <Palette />
+        </button>
+        {showColors && (
+          <div style={{
+            position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 20,
+            display: "flex", gap: 5, padding: 6, borderRadius: 8,
+            background: isDarkMode ? "#1e293b" : "#fff",
+            border: `1px solid ${isDarkMode ? "#334155" : "#cbd5e1"}`,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          }}
           >
-            <Palette />
-          </button>
-          {showColors && (
-            <div style={{
-              position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 20,
-              display: "flex", gap: 5, padding: 6, borderRadius: 8,
-              background: isDarkMode ? "#1e293b" : "#fff",
-              border: `1px solid ${isDarkMode ? "#334155" : "#cbd5e1"}`,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            }}
-            >
-              {COLOR_PRESETS.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  title={c.label}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyColor(c.value)}
-                  style={{
-                    width: 20, height: 20, borderRadius: "50%",
-                    border: `2px solid ${isDarkMode ? "#475569" : "#cbd5e1"}`,
-                    background: c.value === "inherit" ? (isDarkMode ? "#94a3b8" : "#64748b") : c.value,
-                    cursor: "pointer",
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+            {COLOR_PRESETS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => applyColor(c.value)}
+                style={{
+                  width: 20, height: 20, borderRadius: "50%",
+                  border: `2px solid ${isDarkMode ? "#475569" : "#cbd5e1"}`,
+                  background: c.value === "inherit" ? (isDarkMode ? "#94a3b8" : "#64748b") : c.value,
+                  cursor: "pointer",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -168,6 +196,7 @@ export default function RichTextEditor({
   const exec = (command, val = null) => { focusEditor(); document.execCommand(command, false, val); emitChange(); };
   const applyHeading = (tag) => { focusEditor(); document.execCommand("formatBlock", false, tag); emitChange(); };
   const applyColor = (color) => { color === "inherit" ? exec("removeFormat") : exec("foreColor", color); setShowColors(false); };
+  const applyFontSize = (size) => { exec("fontSize", String(size)); };
 
   const handleInput = () => {
     if (maxLength && plainTextLength(editorRef.current?.innerHTML || "") > maxLength) {
@@ -267,6 +296,7 @@ export default function RichTextEditor({
             showColors={showColors}
             setShowColors={setShowColors}
             applyColor={applyColor}
+            applyFontSize={applyFontSize}
           />
         ) : (
           <span style={{ fontSize: pxToEm(11), opacity: 0.75 }}>نمایش HTML / متن خام (با تگ‌ها)</span>

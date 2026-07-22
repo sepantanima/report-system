@@ -1,6 +1,7 @@
 import React from "react";
 import { ANALYSIS_TERMS, BRIEF_TERMS } from "../constants/analysisTerminology.js";
 import { ANALYSIS_FIELD_LIMITS, TOPIC_FIELD_LIMITS } from "../constants/analysisFieldLimits.js";
+import { AnalystSuggestionWorkflowHelp } from "./analystSuggestionHelp.jsx";
 
 const helpSection = (title, items) => (
   <div style={{ marginBottom: 16 }}>
@@ -30,7 +31,9 @@ export const MANAGER_PANEL_HELP = () => (
       "گزارش‌ها از منوی «داشبورد تحلیل‌ها» در دسترس است.",
       `تب «${BRIEF_TERMS.inboxTab}» و «${BRIEF_TERMS.bankTab}»: بررسی تحلیل کوتاه، تأیید بانک و انتشار.`,
     ])}
-    {helpSection("تب «مأموریت‌ها»", [
+    {helpSection("تب «مأموریت‌ها» — تحلیل‌های ثبت‌شده", [
+      `در جزئیات هر تحلیل کوتاه، «${BRIEF_TERMS.suggestAnalyst}» پیشنهاد رسمی برای نقش تحلیل‌گر است.`,
+      "اعمال نقش در «مدیریت کاربران» انجام می‌شود — برچسب «پیشنهاد تحلیل‌گر» در لیست کاربران تا زمان اعمال نقش باقی می‌ماند.",
       "لیست اصلی مأموریت‌هاست؛ هر محور یک دسته تاشو با مأموریت‌هایش.",
       "روی سربرگ هر دسته کلیک کنید تا باز/بسته شود؛ دکمه «ارجاع» برای افزودن مأموریت به همان محور.",
       "نوار «محور آماده ارجاع» فقط برای محورهای بدون مأموریت است — از فیلتر «نما» هم می‌توانید همان‌ها را ببینید.",
@@ -217,9 +220,13 @@ export const BRIEF_INBOX_HELP = () => (
     {helpSection(`تب «${BRIEF_TERMS.inboxTab}»`, [
       "صندوق ورودی تحلیل‌های تازه ثبت‌شده (وضعیت ارسال شده).",
       "مدیر: تأیید → بانک تحلیل، رد (با دلیل رد + یادداشت)، یا بایگانی.",
+      `«${BRIEF_TERMS.suggestAnalyst}»: ثبت پیشنهاد رسمی برای دادن نقش تحلیل‌گر به نویسنده — اعمال نهایی در «مدیریت کاربران» انجام می‌شود.`,
       `زیرتب «${BRIEF_TERMS.bankTab}»: تحلیل‌های تأییدشده، آماده انتشار و منتشرشده.`,
       "سر دبیر: تأیید انتشار، انتخاب کانال، انتشار؛ پس از انتشار ویرایش متن بانک بدون انتشار مجدد.",
     ])}
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+      <AnalystSuggestionWorkflowHelp compact />
+    </div>
   </div>
 );
 

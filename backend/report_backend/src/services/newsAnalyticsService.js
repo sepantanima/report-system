@@ -6,6 +6,7 @@ import {
   jalaliDateToRefKeyStart,
   jalaliDateToRefKeyEnd,
 } from "./newsMonitorService.js";
+import { instanceNewsAndSql } from "./instanceScopeService.js";
 import {
   computeMonitorScore,
   computeEditorScore,
@@ -180,7 +181,7 @@ function addRank(rows) {
 export async function getAnalyticsFiltersMeta() {
   const [categories, sources, units, monitors, editors, chiefs] = await Promise.all([
     pool.query(`SELECT id, code, title_fa FROM tbl_news_categories WHERE is_active = true ORDER BY sort_order`),
-    pool.query(`SELECT DISTINCT source FROM tbl_news WHERE source IS NOT NULL AND trim(source) <> '' ORDER BY source LIMIT 200`),
+    pool.query(`SELECT DISTINCT source FROM tbl_news WHERE source IS NOT NULL AND trim(source) <> ''${instanceNewsAndSql("tbl_news")} ORDER BY source LIMIT 200`),
     pool.query(`SELECT "UnitCode" AS unit_cd, "UnitShortName" AS unit_name FROM tbl_units ORDER BY "UnitShortName" LIMIT 500`),
     pool.query(`
       SELECT DISTINCT u.id, u.name, u.username

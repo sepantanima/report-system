@@ -36,6 +36,7 @@ import {
 import { buildCleanedFromRaw } from "./newsIngest/newsIngestPipeline.js";
 import { assertNewsSubmissionAllowed, getNewsEntrySettings } from "./newsEntrySettingsService.js";
 import { assertNewsDuplicateAllowed } from "./duplicateCheckService.js";
+import { fanOutFinalizedNews } from "./newsAutoPublishService.js";
 import {
   RESOLVED_SENDER_NAME_SQL,
   RESOLVED_USER_ID_SQL,
@@ -61,6 +62,8 @@ import {
 import moment from "jalali-moment";
 import { similarityPercent } from "./textSimilarity.js";
 import { clampThreshold } from "../utils/duplicateCheckScope.js";
+import { newSyncIdentity, syncIdentityInsertColumns, syncIdentityInsertValues } from "./syncIdentityService.js";
+import { instanceNewsSql, instanceNewsAndSql } from "./instanceScopeService.js";
 
 const WS = sqlNewsWorkflow();
 const EWS = sqlEffectiveNewsWorkflow();
@@ -108,6 +111,7 @@ export const NEWS_REF_KEY_CTE = `
     FROM tbl_news n
     WHERE COALESCE(NULLIF(trim(n.cleaned_text), ''), NULLIF(trim(n.raw_text), '')) IS NOT NULL
       AND COALESCE(n.is_deleted, false) = false
+      AND ${instanceNewsSql("n")}
   ),
   adjusted AS (
     SELECT
@@ -320,7 +324,10 @@ export async function logNewsAudit(client, newsId, userId, action, before, after
 }
 
 async function fetchNewsRow(newsId, client = pool) {
-  const r = await client.query(`SELECT * FROM tbl_news WHERE id = $1`, [newsId]);
+  const r = await client.query(
+    `SELECT * FROM tbl_news WHERE id = $1 AND ${instanceNewsSql("tbl_news")}`,
+    [newsId],
+  );
   return r.rows[0] || null;
 }
 
@@ -582,6 +589,7 @@ export async function createNewsByMonitor(body = {}, user = null) {
   if (body.source_url != null && String(body.source_url).trim()) {
     sourceUrl = normalizeSourceUrl(body.source_url);
   }
+  const syncIdentity = newSyncIdentity();
 
   const client = await pool.connect();
   try {
@@ -599,6 +607,7 @@ export async function createNewsByMonitor(body = {}, user = null) {
          monitor_note,
          workflow_status, review_state, is_approved, status,
          duplicate_status, is_duplicate,
+         ${syncIdentityInsertColumns().join(", ")},
          created_at, updated_at
        ) VALUES (
          $1, $2, $3, $4, $5,
@@ -612,6 +621,7 @@ export async function createNewsByMonitor(body = {}, user = null) {
          $24,
          $25, 'pending', 0, 0,
          'none', false,
+         $26, $27, $28, $29,
          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
        ) RETURNING *`,
       [
@@ -640,6 +650,7 @@ export async function createNewsByMonitor(body = {}, user = null) {
         observer.observer_first_name,
         monitorNote,
         submitNow ? "pending" : "new",
+        ...syncIdentityInsertValues(syncIdentity),
       ],
     );
     const row = ins.rows[0];
@@ -718,9 +729,12 @@ function resolveReviewState(row) {
 
 function appendChiefNote(existingNote, chiefNote) {
   const note = String(chiefNote ?? "").trim();
-  if (!note) throw new Error("یادداشت الزامی است");
+  // #region agent log
+  fetch('http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d349cf'},body:JSON.stringify({sessionId:'d349cf',runId:'post-fix',hypothesisId:'H2',location:'newsMonitorService.js:appendChiefNote',message:'appendChiefNote called',data:{noteLen:note.length,willThrow:false},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   const prefix = "[برگشت سردبیر]";
   const existing = String(existingNote ?? "").trim();
+  if (!note) return existing;
   return existing ? `${existing}\n${prefix} ${note}` : `${prefix} ${note}`;
 }
 
@@ -807,7 +821,26 @@ export async function finalizeNewsPublish(id, userId = null) {
     throw new Error("فقط اخبار تأیید یا شایعه قابل تأیید انتشار هستند");
   }
 
-  return applyChiefFinalize(newsId, userId, before, "ready", "chief_publish");
+  const row = await applyChiefFinalize(newsId, userId, before, "ready", "chief_publish");
+  if (!row) return null;
+
+  // ارسال تکی به همه کانال‌های فعال «انتشار گزارش اخبار» با قالب پیام تنظیمات
+  let auto_publish = null;
+  try {
+    auto_publish = await fanOutFinalizedNews({ newsId, userId });
+  } catch (e) {
+    auto_publish = {
+      ok: false,
+      sent: [],
+      failed: [],
+      skipped: e?.message || String(e),
+      destination_count: 0,
+      sent_count: 0,
+      failed_count: 0,
+    };
+  }
+
+  return { ...row, auto_publish };
 }
 
 export async function finalizeNewsBank(id, userId = null) {
@@ -1596,7 +1629,7 @@ export async function updateNewsItem(id, body = {}, userId = null, userRole = nu
     const newHash = computeHashKey(cleanedPlain, source);
     if (newHash && newHash !== existing.hash_key) {
       const conflictRes = await pool.query(
-        `SELECT id FROM tbl_news WHERE hash_key = $1 AND id <> $2 LIMIT 1`,
+        `SELECT id FROM tbl_news WHERE hash_key = $1 AND id <> $2 AND ${instanceNewsSql("tbl_news")} LIMIT 1`,
         [newHash, newsId],
       );
       if (conflictRes.rows[0]) {
@@ -1714,7 +1747,10 @@ export async function updateNewsLegacy(id, body = {}, userId = null) {
   if (body.is_approved != null || body.status != null) {
     const ia = body.is_approved != null ? parseInt(body.is_approved, 10) : undefined;
     const st = body.status != null ? parseInt(body.status, 10) : undefined;
-    const row = (await pool.query(`SELECT is_approved, status FROM tbl_news WHERE id = $1`, [id])).rows[0];
+    const row = (await pool.query(
+      `SELECT is_approved, status FROM tbl_news WHERE id = $1${instanceNewsAndSql("tbl_news")}`,
+      [id],
+    )).rows[0];
     if (row) {
       patch.review_state = inferReviewState(
         ia != null ? ia : row.is_approved,
@@ -1726,10 +1762,12 @@ export async function updateNewsLegacy(id, body = {}, userId = null) {
 }
 
 export async function listDistinctSources() {
+  const scope = instanceNewsSql("tbl_news");
   const r = await pool.query(
     `SELECT DISTINCT source FROM tbl_news
      WHERE source IS NOT NULL AND trim(source) <> ''
        AND COALESCE(is_deleted, false) = false
+       AND ${scope}
      ORDER BY source`,
   );
   return r.rows.map((row) => row.source);
@@ -1761,7 +1799,7 @@ export async function deleteDraftPermanently(id, userId = null, userRole = null)
     await client.query(`DELETE FROM tbl_news_category_links WHERE news_id = $1`, [newsId]);
     await client.query(`DELETE FROM tbl_news_audit_log WHERE news_id = $1`, [newsId]);
     const del = await client.query(
-      `DELETE FROM tbl_news WHERE id = $1 AND workflow_status = 'new' RETURNING id`,
+      `DELETE FROM tbl_news WHERE id = $1 AND workflow_status = 'new' AND ${instanceNewsSql("tbl_news")} RETURNING id`,
       [newsId],
     );
     if (!del.rows[0]) throw new Error("پیش‌نویس یافت نشد");

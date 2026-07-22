@@ -32,6 +32,15 @@ function Login() {
 
     localStorage.setItem("token", res.data.token);
     persistSessionRoles(roles);
+    if (res.data.permissions) {
+      localStorage.setItem("permissions", JSON.stringify(res.data.permissions));
+    }
+    if (res.data.permission_version != null) {
+      localStorage.setItem("permission_version", String(res.data.permission_version));
+    }
+    if (res.data.instance_mode) localStorage.setItem("instance_mode", res.data.instance_mode);
+    if (res.data.org_code) localStorage.setItem("org_code", res.data.org_code);
+    if (res.data.org_role) localStorage.setItem("org_role", res.data.org_role);
     localStorage.setItem("unitcd", res.data.unitcd || "");
     localStorage.setItem("username", res.data.userName || res.data.username || username);
     localStorage.setItem("name", res.data.name || res.data.userName || username);

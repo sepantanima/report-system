@@ -17,6 +17,11 @@ export const PAGE_SETTINGS_WIDE_MAX = scalePageWidth(960);
 export const PAGE_SETTINGS_SECTION_MAX = scalePageWidth(900);
 export const PAGE_CHANNEL_MAX = scalePageWidth(760);
 
+/** صفحه RBAC — عرض بیشتر برای دو ستون نقش/مجوز */
+export const PAGE_RBAC_MAX = scalePageWidth(1500);
+export const PAGE_RBAC_CSS = `min(${PAGE_RBAC_MAX}px, 99vw)`;
+export const PAGE_RBAC_PX = `${PAGE_RBAC_MAX}px`;
+
 export const PAGE_WIDE_CSS = `min(${PAGE_WIDE_MAX}px, 96vw)`;
 export const PAGE_NARROW_CSS = `min(${PAGE_NARROW_MAX}px, 94vw)`;
 export const PAGE_MESSAGE_CSS = `min(96vw, ${PAGE_MESSAGE_MAX}px)`;

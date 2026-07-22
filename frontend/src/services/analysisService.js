@@ -81,6 +81,10 @@ const analysisService = {
   getBriefSubmission: (id) => api.get(`/analysis/brief-submissions/${id}`).then((r) => r.data),
   updateBriefStatus: (id, data) => api.patch(`/analysis/brief-submissions/${id}/status`, data).then((r) => r.data),
   approveBriefBank: (id, data) => api.post(`/analysis/brief-submissions/${id}/approve-bank`, data).then((r) => r.data),
+  setBriefCommandVisibility: (id, showInCommand) =>
+    api.patch(`/analysis/brief-submissions/${id}/command-visibility`, {
+      show_in_command: showInCommand === true,
+    }).then((r) => r.data),
   approveBriefForPublish: (id, data) => api.post(`/analysis/brief-submissions/${id}/editor-approve`, data).then((r) => r.data),
   publishBriefSubmission: (id, data) => api.post(`/analysis/brief-submissions/${id}/publish`, data).then((r) => r.data),
   editBriefBankContent: (id, data) => api.patch(`/analysis/brief-submissions/${id}/bank-content`, data).then((r) => r.data),

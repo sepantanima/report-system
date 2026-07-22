@@ -45,6 +45,7 @@ import WidgetHelpButton, {
   StaleBodyWrap,
 } from "../../components/command/dashboard/WidgetHelpButton.jsx";
 import { getWidgetHelp } from "../../components/command/dashboard/dashboardWidgetHelp.js";
+import { normalizeProvinceName, findProvinceMeta } from "../../components/command/dashboard/iranProvincesSvg.js";
 import {
   DashboardLoadProgress,
   LazyWidgetBody,
@@ -78,6 +79,27 @@ const WALL_WIDGETS = new Set(["alerts", "health", "iran_map", "units"]);
 const RETURN_TO = "/command";
 const DASH_CACHE_KEY = "command-dashboard-last-good-v1";
 const FILTER_CACHE_KEY = "command-dashboard-filters-v1";
+const REFRESH_KEY = "command-dashboard-refresh-sec";
+
+/** فاصله رفرش کامل داشبورد (ثانیه) — ۰ = فقط دستی؛ پالس سبک KPI هم با همان خاموش می‌شود */
+const DASH_REFRESH_OPTIONS = [
+  { sec: 60, label: "هر ۱ دقیقه" },
+  { sec: 120, label: "هر ۲ دقیقه" },
+  { sec: 300, label: "هر ۵ دقیقه" },
+  { sec: 600, label: "هر ۱۰ دقیقه" },
+  { sec: 0, label: "فقط دستی" },
+];
+const DEFAULT_DASH_REFRESH_SEC = 300;
+
+function readRefreshSec() {
+  try {
+    const v = parseInt(localStorage.getItem(REFRESH_KEY), 10);
+    if (DASH_REFRESH_OPTIONS.some((o) => o.sec === v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_DASH_REFRESH_SEC;
+}
 
 /** هر ویجت به کدام مرحلهٔ بارگذاری وابسته است */
 const WIDGET_SECTION = {
@@ -181,6 +203,9 @@ export default function CommandCenterHome() {
   const [liveOnline, setLiveOnline] = useState(null);
   const [fresh, setFresh] = useState(() => (cachedInit ? { core: true, ops: true, deep: true } : { ...EMPTY_FRESH }));
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [refreshSec, setRefreshSec] = useState(() => readRefreshSec());
+  /** فوکوس نقشه/استان — بدون تغییر فیلتر سرور و بدون رفرش کل داشبورد */
+  const [focusProvince, setFocusProvince] = useState("");
   const loadGen = useRef(0);
 
   useEffect(() => {
@@ -274,8 +299,8 @@ export default function CommandCenterHome() {
   ]);
 
   useCommandDashboardLive(filtersToApiParams(filters), {
-    enabled: !loading && loadProgress >= 100,
-    intervalMs: wallMode ? 12000 : 25000,
+    enabled: refreshSec > 0 && !loading && loadProgress >= 100,
+    intervalMs: wallMode ? Math.min(15000, Math.max(10000, refreshSec * 1000)) : Math.min(30000, Math.max(15000, Math.floor(refreshSec * 1000) || 25000)),
     onPulse: (pulse) => {
       setData((prev) => {
         const patch = {
@@ -298,6 +323,24 @@ export default function CommandCenterHome() {
     },
   });
 
+  useEffect(() => {
+    if (!refreshSec || refreshSec <= 0) return undefined;
+    const t = setInterval(() => {
+      setReloadNonce((n) => n + 1);
+    }, refreshSec * 1000);
+    return () => clearInterval(t);
+  }, [refreshSec]);
+
+  const changeRefresh = (v) => {
+    const n = Number(v);
+    const next = DASH_REFRESH_OPTIONS.some((o) => o.sec === n) ? n : DEFAULT_DASH_REFRESH_SEC;
+    setRefreshSec(next);
+    try {
+      localStorage.setItem(REFRESH_KEY, String(next));
+    } catch {
+      /* ignore */
+    }
+  };
   useEffect(() => {
     if (!wallMode) return undefined;
     const onFs = () => {
@@ -337,8 +380,28 @@ export default function CommandCenterHome() {
   };
 
   const onSelectProvince = (province) => {
-    setFilters((f) => ({ ...f, province: String(province), unit_id: "" }));
+    const p = String(province || "").trim();
+    if (!p) return;
+    setFocusProvince((prev) => (normalizeProvinceName(prev) === normalizeProvinceName(p) ? "" : p));
   };
+
+  const focusedUnits = useMemo(() => {
+    const units = data?.units_heatmap || [];
+    if (!focusProvince) return units;
+    const meta = findProvinceMeta(focusProvince);
+    const names = new Set(
+      [focusProvince, meta?.name, ...(meta?.aliases || [])].map(normalizeProvinceName).filter(Boolean),
+    );
+    return units.filter((u) => {
+      const n = normalizeProvinceName(u.province);
+      if (!n) return false;
+      if (names.has(n)) return true;
+      for (const x of names) {
+        if (n.includes(x) || x.includes(n)) return true;
+      }
+      return false;
+    });
+  }, [data?.units_heatmap, focusProvince]);
 
   const exportKpi = () => {
     const ok = exportCommandDashboardExcel(data, filters);
@@ -382,6 +445,7 @@ export default function CommandCenterHome() {
         <IranMapWidget
           provinces={data?.provinces_heat || []}
           theme={theme}
+          selectedProvince={focusProvince}
           onSelectProvince={onSelectProvince}
         />
       );
@@ -391,6 +455,7 @@ export default function CommandCenterHome() {
         <ProvincesHeatWidget
           provinces={data?.provinces_heat || []}
           theme={theme}
+          selectedProvince={focusProvince}
           onSelectProvince={onSelectProvince}
         />
       );
@@ -400,12 +465,36 @@ export default function CommandCenterHome() {
     }
     if (id === "units") {
       return (
-        <UnitsHeatMapWidget
-          units={data?.units_heatmap || []}
-          theme={theme}
-          onSelectUnit={onSelectUnit}
-          returnTo={RETURN_TO}
-        />
+        <div>
+          {focusProvince ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+                marginBottom: 10,
+                fontSize: 12,
+                color: theme.muted,
+              }}
+            >
+              <span>
+                فوکوس استان: <strong style={{ color: theme.text }}>{focusProvince}</strong>
+                {" · "}
+                {focusedUnits.length} یگان
+              </span>
+              <button type="button" onClick={() => setFocusProvince("")} style={toolBtn(theme)}>
+                لغو فوکوس
+              </button>
+            </div>
+          ) : null}
+          <UnitsHeatMapWidget
+            units={focusedUnits}
+            theme={theme}
+            onSelectUnit={onSelectUnit}
+            returnTo={RETURN_TO}
+          />
+        </div>
       );
     }
     if (id === "users") {
@@ -452,6 +541,38 @@ export default function CommandCenterHome() {
       >
         <RefreshCw size={14} /> به‌روزرسانی
       </button>
+      <label
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 12,
+          color: theme.muted,
+        }}
+        title="فاصله رفرش کامل داشبورد؛ پالس سبک KPI/هشدار هم با «فقط دستی» خاموش می‌شود"
+      >
+        خودکار:
+        <select
+          value={refreshSec}
+          onChange={(e) => changeRefresh(e.target.value)}
+          style={{
+            fontFamily: "inherit",
+            fontSize: 12,
+            background: theme.card,
+            color: theme.text,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 8,
+            padding: "5px 8px",
+          }}
+        >
+          {DASH_REFRESH_OPTIONS.map((o) => (
+            <option key={o.sec} value={o.sec}>
+              {o.label}
+              {o.sec === DEFAULT_DASH_REFRESH_SEC ? " (پیش‌فرض)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
       <button type="button" onClick={() => setShowPersonalize((v) => !v)} style={toolBtn(theme)}>
         <SlidersHorizontal size={14} /> شخصی‌سازی
       </button>
@@ -476,7 +597,29 @@ export default function CommandCenterHome() {
       </button>
     </div>
   ) : (
-    <button type="button" onClick={toggleWall} style={toolBtn(theme)}>خروج از Wall</button>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+      <select
+        value={refreshSec}
+        onChange={(e) => changeRefresh(e.target.value)}
+        style={{
+          fontFamily: "inherit",
+          fontSize: 12,
+          background: theme.card,
+          color: theme.text,
+          border: `1px solid ${theme.border}`,
+          borderRadius: 8,
+          padding: "5px 8px",
+        }}
+        title="به‌روزرسانی خودکار"
+      >
+        {DASH_REFRESH_OPTIONS.map((o) => (
+          <option key={o.sec} value={o.sec}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={toggleWall} style={toolBtn(theme)}>خروج از Wall</button>
+    </div>
   );
 
   const body = (
@@ -628,7 +771,7 @@ export default function CommandCenterHome() {
             <span style={{ color: theme.muted, fontSize: 14 }}>
               {subtitle}
               {onlineWall != null ? ` · آنلاین: ${onlineWall}` : ""}
-              {" · به‌روزرسانی خودکار"}
+              {refreshSec > 0 ? ` · خودکار هر ${refreshSec >= 60 ? `${refreshSec / 60} دقیقه` : `${refreshSec}ث`}` : " · فقط دستی"}
             </span>
           </div>
           {toolbarExtra}
@@ -665,7 +808,10 @@ export default function CommandCenterHome() {
             روی هر ویجت دکمهٔ «راهنما» تفسیر دقیق اعداد همان بخش را نشان می‌دهد. برای KPI هم «راهنمای شاخص‌ها» بالای
             نوار شاخص‌ها در دسترس است.
           </p>
-          <p>دکمهٔ «به‌روزرسانی» کل داشبورد را با فیلتر فعلی دوباره از سرور می‌گیرد.</p>
+          <p>
+            دکمهٔ «به‌روزرسانی» کل داشبورد را فوری می‌گیرد. از منوی «خودکار» فاصلهٔ رفرش کامل را انتخاب کنید
+            (پیش‌فرض ۵ دقیقه). گزینهٔ «فقط دستی» رفرش دوره‌ای و پالس زنده KPI/هشدار را هم خاموش می‌کند.
+          </p>
         </div>
       )}
       helpTitle="راهنمای مرکز فرماندهی"

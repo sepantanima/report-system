@@ -1,4 +1,5 @@
 import pool from "../db.js";
+import { fieldReportListScopeSql, fieldReportTypeJoinSql } from "./instanceScopeService.js";
 import { parseUserRoles } from "../middleware/requireRole.js";
 import {
   buildDailyQuota,
@@ -105,9 +106,11 @@ export async function updateFieldReportSettings(body, userId) {
 
 export async function countFieldUserSubmissions(userId, unitcd, date) {
   const r = await pool.query(
-    `SELECT COUNT(*)::int AS cnt FROM tbl_unit_events
-     WHERE sender_id = $1 AND unitcd = $2 AND date = $3
-       AND (is_deleted = false OR is_deleted IS NULL)`,
+    `SELECT COUNT(*)::int AS cnt FROM tbl_unit_events e
+     ${fieldReportTypeJoinSql("e")}
+     WHERE e.sender_id = $1 AND e.unitcd = $2 AND e.date = $3
+       AND (e.is_deleted = false OR e.is_deleted IS NULL)
+       ${fieldReportListScopeSql("e", "rt_scope")}`,
     [String(userId), unitcd || 0, date],
   );
   return r.rows[0]?.cnt ?? 0;

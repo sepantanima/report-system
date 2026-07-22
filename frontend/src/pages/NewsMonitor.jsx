@@ -303,7 +303,20 @@ export default function NewsMonitor() {
     try {
       const updated = await newsMonitorService.finalizePublish(id);
       patchItemInList(updated);
-      showToast("تأیید و انتشار — آماده انتشار");
+      const ap = updated?.auto_publish;
+      if (ap?.skipped && !ap?.sent_count) {
+        showToast(`تأیید شد — ارسال کانال: ${ap.skipped}`);
+      } else if (ap && (ap.sent_count > 0 || ap.failed_count > 0)) {
+        const okPart = ap.sent_count
+          ? `ارسال به ${toPersianDigits(ap.sent_count)} کانال`
+          : "ارسال نشد";
+        const failPart = ap.failed_count
+          ? `، ${toPersianDigits(ap.failed_count)} ناموفق`
+          : "";
+        showToast(`تأیید و انتشار — ${okPart}${failPart}`);
+      } else {
+        showToast("تأیید و انتشار — آماده انتشار");
+      }
       advanceAfterChiefAction(id);
     } catch (e) {
       showToast(e.response?.data?.error || "خطا در تأیید انتشار");

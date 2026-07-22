@@ -1,65 +1,38 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { UserPlus, Trash2, Edit, X, Search, CheckSquare, Square, ChevronDown, Key, HelpCircle } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { UserPlus, Trash2, Edit, X, Search, ChevronDown, Key, HelpCircle } from "lucide-react";
+import RoleAssignMultiSelect from "../components/settings/RoleAssignMultiSelect.jsx";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import HelpModal from "../components/common/HelpModal.jsx";
 import { PAGE_ADMIN_PX } from "../constants/pageLayoutWidths.js";
 import MessengerAccountsPanel from "../components/settings/MessengerAccountsPanel.jsx";
 import { USER_ROLE_GUIDE_HELP } from "../content/userRoleGuideHelp.jsx";
+import { ANALYST_SUGGESTION_HELP } from "../content/analystSuggestionHelp.jsx";
 import { GENDER_OPTIONS, normalizeGender } from "../utils/userGreeting.js";
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import { getFormPageTheme, FORM_PAGE_MODAL_Z_INDEX } from "../theme/formPageTheme.js";
+import { getRoleLabelFa, normalizeRoles } from "../utils/userRoles.js";
+import {
+  fetchRoleTemplates,
+  fetchUserRbac,
+  updateUserAssignments,
+} from "../services/rbacAdminService.js";
+import api from "../api/api";
 
-// =========================================================================
-// 🌟 راهنمای ایمپورت در پروژه واقعی شما (جهت اتصال به دیتابیس و استایل‌ها):
-// هنگام کپی کردن این فایل به پروژه محلی خود، کافیست خطوط زیر را از حالت کامنت خارج کنید:
-//
- import api from "../api/api";
-// =========================================================================
+const UI_LEGACY_ROLE_MAP = { system_admin: "admin" };
+const API_LEGACY_ROLE_MAP = { admin: "system_admin" };
 
-// // شبیه‌ساز هوشمند وب‌سرویس‌ها جهت جلوگیری از خطای بیلد در پیش‌نمایش کانوس
-// const api = window.api || {
-//   get: async (url) => {
-//     await new Promise((resolve) => setTimeout(resolve, 500));
-//     if (url === "/users") {
-//       return {
-//         data: [
-//           { id: 1, name: "نیما امینی", username: "nima_amini", role: ["admin", "news_admin", "user"], UnitShortName: "ABHAD", unit_cd: 300940, active: true },
-//           { id: 2, name: "علی عباسی", username: "Ali_Abasi", role: ["user"], UnitShortName: "واحد تهران ۱۰۰۲۰۰", unit_cd: 100200, active: true },
-//           { id: 3, name: "مدیر سیستم", username: "Admin_System", role: ["admin"], UnitShortName: "واحد اصفهان ۲۰۰۳۰۰", unit_cd: 200300, active: true }
-//         ]
-//       };
-//     }
-//     if (url === "/users/units") {
-//       return {
-//         data: [
-//           { UnitCode: 300940, UnitShortName: "واحد فارس ۳۰۰۹۴۰" },
-//           { UnitCode: 100200, UnitShortName: "واحد تهران ۱۰۰۲۰۰" },
-//           { UnitCode: 200300, UnitShortName: "واحد اصفهان ۲۰۰۳۰۰" }
-//         ]
-//       };
-//     }
-//     return { data: [] };
-//   },
-//   post: async (url, data) => {
-//     console.log("Mock POST request:", url, data);
-//     await new Promise((resolve) => setTimeout(resolve, 600));
-//     return { data: { ...data, id: Date.now() } };
-//   },
-//   put: async (url, data) => {
-//     console.log("Mock PUT request:", url, data);
-//     await new Promise((resolve) => setTimeout(resolve, 600));
-//     return { data };
-//   },
-//   delete: async (url) => {
-//     console.log("Mock DELETE request:", url);
-//     await new Promise((resolve) => setTimeout(resolve, 500));
-//     return { data: { success: true } };
-//   }
-// };
+function toUiRoleCode(code) {
+  return UI_LEGACY_ROLE_MAP[code] || code;
+}
 
-// لیست ثابت نقش‌های موجود در سیستم جهت مدیریت متمرکز به همراه برچسب‌های فارسی مصوب
-const AVAILABLE_ROLES = [
+function toApiRoleCode(uiCode) {
+  return API_LEGACY_ROLE_MAP[uiCode] || uiCode;
+}
+
+// fallback if RBAC API unavailable
+const DEFAULT_ROLES = [
   { id: "admin", label: "مدیر کل سیستم" },
+  { id: "tech_admin", label: "مدیر فنی" },
   { id: "analysis_manager", label: "مدیر تحلیل / سردبیر" },
   { id: "analyst", label: "تحلیل‌گر" },
   { id: "mentor", label: "راهنما / داور" },
@@ -69,9 +42,10 @@ const AVAILABLE_ROLES = [
   { id: "news_editor", label: "دبیر اخبار" },
   { id: "news_chief", label: "سردبیر اخبار" },
   { id: "Field_admin", label: "مدیر گزارشات میدانی" },
-  { id: "user", label: "کاربر واحد (ثبت گزارش)" },
+  { id: "user", label: "کاربر واحد (گزارش، پایش، تحلیل کوتاه)" },
   { id: "strategy_viewer", label: "ناظر راهبردی" },
   { id: "strategy_commander", label: "فرمانده راهبردی" },
+  { id: "strategy_analysis_manager", label: "مدیر تحلیل راهبردی" },
 ];
 
 // تابع فارسی‌سازی مقادیر عددی برای شمارنده‌ها
@@ -109,8 +83,10 @@ export default function UserManagement() {
 
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
+  const [availableRoles, setAvailableRoles] = useState(DEFAULT_ROLES);
   const [showModal, setShowModal] = useState(false);
   const [showRoleGuide, setShowRoleGuide] = useState(false);
+  const [showAnalystHelp, setShowAnalystHelp] = useState(false);
   const [editMode, setEditMode] = useState(false);
   
   // 🌟 استیت پویای کنترل نمایش فیلد پسورد در حالت ویرایش کاربر قدیمی
@@ -118,6 +94,7 @@ export default function UserManagement() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [contributorFilter, setContributorFilter] = useState("all");
+  const [newUserDefaultRoles, setNewUserDefaultRoles] = useState(["user"]);
   const [formData, setFormData] = useState({
     id: "",
     username: "",
@@ -153,6 +130,23 @@ export default function UserManagement() {
   useEffect(() => {
     fetchData();
     fetchUnits();
+    api.get("/users/new-user-default-roles")
+      .then((res) => {
+        const codes = (res.data?.role_codes || ["user"]).map(toUiRoleCode);
+        setNewUserDefaultRoles(codes.length ? codes : ["user"]);
+      })
+      .catch(() => {});
+    fetchRoleTemplates()
+      .then((templates) => {
+        if (!templates?.length) return;
+        setAvailableRoles(
+          templates.map((t) => ({
+            id: toUiRoleCode(t.code),
+            label: t.label_fa || t.code,
+          })),
+        );
+      })
+      .catch(() => {});
   }, []);
 
   // هندلر بستن پاپ‌آپ واحد با کلیک روی بیرون از کادر
@@ -166,25 +160,26 @@ export default function UserManagement() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // تابع مدیریت تیک زدن نقش‌ها
-  const toggleRole = (roleId) => {
-    setFormData(prev => {
-      const currentRoles = [...prev.role];
-      if (currentRoles.includes(roleId)) {
-        if (currentRoles.length > 1) {
-          return { ...prev, role: currentRoles.filter(r => r !== roleId) };
-        }
-        return prev;
-      } else {
-        return { ...prev, role: [...currentRoles, roleId] };
-      }
-    });
-  };
+  // حداقل یک نقش همیشه فعال بماند
+  const handleRolesChange = useCallback((nextRoles) => {
+    setFormData((prev) => ({
+      ...prev,
+      role: nextRoles?.length ? nextRoles : ["user"],
+    }));
+  }, []);
 
   // 🌟 باز کردن پنجره ویرایش کاربر قدیمی
-  const openEdit = (user) => {
+  const openEdit = async (user) => {
     let userRoles = [];
-    if (user.role) {
+    try {
+      const rbac = await fetchUserRbac(user.id);
+      userRoles = (rbac.assignments || [])
+        .filter((a) => a.active)
+        .map((a) => toUiRoleCode(a.code));
+    } catch {
+      /* fallback legacy role field */
+    }
+    if (!userRoles.length && user.role) {
       if (Array.isArray(user.role)) {
         userRoles = user.role;
       } else if (typeof user.role === "string") {
@@ -227,13 +222,16 @@ export default function UserManagement() {
         ...formData,
         unit_cd: formData.unit_cd ? parseInt(formData.unit_cd, 10) : null 
       };
+      const roleCodes = formData.role.map(toApiRoleCode);
 
       if (editMode) {
-        // 🌟 در حالت ویرایش، اگر تیک فیلد پسورد زده نشده باشد، پسورد از پارامترهای ارسالی حذف می‌شود تا رمز قدیمی دیتابیس حفظ شود
         if (!showPassField) delete payload.password;
         await api.put(`/users/${formData.id}`, payload);
+        await updateUserAssignments(formData.id, roleCodes);
       } else {
-        await api.post("/users", payload);
+        const res = await api.post("/users", payload);
+        const newId = res.data?.id;
+        if (newId) await updateUserAssignments(newId, roleCodes);
       }
       setShowModal(false);
       fetchData();
@@ -277,7 +275,7 @@ export default function UserManagement() {
         }
       }
       const matchRole = userRoles.some(r => {
-        const roleObj = AVAILABLE_ROLES.find(ar => ar.id === r);
+        const roleObj = availableRoles.find(ar => ar.id === r);
         const persianLabel = roleObj ? roleObj.label : "";
         return r.toLowerCase().includes(term) || persianLabel.toLowerCase().includes(term);
       });
@@ -303,6 +301,7 @@ export default function UserManagement() {
   // تبدیل نام انگلیسی نقش به برچسب فارسی شیک و تخصیص پالت رنگی مناسب
   const getRoleBadgeDetails = (roleId) => {
     if (roleId === "admin") return { label: "مدیر کل", bg: "rgba(239, 68, 68, 0.12)", color: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
+    if (roleId === "tech_admin") return { label: "مدیر فنی", bg: "rgba(100, 116, 139, 0.14)", color: "#475569", border: "rgba(100, 116, 139, 0.3)" };
     if (roleId === "analysis_manager") return { label: "مدیر تحلیل", bg: "rgba(16, 185, 129, 0.12)", color: "#10b981", border: "rgba(16, 185, 129, 0.25)" };
     if (roleId === "analyst") return { label: "تحلیل‌گر", bg: "rgba(99, 102, 241, 0.12)", color: "#6366f1", border: "rgba(99, 102, 241, 0.25)" };
     if (roleId === "mentor") return { label: "راهنما", bg: "rgba(168, 85, 247, 0.12)", color: "#a855f7", border: "rgba(168, 85, 247, 0.25)" };
@@ -312,14 +311,19 @@ export default function UserManagement() {
     if (roleId === "news_editor") return { label: "دبیر اخبار", bg: "rgba(59, 130, 246, 0.12)", color: "#3b82f6", border: "rgba(59, 130, 246, 0.25)" };
     if (roleId === "news_chief") return { label: "سردبیر اخبار", bg: "rgba(245, 158, 11, 0.12)", color: "#f59e0b", border: "rgba(245, 158, 11, 0.25)" };
     if (roleId === "Field_admin") return { label: "مدیر میدانی", bg: "rgba(244, 63, 94, 0.12)", color: "#f43f5e", border: "rgba(244, 63, 94, 0.25)" };
-    return { label: "کاربر واحد", bg: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", border: "rgba(56, 189, 248, 0.25)" };
+    if (roleId === "user") return { label: "کاربر واحد", bg: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", border: "rgba(56, 189, 248, 0.25)" };
+    if (roleId === "strategy_viewer") return { label: "ناظر راهبردی", bg: "rgba(100, 116, 139, 0.14)", color: "#64748b", border: "rgba(100, 116, 139, 0.3)" };
+    if (roleId === "strategy_commander") return { label: "فرمانده راهبردی", bg: "rgba(15, 118, 110, 0.14)", color: "#0f766e", border: "rgba(15, 118, 110, 0.3)" };
+    if (roleId === "strategy_analysis_manager") return { label: "مدیر تحلیل راهبردی", bg: "rgba(124, 58, 237, 0.12)", color: "#7c3aed", border: "rgba(124, 58, 237, 0.28)" };
+    // نقش ناشناس را دیگر به‌اشتباه «کاربر واحد» نشان نده
+    return { label: getRoleLabelFa(roleId) || roleId || "نقش نامشخص", bg: "rgba(148, 163, 184, 0.12)", color: "#64748b", border: "rgba(148, 163, 184, 0.3)" };
   };
 
   return (
     <FormPageLayout
       title="مدیریت کاربران"
       onHelp={() => <USER_ROLE_GUIDE_HELP />}
-      helpTitle="راهنمای جامع نقش‌ها و مسئولیت‌ها"
+      helpTitle="راهنمای نقش‌ها، مجوزها و پیشنهاد تحلیل‌گر"
       wide
       maxWidth={PAGE_ADMIN_PX}
       contentPadding="0 0 32px"
@@ -391,26 +395,6 @@ export default function UserManagement() {
         }
         .role-badge-button:hover {
           transform: scale(1.03);
-        }
-
-        .checkbox-item { 
-          display: flex; 
-          align-items: center; 
-          gap: 10px; 
-          padding: 12px; 
-          background: ${isDarkMode ? "rgba(255,255,255,0.03)" : "#f8fafc"}; 
-          border: 1px solid ${theme.border}; 
-          border-radius: 10px; 
-          cursor: pointer; 
-          transition: 0.2s; 
-          user-select: none;
-        }
-        .checkbox-item:hover { 
-          background: ${isDarkMode ? "rgba(255,255,255,0.08)" : "#f1f5f9"}; 
-        }
-        .checkbox-item.active { 
-          border-color: #00cec9; 
-          background: rgba(0, 206, 201, 0.08); 
         }
 
         .custom-searchable-select {
@@ -501,13 +485,35 @@ export default function UserManagement() {
             >
               <option value="all">همه کاربران</option>
               <option value="contributors">دارای تحلیل کوتاه</option>
-              <option value="suggested">پیشنهاد تحلیل‌گر</option>
+              <option value="suggested">پیشنهاد تحلیل‌گر (نیاز به اعمال نقش)</option>
             </select>
+            <button
+              type="button"
+              onClick={() => setShowAnalystHelp(true)}
+              style={{
+                height: 42,
+                padding: "0 12px",
+                borderRadius: 10,
+                border: `1px solid ${theme.border}`,
+                background: theme.inputBg,
+                color: theme.muted,
+                fontFamily: "inherit",
+                fontSize: 12,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+              title="راهنمای پیشنهاد تحلیل‌گر"
+            >
+              <HelpCircle size={16} />
+              راهنمای پیشنهاد
+            </button>
             <div style={{ position: "relative", flex: 1, maxWidth: "450px", minWidth: 200 }}>
               <Search style={{ position: "absolute", right: "12px", top: "12px", opacity: 0.5, color: theme.muted }} size={18} />
               <input className="input" style={{ ...inputStyle, paddingRight: "40px", fontSize: "13.5px" }} placeholder="جستجو بر اساس نام، یوزرنیم، نقش، نام واحد، وضعیت..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <button onClick={() => { setEditMode(false); setFormData({ id: "", username: "", name: "", password: "", role: ["user"], unit_cd: "", gender: "male", active: true }); setUnitSearchQuery(""); setShowModal(true); }} className="submitBtn" style={{ width: "auto", padding: "0 20px", height: "45px", marginTop: 0, background: "#00cec9", border: "none", color: "#fff", borderRadius: "10px", fontWeight: "bold", display: "flex", alignItems: "center" }}><UserPlus size={18} style={{ marginLeft: "8px" }} /> کاربر جدید</button>
+            <button onClick={() => { setEditMode(false); setFormData({ id: "", username: "", name: "", password: "", role: [...newUserDefaultRoles], unit_cd: "", gender: "male", active: true }); setUnitSearchQuery(""); setShowModal(true); }} className="submitBtn" style={{ width: "auto", padding: "0 20px", height: "45px", marginTop: 0, background: "#00cec9", border: "none", color: "#fff", borderRadius: "10px", fontWeight: "bold", display: "flex", alignItems: "center" }}><UserPlus size={18} style={{ marginLeft: "8px" }} /> کاربر جدید</button>
           </div>
         </div>
 
@@ -519,7 +525,17 @@ export default function UserManagement() {
                 <th style={{ padding: "15px", textAlign: "right" }}>نام کاربر</th>
                 <th style={{ textAlign: "center" }}>واحد سازمانی</th>
                 <th style={{ textAlign: "center" }}>نقش‌های دسترسی</th>
-                <th style={{ textAlign: "center" }}>تحلیل کوتاه</th>
+                <th style={{ textAlign: "center" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+                    تحلیل کوتاه
+                    <HelpCircle
+                      size={15}
+                      style={{ cursor: "pointer", opacity: 0.65 }}
+                      title="راهنمای پیشنهاد تحلیل‌گر"
+                      onClick={() => setShowAnalystHelp(true)}
+                    />
+                  </span>
+                </th>
                 <th style={{ textAlign: "center" }}>وضعیت</th>
                 <th style={{ textAlign: "center" }}>عملیات</th>
               </tr>
@@ -531,15 +547,10 @@ export default function UserManagement() {
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
-                  let parsedRoles = [];
-                  if (user.role) {
-                    if (Array.isArray(user.role)) {
-                      parsedRoles = user.role;
-                    } else if (typeof user.role === "string") {
-                      const cleaned = user.role.replace(/[{}"\s]/g, "");
-                      parsedRoles = cleaned.split(",").filter(Boolean);
-                    }
-                  }
+                  const roleSource = Array.isArray(user.role_codes) && user.role_codes.length
+                    ? user.role_codes.map(toUiRoleCode)
+                    : user.role;
+                  let parsedRoles = normalizeRoles(roleSource);
                   if (parsedRoles.length === 0) parsedRoles = ["user"];
 
                   return (
@@ -574,7 +585,7 @@ export default function UserManagement() {
                       </td>
                       <td style={{ textAlign: "center", fontSize: 12 }}>
                         {toPersianDigits(user.brief_submission_count || 0)}
-                        {user.analyst_suggested ? (
+                        {user.analyst_suggested && !parsedRoles.includes("analyst") ? (
                           <span style={{ display: "block", marginTop: 4, fontSize: 10, color: "#a855f7", fontWeight: 700 }}>پیشنهاد تحلیل‌گر</span>
                         ) : null}
                       </td>
@@ -680,18 +691,13 @@ export default function UserManagement() {
                 <HelpCircle size={13} /> راهنمای نقش‌ها
               </button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {AVAILABLE_ROLES.map((role) => (
-                <div 
-                  key={role.id} 
-                  className={`checkbox-item ${formData.role.includes(role.id) ? "active" : ""}`}
-                  onClick={() => toggleRole(role.id)}
-                >
-                  {formData.role.includes(role.id) ? <CheckSquare size={18} color="#00cec9" /> : <Square size={18} color={theme.muted} />}
-                  <span style={{ color: formData.role.includes(role.id) ? theme.text : theme.muted, fontSize: "13px" }}>{role.label}</span>
-                </div>
-              ))}
-            </div>
+            <RoleAssignMultiSelect
+              roles={availableRoles}
+              values={formData.role}
+              onChange={handleRolesChange}
+              theme={theme}
+              isDarkMode={isDarkMode}
+            />
 
             <label style={{ ...labelStyle, marginTop: "10px" }}>واحد مربوطه (اختیاری):</label>
             <div className="custom-searchable-select" ref={dropdownRef}>
@@ -766,9 +772,18 @@ export default function UserManagement() {
       )}
 
       <HelpModal
+        open={showAnalystHelp}
+        onClose={() => setShowAnalystHelp(false)}
+        title="راهنمای پیشنهاد تحلیل‌گر"
+        maxWidth={640}
+      >
+        <ANALYST_SUGGESTION_HELP />
+      </HelpModal>
+
+      <HelpModal
         open={showRoleGuide}
         onClose={() => setShowRoleGuide(false)}
-        title="راهنمای جامع نقش‌ها و مسئولیت‌ها"
+        title="راهنمای جامع نقش‌ها و مجوزها"
         maxWidth={720}
       >
         <USER_ROLE_GUIDE_HELP />

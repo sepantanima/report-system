@@ -2,6 +2,12 @@ import pool from "../db.js";
 import { parseUserRoles } from "../middleware/requireRole.js";
 import { notifyUserSafe } from "./analysisNotificationService.js";
 import { nowJalaliDate, subtractJalaliDays } from "./newsTextUtils.js";
+import {
+  instanceNewsAndSql,
+  instanceNewsSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 export const ANNOTATION_TYPES = {
   confirm: "تأیید",
@@ -129,7 +135,7 @@ export async function listLiveNewsFeed({ limit = 100, days = 1, kind = "all" } =
       WHERE COALESCE(n.is_deleted, false) = false
         AND COALESCE(n.workflow_status, '') IN ('finalized', 'reviewed', 'pending')
         AND ${dateExpr} IS NOT NULL
-        AND ${dateExpr} >= $${fromIdx}
+        AND ${dateExpr} >= $${fromIdx}${instanceNewsAndSql("n")}
     `);
   }
 
@@ -179,6 +185,7 @@ export async function listLiveNewsFeed({ limit = 100, days = 1, kind = "all" } =
           NULLIF(trim(e."createdAt"), '')::timestamptz
         ) AS sort_ts
       FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
       LEFT JOIN tbl_units u ON e.unitcd = u."UnitCode"
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS cnt,
@@ -191,6 +198,7 @@ export async function listLiveNewsFeed({ limit = 100, days = 1, kind = "all" } =
         AND COALESCE(e.classification, 1) <> 4
         AND NULLIF(trim(e.date), '') IS NOT NULL
         AND NULLIF(trim(e.date), '') >= $${fromIdx}
+        ${fieldReportListScopeSql("e", "rt_scope")}
     `);
   }
 
@@ -221,86 +229,62 @@ export async function listLiveNewsFeed({ limit = 100, days = 1, kind = "all" } =
     params.push(feedCap);
     const r = await pool.query(orderLimitSql(unionSql, params.length), params);
     rows = r.rows;
-    // #region agent log
-    {
-      const sample = rows.slice(0, 30).map((row, i) => ({
-        i,
-        kind: row.kind,
-        id: row.item_id,
-        sort_urgent: row.sort_urgent,
-        event_sort_key: row.event_sort_key,
-        date: row.source_date_jalali || row.event_date_jalali,
-        time: row.source_time_hm || row.relay_time_hm,
-      }));
-      const kinds = rows.map((row) => row.kind);
-      let transitions = 0;
-      for (let i = 1; i < kinds.length; i += 1) if (kinds[i] !== kinds[i - 1]) transitions += 1;
-      const firstFieldIdx = kinds.indexOf("field");
-      const lastNewsIdx = kinds.lastIndexOf("news");
-      const newsKeys = rows.filter((row) => row.kind === "news").slice(0, 5).map((row) => String(row.event_sort_key || ""));
-      const fieldKeys = rows.filter((row) => row.kind === "field").slice(0, 5).map((row) => String(row.event_sort_key || ""));
-      fetch("http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e87c62" },
-        body: JSON.stringify({
-          sessionId: "e87c62",
-          runId: "post-fix",
-          hypothesisId: "H1-fix2",
-          location: "strategyAnnotationService.js:listLiveNewsFeed",
-          message: "backend feed after global UNION time sort",
-          data: {
-            lim,
-            feedCap,
-            dayCount,
-            fromJalali,
-            total: rows.length,
-            newsCount: kinds.filter((k) => k === "news").length,
-            fieldCount: kinds.filter((k) => k === "field").length,
-            transitions,
-            firstFieldIdx,
-            lastNewsIdx,
-            segregated: firstFieldIdx >= 0
-              && lastNewsIdx >= 0
-              && transitions === 1
-              && kinds.slice(0, firstFieldIdx).every((k) => k === "news")
-              && kinds.slice(firstFieldIdx).every((k) => k === "field"),
-            newsKeysSample: newsKeys,
-            fieldKeysSample: fieldKeys,
-            sample,
-            aroundFirstField: firstFieldIdx >= 0
-              ? rows.slice(Math.max(0, firstFieldIdx - 2), firstFieldIdx + 5).map((row, j) => ({
-                i: Math.max(0, firstFieldIdx - 2) + j,
-                kind: row.kind,
-                event_sort_key: row.event_sort_key,
-                time: row.source_time_hm || row.relay_time_hm,
-              }))
-              : [],
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
   } else {
     params.push(lim);
     const r = await pool.query(orderLimitSql(parts[0], params.length), params);
     rows = r.rows;
   }
 
+  // #region agent log
+  try {
+    const byRs = {};
+    let rejected = 0;
+    for (const row of rows) {
+      const rs = String(row?.review_state || "").toLowerCase() || "(empty)";
+      byRs[rs] = (byRs[rs] || 0) + 1;
+      if (rs === "rejected") rejected += 1;
+    }
+    fetch("http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "6de48a" },
+      body: JSON.stringify({
+        sessionId: "6de48a",
+        runId: "pre-fix",
+        hypothesisId: "D",
+        location: "strategyAnnotationService.js:listLiveNewsFeed",
+        message: "backend live feed review_state breakdown",
+        data: {
+          total: rows.length,
+          rejected,
+          byReviewState: byRs,
+          kindFilter,
+          dayCount,
+          sqlExcludesRejected: false,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  } catch (_) {
+    /* ignore debug errors */
+  }
+  // #endregion
+
   const items = rows.map((row) => {
     const {
       sort_urgent: _su,
       sort_ts: _st,
-      event_sort_key: _esk,
       event_hm_digits: _ehd,
       event_date_jalali: _edj,
       item_id,
+      event_sort_key,
       ...rest
     } = row;
     return {
       ...rest,
       id: item_id,
       item_id,
+      event_sort_key: event_sort_key || null,
+      sort_ts: _st || null,
     };
   });
 
@@ -317,6 +301,11 @@ export async function listLiveNewsFeed({ limit = 100, days = 1, kind = "all" } =
 export async function listAnnotationsForNews(newsId) {
   const id = parseInt(newsId, 10);
   if (!Number.isFinite(id)) throw new Error("شناسه خبر نامعتبر است");
+  const exists = await pool.query(
+    `SELECT id FROM tbl_news WHERE id = $1 AND COALESCE(is_deleted, false) = false${instanceNewsAndSql("tbl_news")}`,
+    [id],
+  );
+  if (!exists.rows[0]) throw new Error("خبر یافت نشد");
   const r = await pool.query(
     `SELECT a.*, u.name AS author_name, u.username AS author_username
      FROM tbl_strategy_news_annotations a
@@ -333,10 +322,12 @@ export async function listAnnotationsForField(eventId) {
   if (!Number.isFinite(id)) throw new Error("شناسه گزارش میدانی نامعتبر است");
   const allowed = await pool.query(
     `SELECT 1 FROM tbl_unit_events e
+     ${fieldReportTypeJoinSql("e")}
      WHERE e.id = $1
        AND COALESCE(e.is_deleted, false) = false
        AND COALESCE(e.state, '') = 'verified'
-       AND COALESCE(e.classification, 1) <> 4`,
+       AND COALESCE(e.classification, 1) <> 4
+       ${fieldReportListScopeSql("e", "rt_scope")}`,
     [id],
   );
   if (!allowed.rows[0]) throw new Error("گزارش میدانی قابل‌نمایش یافت نشد");
@@ -401,7 +392,7 @@ export async function createAnnotation(newsId, body, user) {
   const news = await pool.query(
     `SELECT id,
             COALESCE(NULLIF(trim(summary), ''), LEFT(regexp_replace(COALESCE(cleaned_text, raw_text, ''), E'\\s+', ' ', 'g'), 80)) AS title
-     FROM tbl_news WHERE id = $1 AND COALESCE(is_deleted, false) = false`,
+     FROM tbl_news WHERE id = $1 AND COALESCE(is_deleted, false) = false${instanceNewsAndSql("tbl_news")}`,
     [id],
   );
   if (!news.rows[0]) throw new Error("خبر یافت نشد");
@@ -447,10 +438,12 @@ export async function createFieldAnnotation(eventId, body, user) {
               LEFT(regexp_replace(COALESCE(e.cleaned_text, e.raw_text, ''), E'\\s+', ' ', 'g'), 80)
             ) AS title
      FROM tbl_unit_events e
+     ${fieldReportTypeJoinSql("e")}
      WHERE e.id = $1
        AND COALESCE(e.is_deleted, false) = false
        AND COALESCE(e.state, '') = 'verified'
-       AND COALESCE(e.classification, 1) <> 4`,
+       AND COALESCE(e.classification, 1) <> 4
+       ${fieldReportListScopeSql("e", "rt_scope")}`,
     [id],
   );
   if (!ev.rows[0]) throw new Error("گزارش میدانی قابل‌نمایش یافت نشد");

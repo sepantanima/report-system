@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
+import { AuthProvider } from "./context/AuthContext.jsx";
+import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import Login from "./pages/login";
 import MainForm from "./pages/MainForm";
 import UserManagement from "./pages/UserManagement";
@@ -28,6 +30,7 @@ import CommandPermissionRoute from "./components/command/CommandPermissionRoute.
 import CommandCenterHome from "./pages/command/CommandCenterHome.jsx";
 import CommandLiveNewsWall from "./pages/command/CommandLiveNewsWall.jsx";
 import CommandStrategicOutputs from "./pages/command/CommandStrategicOutputs.jsx";
+import CommandStrategyManage from "./pages/command/CommandStrategyManage.jsx";
 import CommandStrategyPrompts from "./pages/command/CommandStrategyPrompts.jsx";
 import PromptManagement from "./pages/PromptManagement.jsx";
 import AiApiManagement from "./pages/AiApiManagement.jsx";
@@ -44,6 +47,9 @@ import NewsEntrySettingsAdmin from "./pages/NewsEntrySettingsAdmin.jsx";
 import MessageInboxPage from "./pages/MessageInboxPage.jsx";
 import ComposeAnnouncementPage from "./pages/ComposeAnnouncementPage.jsx";
 import MessageSettingsAdmin from "./pages/MessageSettingsAdmin.jsx";
+import SyncManagementPage from "./pages/SyncManagementPage.jsx";
+import AdminBriefingPage from "./pages/AdminBriefingPage.jsx";
+import RolePermissionAdmin from "./pages/RolePermissionAdmin.jsx";
 
 
 // کامپوننت محافظت از مسیرها
@@ -83,6 +89,7 @@ function LegacyApproveTopicsDetailRedirect() {
 function App() {
   return (
     <ThemeProvider>
+    <AuthProvider>
     <BrowserRouter>
       <Routes>
         {/* مسیر عمومی ورود */}
@@ -121,6 +128,9 @@ function App() {
         <Route path="/messages" element={<PrivateRoute><MessageInboxPage /></PrivateRoute>} />
         <Route path="/messages/compose" element={<PrivateRoute><ComposeAnnouncementPage /></PrivateRoute>} />
         <Route path="/admin/message-settings" element={<PrivateRoute><MessageSettingsAdmin /></PrivateRoute>} />
+        <Route path="/admin/sync" element={<ProtectedRoute anyOf={["sync.view", "sync.export", "sync.import"]}><SyncManagementPage /></ProtectedRoute>} />
+        <Route path="/admin/briefing" element={<ProtectedRoute permission="sync.briefing"><AdminBriefingPage /></ProtectedRoute>} />
+        <Route path="/admin/rbac" element={<ProtectedRoute permission="rbac.manage"><RolePermissionAdmin /></ProtectedRoute>} />
         <Route path="/admin/unmapped-senders" element={<PrivateRoute><UnmappedSendersAdmin /></PrivateRoute>} />
         <Route path="/SystemSetting" element={<PrivateRoute><SystemSetting /></PrivateRoute>} />
         <Route path="/analysis/topics" element={<AnalysisPermissionRoute permission={["analysis_propose", "analysis_topic_approve", "analysis_manage"]}><AnalysisTopicManagement /></AnalysisPermissionRoute>} />
@@ -147,12 +157,14 @@ function App() {
         <Route path="/command/live-news" element={<CommandPermissionRoute permission="command_live_news"><CommandLiveNewsWall /></CommandPermissionRoute>} />
         <Route path="/command/kpi" element={<Navigate to="/command" replace />} />
         <Route path="/command/outputs" element={<CommandPermissionRoute permission="command_outputs"><CommandStrategicOutputs /></CommandPermissionRoute>} />
+        <Route path="/command/strategy-manage" element={<CommandPermissionRoute permission="command_outputs_manage"><CommandStrategyManage /></CommandPermissionRoute>} />
         <Route path="/command/prompts" element={<CommandPermissionRoute permission="command_manage_prompts"><CommandStrategyPrompts /></CommandPermissionRoute>} />
 
         {/* هدایت خودکار مسیرهای اشتباه به صفحه ورود */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
     </ThemeProvider>
   );
 }

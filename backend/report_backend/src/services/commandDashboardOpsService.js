@@ -2,6 +2,12 @@
  * فاز ۲ داشبورد مرکز فرماندهی: نقش‌ها، Heat Map یگان، هشدارها، Health Score
  */
 import pool from "../db.js";
+import {
+  instanceNewsSql,
+  instanceNewsAndSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 async function safeCount(sql, params = []) {
   try {
@@ -34,6 +40,7 @@ const TRACKED_ROLES = [
   { id: "user", label: "کاربر واحد" },
   { id: "strategy_viewer", label: "ناظر راهبردی" },
   { id: "strategy_commander", label: "فرمانده راهبردی" },
+  { id: "strategy_analysis_manager", label: "مدیر تحلیل راهبردی" },
 ];
 
 function clamp(n, lo, hi) {
@@ -77,16 +84,20 @@ export async function buildRolesPerformance(range) {
           SELECT a.user_id AS uid
           FROM tbl_news_audit_log a
           JOIN tbl_users u ON u.id = a.user_id
+          JOIN tbl_news n ON n.id = a.news_id
           WHERE a.created_at::date >= $1::date AND a.created_at::date <= $2::date
             AND u.role::text ILIKE '%' || $3 || '%'
+            AND ${instanceNewsSql("n")}
           UNION
           SELECT NULLIF(e.sender_id, '')::int AS uid
           FROM tbl_unit_events e
+          ${fieldReportTypeJoinSql("e")}
           JOIN tbl_users u ON u.id::text = e.sender_id
           WHERE e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
             AND (e.is_deleted = false OR e.is_deleted IS NULL)
             AND e.sender_id ~ '^[0-9]+$'
             AND u.role::text ILIKE '%' || $3 || '%'
+            ${fieldReportListScopeSql("e", "rt_scope")}
         ) x WHERE uid IS NOT NULL
         `,
         [from, to, role.id],
@@ -96,14 +107,18 @@ export async function buildRolesPerformance(range) {
         SELECT (
           (SELECT COUNT(*)::int FROM tbl_news_audit_log a
            JOIN tbl_users u ON u.id = a.user_id
+           JOIN tbl_news n ON n.id = a.news_id
            WHERE a.created_at::date >= $1::date AND a.created_at::date <= $2::date
-             AND u.role::text ILIKE '%' || $3 || '%')
+             AND u.role::text ILIKE '%' || $3 || '%'
+             AND ${instanceNewsSql("n")})
           +
           (SELECT COUNT(*)::int FROM tbl_unit_events e
+           ${fieldReportTypeJoinSql("e")}
            JOIN tbl_users u ON u.id::text = e.sender_id
            WHERE e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
              AND (e.is_deleted = false OR e.is_deleted IS NULL)
-             AND u.role::text ILIKE '%' || $3 || '%')
+             AND u.role::text ILIKE '%' || $3 || '%'
+             ${fieldReportListScopeSql("e", "rt_scope")})
         )::int AS c
         `,
         [from, to, role.id],
@@ -111,12 +126,12 @@ export async function buildRolesPerformance(range) {
       role.id === "news_editor" || role.id === "news_monitor"
         ? safeCount(
             `SELECT COUNT(*)::int AS c FROM tbl_news
-             WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='pending'`,
+             WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='pending'${instanceNewsAndSql("tbl_news")}`,
           )
         : role.id === "news_chief"
           ? safeCount(
               `SELECT COUNT(*)::int AS c FROM tbl_news
-               WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='reviewed'`,
+               WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='reviewed'${instanceNewsAndSql("tbl_news")}`,
             )
           : role.id === "analyst" || role.id === "mentor" || role.id === "analysis_manager"
             ? safeCount(
@@ -190,13 +205,17 @@ export async function buildUnitsHeatMap(range) {
       (SELECT COUNT(*)::int FROM tbl_users u
         WHERE u.unit_cd = un."UnitCode" AND u.active IS NOT FALSE) AS users,
       (SELECT COUNT(*)::int FROM tbl_unit_events e
+        ${fieldReportTypeJoinSql("e")}
         WHERE e.unitcd = un."UnitCode"
           AND e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
-          AND (e.is_deleted = false OR e.is_deleted IS NULL)) AS reports,
+          AND (e.is_deleted = false OR e.is_deleted IS NULL)
+          ${fieldReportListScopeSql("e", "rt_scope")}) AS reports,
       (SELECT COUNT(*)::int FROM tbl_news_audit_log a
         JOIN tbl_users u ON u.id = a.user_id
+        JOIN tbl_news n ON n.id = a.news_id
         WHERE u.unit_cd = un."UnitCode"
-          AND a.created_at::date >= $1::date AND a.created_at::date <= $2::date) AS news_actions,
+          AND a.created_at::date >= $1::date AND a.created_at::date <= $2::date
+          AND ${instanceNewsSql("n")}) AS news_actions,
       (SELECT COUNT(*)::int FROM tbl_analysis_assignments aa
         JOIN tbl_users u ON u.id = aa.analyst_id
         WHERE u.unit_cd = un."UnitCode"
@@ -204,9 +223,11 @@ export async function buildUnitsHeatMap(range) {
           AND COALESCE(aa.updated_at, aa.created_at)::date >= $1::date
           AND COALESCE(aa.updated_at, aa.created_at)::date <= $2::date) AS analyses,
       (SELECT COUNT(*)::int FROM tbl_unit_events e
+        ${fieldReportTypeJoinSql("e")}
         WHERE e.unitcd = un."UnitCode"
           AND COALESCE(e.state,'') = 'pending'
-          AND (e.is_deleted = false OR e.is_deleted IS NULL)) AS pending_field
+          AND (e.is_deleted = false OR e.is_deleted IS NULL)
+          ${fieldReportListScopeSql("e", "rt_scope")}) AS pending_field
     FROM tbl_units un
     WHERE un."UnitCode" IS NOT NULL
     ${unitFilter}
@@ -361,7 +382,8 @@ export async function buildManagementAlerts(range, { unitsHeat, kpiBar, health }
      WHERE COALESCE(is_deleted,false)=false
        AND created_at::date >= $1::date AND created_at::date <= $2::date
        AND (COALESCE(priority,'') ILIKE '%urgent%' OR COALESCE(priority,'') ILIKE '%فوری%'
-            OR COALESCE(priority,'') = '1')`,
+            OR COALESCE(priority,'') = '1')
+       ${instanceNewsAndSql("tbl_news")}`,
     [range.from, range.to],
   );
   if (criticalNews != null && criticalNews >= 5) {

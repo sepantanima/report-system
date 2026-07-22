@@ -3,7 +3,12 @@ const router = express.Router();
 import pool from "../db.js";
 import bcrypt from "bcrypt";
 import auth from "../middleware/auth.js";
-import { getBriefStatsForUsers } from "../services/analysisBriefSubmissionService.js";
+import requirePermission from "../middleware/requirePermission.js";
+import { parseUserRoles, serializeUserRoles } from "../middleware/requireRole.js";
+import { legacyRoleToTemplate } from "../services/rbacSeedService.js";
+import { invalidateUserPermissionCache, bumpPermissionVersion } from "../services/rbacService.js";
+import { getBriefStatsForUsers, resolveAnalystRoleSuggestions, countPendingAnalystRoleSuggestions } from "../services/analysisBriefSubmissionService.js";
+import { PERMISSION_DESCRIPTIONS, permissionModule } from "../constants/rbacSeed.js";
 import {
   createAccountForUser,
   deleteAccount,
@@ -154,11 +159,74 @@ router.delete("/me/messenger-accounts/:id", auth, async (req, res) => {
   }
 });
 
-// ۳. دریافت لیست کاربران با نام واحد (مختص ادمین کل)
-router.get("/", auth, async (req, res) => {
+// راهنمای نقش‌ها — مجوزهای زنده از RBAC (برای UI مدیریت کاربران)
+router.get("/role-guide", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (_req, res) => {
+  try {
+    const [rolesRes, permsRes] = await Promise.all([
+      pool.query(
+        `SELECT rt.code, rt.label_fa, rt.is_system,
+                COALESCE(json_agg(p.code ORDER BY p.code) FILTER (WHERE p.code IS NOT NULL), '[]') AS permissions
+         FROM tbl_role_templates rt
+         LEFT JOIN tbl_role_template_permissions rtp ON rtp.role_template_id = rt.id
+         LEFT JOIN tbl_permissions p ON p.id = rtp.permission_id
+         GROUP BY rt.id
+         ORDER BY rt.code`,
+      ),
+      pool.query(`SELECT code, label_fa, module FROM tbl_permissions`),
+    ]);
+    const permMeta = Object.fromEntries(permsRes.rows.map((p) => [p.code, p]));
+    res.json({
+      roles: rolesRes.rows.map((rt) => ({
+        code: rt.code,
+        label_fa: rt.label_fa,
+        is_system: rt.is_system,
+        permissions: (rt.permissions || []).map((code) => ({
+          code,
+          label_fa: permMeta[code]?.label_fa || code,
+          module: permMeta[code]?.module || permissionModule(code),
+          description_fa: PERMISSION_DESCRIPTIONS[code] || "",
+        })),
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// نقش‌های پیش‌فرض فرم «کاربر جدید» (برای مدیران کاربر، بدون نیاز به rbac.manage)
+router.get("/new-user-default-roles", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (_req, res) => {
+  try {
+    const r = await pool.query(`SELECT default_new_user_role_codes FROM tbl_rbac_meta WHERE id = 1`);
+    const codes = r.rows[0]?.default_new_user_role_codes;
+    res.json({
+      role_codes: Array.isArray(codes) && codes.length ? codes : ["user"],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/analyst-suggestion-count", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (_req, res) => {
+  try {
+    const count = await countPendingAnalystRoleSuggestions();
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ۳. دریافت لیست کاربران
+router.get("/", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (req, res) => {
   try {
     const query = `
-      SELECT u.id, u.username, u.name, u.role, u.gender, u.active, u.unit_cd, un."UnitShortName"
+      SELECT u.id, u.username, u.name, u.role, u.gender, u.active, u.unit_cd, un."UnitShortName",
+             COALESCE(
+               (SELECT json_agg(rt.code ORDER BY rt.code)
+                FROM tbl_user_role_assignments ura
+                JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+                WHERE ura.user_id = u.id AND ura.active = TRUE),
+               '[]'::json
+             ) AS role_codes
       FROM tbl_users u
       LEFT JOIN tbl_units un ON u.unit_cd = un."UnitCode"
       ORDER BY u.id DESC
@@ -171,6 +239,7 @@ router.get("/", auth, async (req, res) => {
         ...u,
         brief_submission_count: stats[u.id]?.submission_count || 0,
         analyst_suggested: stats[u.id]?.analyst_suggested || false,
+        role_codes: Array.isArray(u.role_codes) ? u.role_codes : [],
       })));
     }
     res.json(rows);
@@ -179,8 +248,8 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// ۴. افزودن کاربر جدید توسط ادمین (با هش کردن پسورد)
-router.post("/", auth, async (req, res) => {
+// ۴. افزودن کاربر جدید
+router.post("/", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (req, res) => {
   const { username, name, password, role, unit_cd, gender } = req.body;
   try {
     const uname = String(username ?? "").trim();
@@ -193,6 +262,9 @@ router.post("/", auth, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const roleCodes = parseUserRoles(role).map(legacyRoleToTemplate);
+    const serializedRole = serializeUserRoles(roleCodes);
+
     const query = `
       INSERT INTO tbl_users (username, name, password, role, unit_cd, gender, active)
       VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *
@@ -201,11 +273,19 @@ router.post("/", auth, async (req, res) => {
       uname,
       name,
       hashedPassword,
-      role,
+      serializedRole,
       unit_cd,
       normalizeGenderInput(gender),
     ]);
-    res.status(201).json(result.rows[0]);
+    const newUser = result.rows[0];
+    const roles = await pool.query(`SELECT id, code FROM tbl_role_templates WHERE code = ANY($1::text[])`, [roleCodes]);
+    for (const rt of roles.rows) {
+      await pool.query(
+        `INSERT INTO tbl_user_role_assignments (user_id, role_template_id, active) VALUES ($1,$2,TRUE) ON CONFLICT DO NOTHING`,
+        [newUser.id, rt.id],
+      );
+    }
+    res.status(201).json(newUser);
   } catch (err) {
     const pgMsg = pgUniqueViolationMessage(err);
     res.status(pgMsg ? 400 : 500).json({ error: pgMsg || err.message });
@@ -213,7 +293,7 @@ router.post("/", auth, async (req, res) => {
 });
 
 // ۵. ویرایش کاربر توسط ادمین (روت پارامتریک - به پایین‌ترین بخش روت‌ها منتقل شد)
-router.put("/:id", auth, async (req, res) => {
+router.put("/:id", auth, requirePermission("manage_users", { legacyRoles: ["admin", "analysis_manager", "Field_admin"] }), async (req, res) => {
   const { id } = req.params;
   const { username, name, role, unit_cd, active, password, gender } = req.body;
   
@@ -228,6 +308,9 @@ router.put("/:id", auth, async (req, res) => {
       return res.status(400).json({ error: "این نام کاربری قبلاً ثبت شده است — نام دیگری انتخاب کنید" });
     }
 
+    const roleCodes = parseUserRoles(role).map(legacyRoleToTemplate);
+    const serializedRole = serializeUserRoles(roleCodes);
+
     let query;
     let params;
 
@@ -239,16 +322,33 @@ router.put("/:id", auth, async (req, res) => {
         UPDATE tbl_users 
         SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, password=$6, gender=$7
         WHERE id=$8`;
-      params = [uname, name, role, unit_cd, active, hashedPassword, normalizeGenderInput(gender), id];
+      params = [uname, name, serializedRole, unit_cd, active, hashedPassword, normalizeGenderInput(gender), id];
     } else {
       query = `
         UPDATE tbl_users 
         SET username=$1, name=$2, role=$3, unit_cd=$4, active=$5, gender=$6
         WHERE id=$7`;
-      params = [uname, name, role, unit_cd, active, normalizeGenderInput(gender), id];
+      params = [uname, name, serializedRole, unit_cd, active, normalizeGenderInput(gender), id];
     }
 
     await pool.query(query, params);
+
+    const roles = await pool.query(`SELECT id, code FROM tbl_role_templates WHERE code = ANY($1::text[])`, [roleCodes]);
+    await pool.query(`UPDATE tbl_user_role_assignments SET active = FALSE WHERE user_id = $1`, [id]);
+    for (const rt of roles.rows) {
+      await pool.query(
+        `INSERT INTO tbl_user_role_assignments (user_id, role_template_id, active)
+         VALUES ($1,$2,TRUE) ON CONFLICT (user_id, role_template_id) DO UPDATE SET active = TRUE`,
+        [id, rt.id],
+      );
+    }
+
+    if (roleCodes.includes("analyst")) {
+      await resolveAnalystRoleSuggestions(id);
+    }
+
+    invalidateUserPermissionCache(id);
+    await bumpPermissionVersion();
     res.json({ message: "بروزرسانی موفق" });
   } catch (err) {
     const pgMsg = pgUniqueViolationMessage(err);
@@ -257,7 +357,7 @@ router.put("/:id", auth, async (req, res) => {
 });
 
 // ۶. حذف کاربر توسط ادمین
-router.delete("/:id", auth, async (req, res) => {
+router.delete("/:id", auth, requirePermission("manage_users", { legacyRoles: ["admin"] }), async (req, res) => {
   try {
     await pool.query("DELETE FROM tbl_users WHERE id = $1", [req.params.id]);
     res.json({ message: "حذف موفق" });

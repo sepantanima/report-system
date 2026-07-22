@@ -6,6 +6,7 @@ import {
   sourceJalaliToTimestamps,
   subtractJalaliDays,
 } from "./newsTextUtils.js";
+import { instanceNewsAndSql } from "./instanceScopeService.js";
 
 function refKeyToCompactDate(refKey) {
   return String(refKey || "").slice(0, 8);
@@ -92,7 +93,7 @@ export async function ensureReportRefForPeriod(fromRefKey, toRefKey) {
          regexp_replace(COALESCE(source_date_jalali, ''), '[^0-9]', '', 'g') = ANY($1::text[])
          OR regexp_replace(COALESCE(relay_date_jalali, ''), '[^0-9]', '', 'g') = ANY($1::text[])
          OR regexp_replace(COALESCE(report_ref_date_jalali, ''), '[^0-9]', '', 'g') = ANY($1::text[])
-       )
+       )${instanceNewsAndSql("tbl_news")}
      LIMIT 3000`,
     [compactDates],
   );

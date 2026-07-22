@@ -1,6 +1,13 @@
 import pool from "../db.js";
 import { buildPhase2DashboardBundle } from "./commandDashboardOpsService.js";
 import { buildPhase3DashboardBundle } from "./commandDashboardPhase3Service.js";
+import {
+  instanceNewsAndSql,
+  instanceNewsSql,
+  fieldEventsScopedFrom,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 export {
   getUnitDrilldown,
   getUserDrilldown,
@@ -127,18 +134,28 @@ function kpiItem({ id, label, value, prev_value, status, drilldown, note }) {
 
 function newsDateFilter(alias, from, to, paramOffset = 0) {
   const a = alias ? `${alias}.` : "";
+  const scopeAlias = alias || "tbl_news";
   return {
-    sql: `${a}created_at::date >= $${paramOffset + 1}::date AND ${a}created_at::date <= $${paramOffset + 2}::date AND COALESCE(${a}is_deleted,false)=false`,
+    sql: `${instanceNewsSql(scopeAlias)} AND ${a}created_at::date >= $${paramOffset + 1}::date AND ${a}created_at::date <= $${paramOffset + 2}::date AND COALESCE(${a}is_deleted,false)=false`,
     params: [from, to],
   };
 }
 
 function fieldDateFilter(from, to, paramOffset = 0) {
   return {
-    sql: `"createdAt"::date >= $${paramOffset + 1}::date AND "createdAt"::date <= $${paramOffset + 2}::date AND (is_deleted = false OR is_deleted IS NULL)`,
+    sql: `e."createdAt"::date >= $${paramOffset + 1}::date AND e."createdAt"::date <= $${paramOffset + 2}::date AND (e.is_deleted = false OR e.is_deleted IS NULL)`,
     params: [from, to],
   };
 }
+
+function fieldUnitClause(unitId, startIdx) {
+  if (!unitId) return { sql: "", params: [] };
+  return { sql: ` AND e.unitcd = $${startIdx}`, params: [unitId] };
+}
+
+const NEWS_SCOPE = instanceNewsAndSql("tbl_news");
+const FIELD_SCOPE = fieldReportListScopeSql("e", "rt_scope");
+const FIELD_FROM = fieldEventsScopedFrom("e", "rt_scope");
 
 function unitClause(column, unitId, startIdx) {
   if (!unitId) return { sql: "", params: [] };
@@ -160,11 +177,11 @@ export async function getCommandKpiOverview() {
     strategyPublished,
     annotationsToday,
   ] = await Promise.all([
-    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='pending'`),
-    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='reviewed'`),
-    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='finalized'`),
-    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND created_at::date = CURRENT_DATE`),
-    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_unit_events WHERE "createdAt"::date = CURRENT_DATE`),
+    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='pending'${NEWS_SCOPE}`),
+    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='reviewed'${NEWS_SCOPE}`),
+    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')='finalized'${NEWS_SCOPE}`),
+    safeCount(`SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND created_at::date = CURRENT_DATE${NEWS_SCOPE}`),
+    safeCount(`SELECT COUNT(*)::int AS c FROM ${FIELD_FROM} WHERE e."createdAt"::date = CURRENT_DATE${FIELD_SCOPE}`),
     safeCount(`SELECT COUNT(*)::int AS c FROM tbl_analysis_assignments WHERE status IN ('Assigned','InProgress','NeedsRevision','UnderReview')`),
     safeCount(`SELECT COUNT(*)::int AS c FROM tbl_analysis_assignments WHERE status IN ('FinalApproved','Archived')`),
     safeCount(`SELECT COUNT(*)::int AS c FROM tbl_analysis_brief_submissions WHERE created_at::date = CURRENT_DATE`),
@@ -180,7 +197,9 @@ export async function getCommandKpiOverview() {
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS cnt
       FROM tbl_news_audit_log a
+      JOIN tbl_news n ON n.id = a.news_id
       WHERE a.user_id = u.id AND a.created_at::date = CURRENT_DATE
+        AND ${instanceNewsSql("n")}
     ) n ON true
     WHERE u.active IS NOT FALSE
     ORDER BY news_actions_today DESC, u.id
@@ -240,16 +259,16 @@ export async function getCommandKpiWidget(widgetId) {
 async function countNewsInRange(from, to, extraSql = "", extraParams = []) {
   const f = newsDateFilter("", from, to, 0);
   return safeCount(
-    `SELECT COUNT(*)::int AS c FROM tbl_news WHERE ${f.sql}${extraSql}`,
+    `SELECT COUNT(*)::int AS c FROM tbl_news WHERE ${f.sql}${NEWS_SCOPE}${extraSql}`,
     [...f.params, ...extraParams],
   );
 }
 
 async function countFieldInRange(from, to, unitId, extraSql = "", extraParams = []) {
   const f = fieldDateFilter(from, to, 0);
-  const u = unitClause("unitcd", unitId, f.params.length + 1);
+  const u = fieldUnitClause(unitId, f.params.length + 1);
   return safeCount(
-    `SELECT COUNT(*)::int AS c FROM tbl_unit_events WHERE ${f.sql}${u.sql}${extraSql}`,
+    `SELECT COUNT(*)::int AS c FROM ${FIELD_FROM} WHERE ${f.sql}${FIELD_SCOPE}${u.sql}${extraSql}`,
     [...f.params, ...u.params, ...extraParams],
   );
 }
@@ -288,7 +307,7 @@ function fieldPriorityExtra(priority) {
 
 async function countNewsByWorkflow(workflowStatus, priority) {
   const params = [workflowStatus];
-  let sql = `SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')=$1`;
+  let sql = `SELECT COUNT(*)::int AS c FROM tbl_news WHERE COALESCE(is_deleted,false)=false AND COALESCE(workflow_status,'')=$1${NEWS_SCOPE}`;
   const np = newsPriorityExtra(priority, 2);
   sql += np.sql;
   params.push(...np.params);
@@ -308,15 +327,19 @@ async function countActiveUsers(from, to, role) {
       SELECT a.user_id AS uid
       FROM tbl_news_audit_log a
       JOIN tbl_users u ON u.id = a.user_id
+      JOIN tbl_news n ON n.id = a.news_id
       WHERE a.created_at::date >= $1::date AND a.created_at::date <= $2::date
+        AND ${instanceNewsSql("n")}
       ${roleSql}
       UNION
       SELECT NULLIF(e.sender_id, '')::int AS uid
       FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
       LEFT JOIN tbl_users u ON u.id::text = e.sender_id
       WHERE e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
         AND (e.is_deleted = false OR e.is_deleted IS NULL)
         AND e.sender_id ~ '^[0-9]+$'
+        ${fieldReportListScopeSql("e", "rt_scope")}
       ${role ? `AND u.role::text ILIKE '%' || $3 || '%'` : ""}
     ) x
     WHERE uid IS NOT NULL
@@ -475,24 +498,24 @@ async function buildKpiBar(range) {
 async function buildProcesses(range) {
   const unitId = range?.unit_id || null;
   const processStatus = range?.process_status || null;
-  const u = unitClause("unitcd", unitId, 1);
+  const u = unitClause("e.unitcd", unitId, 1);
   const [
     fieldPending, fieldVerified, fieldRejected, newsPending, newsReviewed, newsFinalized, aAssigned, aReview, aDone,
   ] = await mapPool(
     [
       () =>
         safeCount(
-          `SELECT COUNT(*)::int AS c FROM tbl_unit_events WHERE COALESCE(state,'')='pending' AND (is_deleted = false OR is_deleted IS NULL)${u.sql}`,
+          `SELECT COUNT(*)::int AS c FROM ${fieldEventsScopedFrom("e")} WHERE COALESCE(e.state,'')='pending' AND (e.is_deleted = false OR e.is_deleted IS NULL)${fieldReportListScopeSql("e", "rt_scope")}${u.sql}`,
           u.params,
         ),
       () =>
         safeCount(
-          `SELECT COUNT(*)::int AS c FROM tbl_unit_events WHERE COALESCE(state,'')='verified' AND (is_deleted = false OR is_deleted IS NULL)${u.sql}`,
+          `SELECT COUNT(*)::int AS c FROM ${fieldEventsScopedFrom("e")} WHERE COALESCE(e.state,'')='verified' AND (e.is_deleted = false OR e.is_deleted IS NULL)${fieldReportListScopeSql("e", "rt_scope")}${u.sql}`,
           u.params,
         ),
       () =>
         safeCount(
-          `SELECT COUNT(*)::int AS c FROM tbl_unit_events WHERE COALESCE(state,'')='rejected' AND (is_deleted = false OR is_deleted IS NULL)${u.sql}`,
+          `SELECT COUNT(*)::int AS c FROM ${fieldEventsScopedFrom("e")} WHERE COALESCE(e.state,'')='rejected' AND (e.is_deleted = false OR e.is_deleted IS NULL)${fieldReportListScopeSql("e", "rt_scope")}${u.sql}`,
           u.params,
         ),
       () => countNewsByWorkflow("pending", range?.priority),
@@ -626,39 +649,71 @@ async function buildProducts(range) {
 }
 
 async function dailySeries(metric, from, to, unitId) {
+  return timeSeries(metric, from, to, unitId, "day");
+}
+
+async function timeSeries(metric, from, to, unitId, granularity = "day") {
+  const hourly = granularity === "hour";
+  const bucketExpr = (col) =>
+    hourly
+      ? `to_char(date_trunc('hour', ${col}), 'YYYY-MM-DD"T"HH24:00')`
+      : `${col}::date::text`;
+
   if (metric === "field") {
-    const u = unitClause("unitcd", unitId, 3);
+    const u = unitClause("e.unitcd", unitId, 3);
+    const col = `"createdAt"`;
     return safeRows(
-      `SELECT "createdAt"::date::text AS day, COUNT(*)::int AS value
-       FROM tbl_unit_events
-       WHERE "createdAt"::date >= $1::date AND "createdAt"::date <= $2::date
-         AND (is_deleted = false OR is_deleted IS NULL)${u.sql}
+      `SELECT ${bucketExpr(`e.${col}`)} AS day, COUNT(*)::int AS value
+       FROM ${fieldEventsScopedFrom("e")}
+       WHERE e.${col}::date >= $1::date AND e.${col}::date <= $2::date
+         AND (e.is_deleted = false OR e.is_deleted IS NULL)${fieldReportListScopeSql("e", "rt_scope")}${u.sql}
        GROUP BY 1 ORDER BY 1`,
       [from, to, ...u.params],
     );
   }
   if (metric === "news") {
     return safeRows(
-      `SELECT created_at::date::text AS day, COUNT(*)::int AS value
+      `SELECT ${bucketExpr("created_at")} AS day, COUNT(*)::int AS value
        FROM tbl_news
        WHERE created_at::date >= $1::date AND created_at::date <= $2::date
          AND COALESCE(is_deleted,false)=false
+         ${instanceNewsAndSql("tbl_news")}
        GROUP BY 1 ORDER BY 1`,
       [from, to],
     );
   }
   if (metric === "news_finalized") {
     return safeRows(
-      `SELECT created_at::date::text AS day, COUNT(*)::int AS value
+      `SELECT ${bucketExpr("created_at")} AS day, COUNT(*)::int AS value
        FROM tbl_news
        WHERE created_at::date >= $1::date AND created_at::date <= $2::date
          AND COALESCE(is_deleted,false)=false
          AND COALESCE(workflow_status,'')='finalized'
+         ${instanceNewsAndSql("tbl_news")}
        GROUP BY 1 ORDER BY 1`,
       [from, to],
     );
   }
   if (metric === "analysis") {
+    if (hourly) {
+      return safeRows(
+        `SELECT bucket AS day, SUM(c)::int AS value FROM (
+           SELECT ${bucketExpr("created_at")} AS bucket, COUNT(*)::int AS c
+           FROM tbl_analysis_brief_submissions
+           WHERE created_at::date >= $1::date AND created_at::date <= $2::date
+           GROUP BY 1
+           UNION ALL
+           SELECT ${bucketExpr("COALESCE(updated_at, created_at)")} AS bucket, COUNT(*)::int AS c
+           FROM tbl_analysis_assignments
+           WHERE status IN ('FinalApproved','Archived')
+             AND COALESCE(updated_at, created_at)::date >= $1::date
+             AND COALESCE(updated_at, created_at)::date <= $2::date
+           GROUP BY 1
+         ) x
+         GROUP BY 1 ORDER BY 1`,
+        [from, to],
+      );
+    }
     return safeRows(
       `SELECT d::text AS day, SUM(c)::int AS value FROM (
          SELECT created_at::date AS d, COUNT(*)::int AS c
@@ -679,7 +734,7 @@ async function dailySeries(metric, from, to, unitId) {
   }
   if (metric === "ai") {
     return safeRows(
-      `SELECT created_at::date::text AS day, COUNT(*)::int AS value
+      `SELECT ${bucketExpr("created_at")} AS day, COUNT(*)::int AS value
        FROM tbl_ai_run_logs
        WHERE created_at::date >= $1::date AND created_at::date <= $2::date
        GROUP BY 1 ORDER BY 1`,
@@ -687,17 +742,53 @@ async function dailySeries(metric, from, to, unitId) {
     );
   }
   if (metric === "strategy") {
+    const col = "COALESCE(published_at, created_at)";
     return safeRows(
-      `SELECT COALESCE(published_at, created_at)::date::text AS day, COUNT(*)::int AS value
+      `SELECT ${bucketExpr(col)} AS day, COUNT(*)::int AS value
        FROM tbl_strategy_outputs
        WHERE status = 'published'
-         AND COALESCE(published_at, created_at)::date >= $1::date
-         AND COALESCE(published_at, created_at)::date <= $2::date
+         AND ${col}::date >= $1::date
+         AND ${col}::date <= $2::date
        GROUP BY 1 ORDER BY 1`,
       [from, to],
     );
   }
   return [];
+}
+
+function normalizeHourKey(raw) {
+  const s = String(raw || "");
+  const m = s.match(/(\d{4}-\d{2}-\d{2})[T\s](\d{2})/);
+  if (m) return `${m[1]}T${m[2]}:00`;
+  return s.slice(0, 16);
+}
+
+function fillHourlySeries(rows, from, to) {
+  const map = new Map((rows || []).map((r) => [normalizeHourKey(r.day), Number(r.value) || 0]));
+  const out = [];
+  const y0 = Number(from.slice(0, 4));
+  const m0 = Number(from.slice(5, 7)) - 1;
+  const d0 = Number(from.slice(8, 10));
+  const y1 = Number(to.slice(0, 4));
+  const m1 = Number(to.slice(5, 7)) - 1;
+  const d1 = Number(to.slice(8, 10));
+  const cur = new Date(Date.UTC(y0, m0, d0, 0));
+  const endMs = Date.UTC(y1, m1, d1, 23);
+  const single = from === to;
+  while (cur.getTime() <= endMs) {
+    const y = cur.getUTCFullYear();
+    const mo = String(cur.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(cur.getUTCDate()).padStart(2, "0");
+    const h = String(cur.getUTCHours()).padStart(2, "0");
+    const key = `${y}-${mo}-${d}T${h}:00`;
+    out.push({
+      name: key,
+      value: map.get(key) || 0,
+      label: single ? `${h}:00` : `${d}/${mo} ${h}:00`,
+    });
+    cur.setUTCHours(cur.getUTCHours() + 1);
+  }
+  return out;
 }
 
 function fillSeries(rows, from, to) {
@@ -781,6 +872,7 @@ async function buildCommandDashboardOverview(query = {}) {
         { id: "user", label: "کاربر واحد" },
         { id: "strategy_viewer", label: "ناظر راهبردی" },
         { id: "strategy_commander", label: "فرمانده راهبردی" },
+        { id: "strategy_analysis_manager", label: "مدیر تحلیل راهبردی" },
       ],
     },
   };
@@ -892,11 +984,23 @@ export async function getCommandDashboardTrends(query = {}) {
   const metric = String(query.metric || "news").trim();
   const allowed = new Set(["field", "news", "news_finalized", "analysis", "ai", "strategy"]);
   const m = allowed.has(metric) ? metric : "news";
-  const rows = await dailySeries(m, range.from, range.to, range.unit_id);
-  const series = fillSeries(rows, range.from, range.to);
+  let granularity = String(query.granularity || query.grain || "").toLowerCase();
+  if (granularity !== "hour" && granularity !== "day") {
+    granularity = range.from === range.to ? "hour" : "day";
+  }
+  // بیش از ۷ روز ساعتی خیلی شلوغ می‌شود
+  if (granularity === "hour" && range.days > 7) {
+    granularity = "day";
+  }
+  const rows = await timeSeries(m, range.from, range.to, range.unit_id, granularity);
+  const series =
+    granularity === "hour"
+      ? fillHourlySeries(rows, range.from, range.to)
+      : fillSeries(rows, range.from, range.to);
   return {
     generated_at: new Date().toISOString(),
     metric: m,
+    granularity,
     range: { from: range.from, to: range.to, days: range.days },
     series,
     stats: seriesStats(series),

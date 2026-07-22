@@ -63,6 +63,10 @@ export default function NewsChiefActionButtons({
   if (!isPositive) return null;
 
   if (showRejectBox) {
+    const noteEmpty = !rejectNote.trim();
+    // #region agent log
+    fetch('http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d349cf'},body:JSON.stringify({sessionId:'d349cf',runId:'post-fix',hypothesisId:'H4',location:'NewsChiefActionButtons.jsx:rejectBox',message:'reject box render',data:{placeholder:'دلیل برگشت به دبیر (اختیاری)...',noteEmpty,buttonDisabled:!!busy,newsId:item?.id},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return (
       <div
         onClick={stop}
@@ -82,8 +86,9 @@ export default function NewsChiefActionButtons({
         <input
           value={rejectNote}
           onChange={(e) => setRejectNote(e.target.value)}
-          placeholder="دلیل برگشت به دبیر (الزامی)..."
+          placeholder="دلیل برگشت به دبیر (اختیاری)..."
           maxLength={300}
+          data-debug-placeholder="optional-chief-reject"
           style={{
             width: "100%",
             padding: "5px 8px",
@@ -107,8 +112,11 @@ export default function NewsChiefActionButtons({
           </button>
           <button
             type="button"
-            disabled={busy || !rejectNote.trim()}
+            disabled={busy}
             onClick={() => {
+              // #region agent log
+              fetch('http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d349cf'},body:JSON.stringify({sessionId:'d349cf',runId:'post-fix',hypothesisId:'H1',location:'NewsChiefActionButtons.jsx:confirmReject',message:'confirm reject click',data:{noteLen:rejectNote.trim().length,newsId:item?.id},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
               onChiefReject?.(item.id, rejectNote.trim());
               setShowRejectBox(false);
               setRejectNote("");

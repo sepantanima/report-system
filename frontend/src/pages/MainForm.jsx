@@ -27,31 +27,26 @@ import {
   Radio,
   ScrollText,
   FilePenLine,
+  Wand2,
 } from "lucide-react";
 import {
   decodeToken,
   getSessionRoles,
   getRoleLabelFa,
-  hasPermission,
   persistSessionRoles,
 } from "../utils/userRoles.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import { ANALYSIS_TERMS, BRIEF_TERMS } from "../constants/analysisTerminology.js";
 import useAnalysisMenuBadges from "../hooks/useAnalysisMenuBadges.js";
+import useUserManagementBadges from "../hooks/useUserManagementBadges.js";
 import { getWelcomeGreeting, normalizeGender } from "../utils/userGreeting.js";
 import NotificationBell from "../components/messaging/NotificationBell.jsx";
 import GlobalAnnouncementBanner from "../components/messaging/GlobalAnnouncementBanner.jsx";
 import { PAGE_WIDE_CSS } from "../constants/pageLayoutWidths.js";
+import { PERMISSION_CATEGORIES } from "../constants/permissionCategories.js";
 
 // 🌟 انتقال آرایه ساختاری منوها به خارج از کامپوننت جهت حل خطای کامپایلر ری‌اکت
-// متغیرهای استاتیک نباید در هر رندر درون بدنه کامپوننت بازسازی شوند
-// =========================================================================
-const ACTION_CATEGORIES = [
-  { id: "field", title: "گزارشات میدانی", color: "#06b6d4" },
-  { id: "analysis", title: "فرایند تحلیل", color: "#10b981" },
-  { id: "news", title: "اخبار و پردازش", color: "#a855f7" },
-  { id: "command", title: "مرکز فرماندهی", color: "#e11d48" },
-  { id: "system", title: "مدیریت و گزارشات", color: "#f59e0b" },
-];
+const ACTION_CATEGORIES = PERMISSION_CATEGORIES;
 
 function hexToRgb(hex) {
   const h = String(hex || "").replace("#", "");
@@ -126,6 +121,7 @@ const allActions = [
     icon: <Users size={24} />,
     path: "/users",
     permission: "manage_users",
+    badgeKey: "analyst_suggestions",
     category: "system",
   },
   {
@@ -199,6 +195,30 @@ const allActions = [
     path: "/ai-processor",
     permission: "ai_process",
     category: "news",
+  },
+  {
+    id: 62,
+    title: "همگام‌سازی",
+    icon: <Layers size={24} />,
+    path: "/admin/sync",
+    permission: "sync.view",
+    category: "system",
+  },
+  {
+    id: 63,
+    title: "گزارش راهبر آنلاین",
+    icon: <FilePenLine size={24} />,
+    path: "/admin/briefing",
+    permission: "sync.briefing",
+    category: "system",
+  },
+  {
+    id: 64,
+    title: "نقش و مجوز",
+    icon: <Shield size={24} />,
+    path: "/admin/rbac",
+    permission: "rbac.manage",
+    category: "system",
   },
   {
     id: 7,
@@ -340,10 +360,18 @@ const allActions = [
   },
   {
     id: 73,
-    title: "خروجی‌های راهبردی",
+    title: "کتابخانه خروجی‌ها",
     icon: <ScrollText size={24} />,
     path: "/command/outputs",
     permission: "command_outputs",
+    category: "command",
+  },
+  {
+    id: 75,
+    title: "مدیریت تحلیل راهبردی",
+    icon: <Wand2 size={24} />,
+    path: "/command/strategy-manage",
+    permission: "command_outputs_manage",
     category: "command",
   },
   {
@@ -403,7 +431,14 @@ const formatBadgeCount = (n) => {
 export default function MainForm() {
   const navigate = useNavigate();
   const logout = useLogout();
-  const { badges } = useAnalysisMenuBadges();
+  const { hasPermission: canAccess, permissions } = useAuth();
+  const canManageUsers = canAccess("manage_users");
+  const { badges: analysisBadges } = useAnalysisMenuBadges();
+  const { badges: userMgmtBadges } = useUserManagementBadges(canManageUsers);
+  const badges = useMemo(
+    () => ({ ...analysisBadges, ...userMgmtBadges }),
+    [analysisBadges, userMgmtBadges],
+  );
 
   // مهار و نمایش ساعت زنده در بالای فرم
   const [liveTime, setLiveTime] = useState(() => {
@@ -471,11 +506,11 @@ export default function MainForm() {
   const filteredActions = useMemo(() => {
     return allActions.filter((action) => {
       if (action.permissions?.length) {
-        return action.permissions.some((p) => hasPermission(roles, p));
+        return action.permissions.some((p) => canAccess(p));
       }
-      return hasPermission(roles, action.permission);
+      return canAccess(action.permission);
     });
-  }, [roles]);
+  }, [canAccess, permissions]);
 
   const handleLogout = () => {
     if (window.confirm("خروج از حساب کاربری؟")) {

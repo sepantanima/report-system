@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, RefreshCw, Send, Sun, Moon, HelpCircle, Type, X } from "lucide-react";
+import { ArrowRight, RefreshCw, Send, Sun, Moon, HelpCircle, Type, X, MessageSquareText } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { getSessionRoles, hasPermission } from "../../utils/userRoles.js";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 import commandCenterService from "../../services/commandCenterService.js";
 import "./CommandLiveNewsWall.css";
 
-const POLL_MS = 12000;
+const CARDS_KEY = "command-live-news-cards-per-row";
 const VIEW_KEY = "command-live-news-view";
 const FILTERS_KEY = "command-live-news-filters-collapsed";
 const STATS_KEY = "command-live-news-stats-collapsed";
@@ -17,6 +17,26 @@ const KIND_KEY = "command-live-news-kind";
 const FONT_KEY = "command-live-news-font";
 const SCROLL_KEY = "command-live-news-scroll";
 const SOURCE_W_KEY = "command-live-news-source-w";
+const SORT_KEY = "command-live-news-sort";
+const REFRESH_KEY = "command-live-news-refresh-sec";
+
+/** فاصله به‌روزرسانی خودکار (ثانیه) — ۰ = فقط دستی */
+const REFRESH_OPTIONS = [
+  { sec: 30, label: "هر ۳۰ ثانیه" },
+  { sec: 60, label: "هر ۱ دقیقه" },
+  { sec: 120, label: "هر ۲ دقیقه" },
+  { sec: 300, label: "هر ۵ دقیقه" },
+  { sec: 600, label: "هر ۱۰ دقیقه" },
+  { sec: 0, label: "فقط دستی" },
+];
+const DEFAULT_REFRESH_SEC = 60;
+
+const SORT_OPTIONS = [
+  { id: "event_asc", label: "زمان خبر ↑ قدیم→جدید" },
+  { id: "event_desc", label: "زمان خبر ↓ جدید→قدیم" },
+  { id: "priority", label: "اولویت (فوری اول)" },
+  { id: "received_desc", label: "زمان ثبت ↓" },
+];
 
 const KIND_FILTERS = [
   { key: "all", label: "همه" },
@@ -44,6 +64,45 @@ function priorityFilterKey(priority) {
   if (p === 2) return "important";
   if (p === 3) return "medium";
   return "normal";
+}
+
+function eventSortKeyOf(n) {
+  if (n?.event_sort_key) return String(n.event_sort_key);
+  const d = String(n?.source_date_jalali || n?.event_date_jalali || n?.relay_date_jalali || "").replace(/\D/g, "");
+  const tRaw = String(n?.source_time_hm || n?.relay_time_hm || "").replace(/\D/g, "");
+  const t = (tRaw || "0000").padStart(4, "0").slice(-4);
+  return `${d}${t}`;
+}
+
+function sortFeedItems(list, mode) {
+  const arr = [...(list || [])];
+  const idNum = (x) => {
+    const n = Number(x?.id);
+    return Number.isFinite(n) ? n : 0;
+  };
+  arr.sort((a, b) => {
+    if (mode === "event_desc") {
+      const c = eventSortKeyOf(b).localeCompare(eventSortKeyOf(a));
+      return c || idNum(b) - idNum(a);
+    }
+    if (mode === "priority") {
+      const pa = Math.min(4, Math.max(1, parseInt(a?.priority, 10) || 3));
+      const pb = Math.min(4, Math.max(1, parseInt(b?.priority, 10) || 3));
+      if (pa !== pb) return pa - pb;
+      const c = eventSortKeyOf(b).localeCompare(eventSortKeyOf(a));
+      return c || idNum(b) - idNum(a);
+    }
+    if (mode === "received_desc") {
+      const ta = a?.sort_ts ? new Date(a.sort_ts).getTime() : 0;
+      const tb = b?.sort_ts ? new Date(b.sort_ts).getTime() : 0;
+      if (tb !== ta) return tb - ta;
+      return idNum(b) - idNum(a);
+    }
+    // event_asc (پیش‌فرض)
+    const c = eventSortKeyOf(a).localeCompare(eventSortKeyOf(b));
+    return c || idNum(a) - idNum(b);
+  });
+  return arr;
 }
 
 function toggleKey(set, key) {
@@ -199,10 +258,10 @@ function LiveNewsHelp() {
         <li><b>نوع محتوا:</b> همه، فقط اخبار، یا فقط رصد میدانی — کارت میدانی با زمینه و برچسب متمایز است.</li>
         <li><b>نوع راز (میدانی):</b> عمومی / استانی / واحد روی کارت؛ گزارش‌های «خاص» در تالار نمایش داده نمی‌شوند.</li>
         <li><b>متن کامل:</b> با «ادامه…» بدون باز شدن پنل حاشیه، متن کامل را بخوانید.</li>
-        <li><b>نمای لیست / کارت:</b> دو حالت نمایش؛ ترجیح شما ذخیره می‌شود.</li>
+        <li><b>نمای لیست / کارت:</b> دو حالت نمایش؛ در تنظیمات می‌توانید تعداد کارت در هر سطر را انتخاب کنید (پیش‌فرض یک کارت).</li>
         <li><b>بازه زمانی:</b> روز جاری، دو روز اخیر، یا سه روز اخیر.</li>
         <li><b>فیلتر چندانتخابی:</b> وضعیت و اهمیت (OR داخل هر گروه).</li>
-        <li><b>حاشیه راهبردی:</b> کلیک روی کارت پنل حاشیه را باز می‌کند. با ضربدر یا Escape بسته می‌شود.</li>
+        <li><b>حاشیه راهبردی:</b> فقط با دکمه «دستور» پنل حاشیه باز می‌شود — کلیک روی خود خبر حاشیه را باز نمی‌کند. با ضربدر یا Escape بسته می‌شود.</li>
         <li><b>اعلان:</b> برای خبر به دبیر/سردبیر؛ برای میدانی به مدیر رصد.</li>
       </ul>
     </>
@@ -224,7 +283,13 @@ export default function CommandLiveNewsWall() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [clock, setClock] = useState("");
-  const [view, setView] = useState(() => localStorage.getItem(VIEW_KEY) || "grid");
+  const [view, setView] = useState(() => {
+    const saved = localStorage.getItem(VIEW_KEY);
+    if (saved === "grid" || saved === "table") return saved;
+    // موبایل: پیش‌فرض کارتی
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) return "grid";
+    return "grid";
+  });
   const [filtersCollapsed, setFiltersCollapsed] = useState(() => localStorage.getItem(FILTERS_KEY) === "1");
   const [statsCollapsed, setStatsCollapsed] = useState(() => localStorage.getItem(STATS_KEY) === "1");
   const [settingsCollapsed, setSettingsCollapsed] = useState(() => localStorage.getItem(SETTINGS_KEY) !== "0");
@@ -233,8 +298,20 @@ export default function CommandLiveNewsWall() {
     const v = localStorage.getItem(KIND_KEY);
     return ["all", "news", "field"].includes(v) ? v : "all";
   });
+  const [sortMode, setSortMode] = useState(() => {
+    const v = localStorage.getItem(SORT_KEY);
+    return SORT_OPTIONS.some((o) => o.id === v) ? v : "event_asc";
+  });
   const [fontLevel, setFontLevel] = useState(() => readIntPref(FONT_KEY, DEFAULT_FONT, FONT_ALLOWED));
   const [scrollSpeed, setScrollSpeed] = useState(() => readIntPref(SCROLL_KEY, 2, [1, 2, 3, 4]));
+  const [cardsPerRow, setCardsPerRow] = useState(() => readIntPref(CARDS_KEY, 1, [1, 2, 3, 4]));
+  const [refreshSec, setRefreshSec] = useState(() =>
+    readIntPref(
+      REFRESH_KEY,
+      DEFAULT_REFRESH_SEC,
+      REFRESH_OPTIONS.map((o) => o.sec),
+    ),
+  );
   const [statusSet, setStatusSet] = useState(() => new Set());
   const [prioSet, setPrioSet] = useState(() => new Set());
   const [sourceW, setSourceW] = useState(() => {
@@ -264,51 +341,28 @@ export default function CommandLiveNewsWall() {
       const nextItems = Array.isArray(data?.items) ? data.items : [];
       // #region agent log
       {
-        const kinds = nextItems.map((n) => n.kind || "news");
-        let transitions = 0;
-        for (let i = 1; i < kinds.length; i += 1) if (kinds[i] !== kinds[i - 1]) transitions += 1;
-        const firstFieldIdx = kinds.indexOf("field");
-        const lastNewsIdx = kinds.lastIndexOf("news");
-        const segregated = firstFieldIdx >= 0 && lastNewsIdx >= 0 && transitions === 1
-          && kinds.slice(0, firstFieldIdx).every((k) => k === "news")
-          && kinds.slice(firstFieldIdx).every((k) => k === "field");
+        const byRs = {};
+        let rejectCount = 0;
+        nextItems.forEach((n) => {
+          const rs = String(n?.review_state || "").toLowerCase() || "(empty)";
+          byRs[rs] = (byRs[rs] || 0) + 1;
+          if (normalizeStatus(n) === "reject") rejectCount += 1;
+        });
         fetch("http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e87c62" },
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "6de48a" },
           body: JSON.stringify({
-            sessionId: "e87c62",
-            runId: "post-fix",
-            hypothesisId: "H1-fix",
+            sessionId: "6de48a",
+            runId: "pre-fix",
+            hypothesisId: "D",
             location: "CommandLiveNewsWall.jsx:loadFeed",
-            message: "frontend received feed order",
+            message: "live feed items status breakdown",
             data: {
+              total: nextItems.length,
+              rejectNormalized: rejectCount,
+              byReviewState: byRs,
               kindFilter,
               days,
-              total: nextItems.length,
-              newsCount: kinds.filter((k) => k === "news").length,
-              fieldCount: kinds.filter((k) => k === "field").length,
-              transitions,
-              firstFieldIdx,
-              lastNewsIdx,
-              segregated,
-              viewportW: typeof window !== "undefined" ? window.innerWidth : null,
-              head: nextItems.slice(0, 20).map((n, i) => ({
-                i,
-                kind: n.kind || "news",
-                id: n.id,
-                date: n.source_date_jalali || n.relay_date_jalali,
-                time: n.source_time_hm || n.relay_time_hm,
-                prio: n.priority,
-              })),
-              aroundFirstField: firstFieldIdx >= 0
-                ? nextItems.slice(Math.max(0, firstFieldIdx - 3), firstFieldIdx + 5).map((n, j) => ({
-                  i: Math.max(0, firstFieldIdx - 3) + j,
-                  kind: n.kind || "news",
-                  id: n.id,
-                  date: n.source_date_jalali || n.relay_date_jalali,
-                  time: n.source_time_hm || n.relay_time_hm,
-                }))
-                : [],
             },
             timestamp: Date.now(),
           }),
@@ -327,9 +381,88 @@ export default function CommandLiveNewsWall() {
   useEffect(() => {
     loadFeed(false);
     commandCenterService.annotationTypes().then((d) => setTypes(d?.types || {})).catch(() => {});
-    const t = setInterval(() => loadFeed(true), POLL_MS);
-    return () => clearInterval(t);
   }, [loadFeed]);
+
+  // #region agent log
+  useEffect(() => {
+    const measure = () => {
+      const root = document.querySelector(".clw-root");
+      const titleRow = document.querySelector(".clw-title-row");
+      const sections = Array.from(document.querySelectorAll(".clw-header-section"));
+      const main = document.querySelector(".clw-main");
+      const grid = document.querySelector(".clw-news-grid");
+      const card = document.querySelector(".clw-news-card");
+      const summary = document.querySelector(".clw-card-summary-text");
+      const rectOf = (el) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        const cs = window.getComputedStyle(el);
+        return {
+          left: Math.round(r.left),
+          right: Math.round(r.right),
+          width: Math.round(r.width),
+          top: Math.round(r.top),
+          height: Math.round(r.height),
+          paddingL: cs.paddingLeft,
+          paddingR: cs.paddingRight,
+          marginL: cs.marginLeft,
+          marginR: cs.marginRight,
+          textAlign: cs.textAlign,
+          display: cs.display,
+          webkitBoxOrient: cs.webkitBoxOrient || cs.getPropertyValue("-webkit-box-orient"),
+          flexWrap: cs.flexWrap,
+          minWidth: cs.minWidth,
+          flex: cs.flex,
+        };
+      };
+      const vw = window.innerWidth;
+      const cardRect = card ? card.getBoundingClientRect() : null;
+      const mainRect = main ? main.getBoundingClientRect() : null;
+      fetch("http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "6de48a" },
+        body: JSON.stringify({
+          sessionId: "6de48a",
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "CommandLiveNewsWall.jsx:layoutMeasure",
+          message: "mobile layout metrics",
+          data: {
+            vw,
+            vh: window.innerHeight,
+            isMobile: vw <= 640,
+            titleRow: rectOf(titleRow),
+            sections: sections.map((el, i) => ({ i, className: el.className, ...rectOf(el) })),
+            main: rectOf(main),
+            grid: rectOf(grid),
+            card: rectOf(card),
+            summary: rectOf(summary),
+            cardGapLeftFromViewport: cardRect ? Math.round(cardRect.left) : null,
+            cardGapRightFromViewport: cardRect ? Math.round(vw - cardRect.right) : null,
+            mainGapLeft: mainRect ? Math.round(mainRect.left) : null,
+            mainGapRight: mainRect ? Math.round(vw - mainRect.right) : null,
+            rootOverflowX: root ? window.getComputedStyle(root).overflowX : null,
+            bodyScrollWidth: document.documentElement.scrollWidth,
+            bodyClientWidth: document.documentElement.clientWidth,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    };
+    const t = window.setTimeout(measure, 400);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", measure);
+    };
+  }, [items, view, filtersCollapsed, statsCollapsed, settingsCollapsed]);
+  // #endregion
+
+  useEffect(() => {
+    if (!refreshSec || refreshSec <= 0) return undefined;
+    const t = setInterval(() => loadFeed(true), refreshSec * 1000);
+    return () => clearInterval(t);
+  }, [loadFeed, refreshSec]);
 
   useEffect(() => {
     const tick = () => {
@@ -387,51 +520,39 @@ export default function CommandLiveNewsWall() {
   }, [items, search]);
 
   const filtered = useMemo(() => {
-    return searchFiltered.filter((n) => {
+    const list = searchFiltered.filter((n) => {
       const st = normalizeStatus(n);
       const sMatch = statusSet.size === 0 || statusSet.has(st);
       const pk = priorityFilterKey(n.priority);
       const iMatch = prioSet.size === 0 || prioSet.has(pk);
       return sMatch && iMatch;
     });
-  }, [searchFiltered, statusSet, prioSet]);
+    return sortFeedItems(list, sortMode);
+  }, [searchFiltered, statusSet, prioSet, sortMode]);
 
   // #region agent log
   useEffect(() => {
-    if (view === "grid" || !filtered.length) return undefined;
-    const t = setTimeout(() => {
-      const table = scrollRef.current?.querySelector?.(".clw-news-table");
-      if (!table) return;
-      const ths = [...table.querySelectorAll("thead th")];
-      const cols = ths.map((th, i) => ({
-        i,
-        label: (th.textContent || "").trim().slice(0, 24),
-        w: Math.round(th.getBoundingClientRect().width),
-        display: window.getComputedStyle(th).display,
-        hiddenClass: th.classList.contains("clw-col-desktop"),
-      }));
-      const summary = table.querySelector("td.clw-td-summary");
-      fetch("http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e87c62" },
-        body: JSON.stringify({
-          sessionId: "e87c62",
-          runId: "post-fix",
-          hypothesisId: "H4-H5",
-          location: "CommandLiveNewsWall.jsx:measureCols",
-          message: "table column widths",
-          data: {
-            viewportW: window.innerWidth,
-            tableW: Math.round(table.getBoundingClientRect().width),
-            summaryW: summary ? Math.round(summary.getBoundingClientRect().width) : null,
-            cols,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }, 400);
-    return () => clearTimeout(t);
-  }, [view, filtered.length, selectedKey]);
+    const rejectInFiltered = filtered.filter((n) => normalizeStatus(n) === "reject").length;
+    fetch("http://127.0.0.1:7732/ingest/84806bcd-7c67-4feb-bf71-3b9c8b6b47fb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "6de48a" },
+      body: JSON.stringify({
+        sessionId: "6de48a",
+        runId: "pre-fix",
+        hypothesisId: "E",
+        location: "CommandLiveNewsWall.jsx:filtered",
+        message: "client filter still shows rejected",
+        data: {
+          itemsTotal: items.length,
+          filteredTotal: filtered.length,
+          rejectInFiltered,
+          statusSet: [...statusSet],
+          emptyStatusSetShowsAll: statusSet.size === 0,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [filtered, items.length, statusSet]);
   // #endregion
 
   /** آمار از قبل از فیلتر وضعیت/اهمیت تا تاگل‌ها شمارندهٔ واقعی داشته باشند */
@@ -514,6 +635,12 @@ export default function CommandLiveNewsWall() {
     setSelectedKey(null);
   };
 
+  const changeSort = (v) => {
+    const next = SORT_OPTIONS.some((o) => o.id === v) ? v : "event_asc";
+    setSortMode(next);
+    localStorage.setItem(SORT_KEY, next);
+  };
+
   const changeFont = (v) => {
     const n = Number(v);
     setFontLevel(n);
@@ -531,7 +658,30 @@ export default function CommandLiveNewsWall() {
     localStorage.setItem(SCROLL_KEY, String(n));
   };
 
+  const changeCardsPerRow = (v) => {
+    const n = Number(v);
+    const next = [1, 2, 3, 4].includes(n) ? n : 1;
+    setCardsPerRow(next);
+    localStorage.setItem(CARDS_KEY, String(next));
+  };
+
+  const changeRefresh = (v) => {
+    const n = Number(v);
+    const allowed = REFRESH_OPTIONS.map((o) => o.sec);
+    const next = allowed.includes(n) ? n : DEFAULT_REFRESH_SEC;
+    setRefreshSec(next);
+    localStorage.setItem(REFRESH_KEY, String(next));
+  };
+
   const closeDetail = () => setSelectedKey(null);
+
+  const openAnnotation = (item, e) => {
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
+    const key = feedKeyOf(item);
+    if (!key) return;
+    setSelectedKey(key);
+  };
 
   const submitAnnotation = async () => {
     if (!selectedKey || !canAnnotate || !selected) return;
@@ -658,6 +808,17 @@ export default function CommandLiveNewsWall() {
               </select>
             </label>
 
+            <label>
+              مرتب‌سازی:
+              <select value={sortMode} onChange={(e) => changeSort(e.target.value)}>
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}{o.id === "event_asc" ? " (پیش‌فرض)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <div className="clw-multi-filters">
               <span className="clw-multi-label">نوع:</span>
               {KIND_FILTERS.map((k) => (
@@ -731,6 +892,26 @@ export default function CommandLiveNewsWall() {
               <select value={scrollSpeed} onChange={(e) => changeScroll(e.target.value)}>
                 {Object.entries(SCROLL_SPEEDS).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}{Number(k) === 2 ? " (پیش‌فرض)" : ""}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              تعداد کارت در هر سطر:
+              <select value={cardsPerRow} onChange={(e) => changeCardsPerRow(e.target.value)}>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {toPersianDigits(n)}{n === 1 ? " (پیش‌فرض)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              به‌روزرسانی خودکار:
+              <select value={refreshSec} onChange={(e) => changeRefresh(e.target.value)}>
+                {REFRESH_OPTIONS.map((o) => (
+                  <option key={o.sec} value={o.sec}>
+                    {o.label}{o.sec === DEFAULT_REFRESH_SEC ? " (پیش‌فرض)" : ""}
+                  </option>
                 ))}
               </select>
             </label>
@@ -827,7 +1008,8 @@ export default function CommandLiveNewsWall() {
         <main className="clw-main">
           <div
             ref={scrollRef}
-            className={view === "grid" ? "clw-news-grid" : "clw-table-container"}
+            className={view === "grid" ? `clw-news-grid clw-cols-${cardsPerRow}` : "clw-table-container"}
+            style={view === "grid" ? { ["--clw-cols"]: cardsPerRow } : undefined}
             onMouseEnter={() => { pausedRef.current = true; }}
             onMouseLeave={() => { pausedRef.current = false; }}
           >
@@ -842,11 +1024,9 @@ export default function CommandLiveNewsWall() {
                 const preview = stripPreview(n.summary || n.cleaned_text || n.title, 320);
                 const isTruncated = full.length > 320;
                 return (
-                  <button
+                  <article
                     key={key}
-                    type="button"
                     className={`clw-news-card imp-${imp} st-${st}${isField ? " clw-card-field" : " clw-card-news"}${selectedKey === key ? " selected" : ""}`}
-                    onClick={() => setSelectedKey(key)}
                     title={isField ? `گزارش میدانی #${n.id}` : `خبر #${n.id}`}
                   >
                     <div className="clw-card-body">
@@ -883,10 +1063,21 @@ export default function CommandLiveNewsWall() {
                             ? [n.unit_name || n.source, n.topic].filter(Boolean).join(" · ") || "—"
                             : (n.source || n.sender || "—")}
                         </span>
-                        <StatusBadge status={st} kind={n.kind} />
+                        <span className="clw-card-footer-actions">
+                          <StatusBadge status={st} kind={n.kind} />
+                          <button
+                            type="button"
+                            className="clw-cmd-btn"
+                            onClick={(e) => openAnnotation(n, e)}
+                            title="باز کردن پنل دستور / حاشیه راهبردی"
+                          >
+                            <MessageSquareText size={12} />
+                            دستور
+                          </button>
+                        </span>
                       </div>
                     </div>
-                  </button>
+                  </article>
                 );
               })
             ) : (
@@ -899,7 +1090,7 @@ export default function CommandLiveNewsWall() {
                   <col className="clw-col-desktop" style={{ width: 72 }} />
                   <col className="clw-col-desktop" style={{ width: sourceW }} />
                   <col className="clw-col-desktop" style={{ width: 72 }} />
-                  <col className="clw-col-desktop" style={{ width: 52 }} />
+                  <col className="clw-col-cmd" style={{ width: 72 }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -917,7 +1108,7 @@ export default function CommandLiveNewsWall() {
                       />
                     </th>
                     <th className="clw-col-desktop">وضعیت</th>
-                    <th className="clw-col-desktop">دستور</th>
+                    <th className="clw-col-cmd">دستور</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -928,11 +1119,11 @@ export default function CommandLiveNewsWall() {
                     const isField = n.kind === "field";
                     const full = fullItemText(n);
                     const isTruncated = full.length > 220;
+                    const annCount = Number(n.annotation_count) || 0;
                     return (
                       <tr
                         key={key}
                         className={`imp-${imp} st-${st}${isField ? " clw-row-field" : ""}${selectedKey === key ? " selected" : ""}`}
-                        onClick={() => setSelectedKey(key)}
                         title={isField ? `گزارش میدانی #${n.id}` : `خبر #${n.id}`}
                       >
                         <td className="clw-col-desktop">{toPersianDigits(idx + 1)}</td>
@@ -960,10 +1151,17 @@ export default function CommandLiveNewsWall() {
                           {isField ? (n.unit_name || n.source || "—") : (n.source || "—")}
                         </td>
                         <td className="clw-col-desktop"><StatusBadge status={st} kind={n.kind} /></td>
-                        <td className="clw-col-desktop">
-                          {Number(n.annotation_count) > 0
-                            ? toPersianDigits(n.annotation_count)
-                            : "—"}
+                        <td className="clw-col-cmd">
+                          <button
+                            type="button"
+                            className="clw-cmd-btn"
+                            onClick={(e) => openAnnotation(n, e)}
+                            title="باز کردن پنل دستور / حاشیه راهبردی"
+                          >
+                            <MessageSquareText size={12} />
+                            دستور
+                            {annCount > 0 ? ` ${toPersianDigits(annCount)}` : ""}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -1116,13 +1314,14 @@ export default function CommandLiveNewsWall() {
             <div className="clw-text-modal-actions">
               <button
                 type="button"
-                className="clw-icon-btn"
+                className="clw-cmd-btn"
                 onClick={() => {
                   setSelectedKey(feedKeyOf(previewItem));
                   setPreviewItem(null);
                 }}
               >
-                باز کردن حاشیه راهبردی
+                <MessageSquareText size={12} />
+                دستور
               </button>
               <button type="button" className="clw-icon-btn" onClick={() => setPreviewItem(null)}>بستن</button>
             </div>

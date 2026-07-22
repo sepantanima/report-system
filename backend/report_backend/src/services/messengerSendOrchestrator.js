@@ -62,8 +62,10 @@ export async function publishSingleNews({
   channelConfigId,
   userId,
   message,
+  newsId = null,
 }) {
   const usageKey = MESSENGER_USAGE_KEYS.NEWS_REPORT_PUBLISH;
+  const newsMeta = newsId != null ? { news_id: newsId } : {};
   try {
     const res = await sendMessengerText(channelConfigId, message);
     await insertMessengerSendLog({
@@ -73,7 +75,7 @@ export async function publishSingleNews({
       payload_kind: "text",
       status: "ok",
       platform_message_id: res.messageId,
-      request_meta: { step: "single_news" },
+      request_meta: { step: "single_news", ...newsMeta },
     });
     return { ok: true };
   } catch (e) {
@@ -84,7 +86,7 @@ export async function publishSingleNews({
       payload_kind: "text",
       status: "error",
       error_message: e.message,
-      request_meta: { step: "single_news_failed" },
+      request_meta: { step: "single_news_failed", ...newsMeta },
     });
     throw e;
   }

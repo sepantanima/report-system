@@ -59,17 +59,21 @@ export function classifyLlmFailure(error, row = null) {
     category = "timeout";
     messageFa = "مهلت زمانی درخواست به API هوش مصنوعی تمام شد";
   } else if (
-    ["ENOTFOUND", "ECONNREFUSED", "ENETUNREACH", "EAI_AGAIN", "ETIMEDOUT"].includes(error?.code)
+    ["ENOTFOUND", "ECONNREFUSED", "ENETUNREACH", "EAI_AGAIN", "ETIMEDOUT", "ECONNRESET", "EPIPE"].includes(error?.code)
     || /getaddrinfo ENOTFOUND/i.test(rawMsg)
     || /ECONNREFUSED/i.test(rawMsg)
     || /ENETUNREACH/i.test(rawMsg)
+    || /socket hang up/i.test(rawMsg)
+    || /ECONNRESET/i.test(rawMsg)
   ) {
     category = "network";
     const hostMatch = rawMsg.match(/ENOTFOUND\s+(\S+)/i);
     const host = hostMatch?.[1] || null;
     messageFa = host
       ? `اتصال به ${host} برقرار نشد — DNS یا شبکه را بررسی کنید.`
-      : "اتصال به سرویس هوش مصنوعی برقرار نشد — اینترنت، DNS یا فیلترینگ را بررسی کنید.";
+      : /socket hang up|ECONNRESET/i.test(rawMsg)
+        ? "اتصال به سرویس هوش مصنوعی قطع شد (socket hang up) — اینترنت، پروکسی، فیلترینگ یا وضعیت API را بررسی کنید."
+        : "اتصال به سرویس هوش مصنوعی برقرار نشد — اینترنت، DNS یا فیلترینگ را بررسی کنید.";
   } else if (
     httpStatus === 429
     || (providerCode && /quota|rate_limit|insufficient/i.test(providerCode))
@@ -99,6 +103,7 @@ export function classifyLlmFailure(error, row = null) {
   if (modelId && category === "model_access") {
     messageFa = `${messageFa} — مدل: ${modelId}`;
   }
+
 
   return {
     category,

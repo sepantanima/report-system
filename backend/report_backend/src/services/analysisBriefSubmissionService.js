@@ -216,7 +216,7 @@ export async function getBriefSubmission(id, user, { isManager = false } = {}) {
 }
 
 export async function updateBriefStatus(id, body, managerUser) {
-  const { status, manager_note, quality_tag, reject_reason } = body;
+  const { status, manager_note, quality_tag, reject_reason, show_in_command } = body;
   if (!VALID_BRIEF_STATUSES.includes(status)) throw new Error("وضعیت نامعتبر");
 
   if (status === "Rejected" && !String(reject_reason || "").trim()) {
@@ -244,16 +244,43 @@ export async function updateBriefStatus(id, body, managerUser) {
            reject_reason = COALESCE($4::text, reject_reason),
            quality_tag = COALESCE($5::varchar, quality_tag),
            manager_approved_at = CASE WHEN $1::varchar = 'ManagerApproved' THEN CURRENT_TIMESTAMP ELSE manager_approved_at END,
+           show_in_command = CASE
+             WHEN $1::varchar = 'ManagerApproved' THEN COALESCE($6::boolean, false)
+             ELSE show_in_command
+           END,
+           command_visible_at = CASE
+             WHEN $1::varchar = 'ManagerApproved' AND COALESCE($6::boolean, false) THEN CURRENT_TIMESTAMP
+             WHEN $1::varchar = 'ManagerApproved' THEN NULL
+             ELSE command_visible_at
+           END,
+           command_visible_by = CASE
+             WHEN $1::varchar = 'ManagerApproved' AND COALESCE($6::boolean, false) THEN $2::integer
+             WHEN $1::varchar = 'ManagerApproved' THEN NULL
+             ELSE command_visible_by
+           END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $6::integer RETURNING *`,
-      [status, managerUser.id, manager_note || null, rejectReasonVal, quality_tag ?? prev.quality_tag, id],
+       WHERE id = $7::integer RETURNING *`,
+      [
+        status,
+        managerUser.id,
+        manager_note || null,
+        rejectReasonVal,
+        quality_tag ?? prev.quality_tag,
+        show_in_command == null ? null : show_in_command === true,
+        id,
+      ],
     );
     await logActivity(client, {
       userId: managerUser.id,
       action: "status_change",
       entityType: "brief_submission",
       entityId: id,
-      details: { status, quality_tag, reject_reason: rejectReasonVal },
+      details: {
+        status,
+        quality_tag,
+        reject_reason: rejectReasonVal,
+        show_in_command: status === "ManagerApproved" ? show_in_command === true : undefined,
+      },
     });
     await client.query("COMMIT");
 
@@ -278,6 +305,29 @@ export async function updateBriefStatus(id, body, managerUser) {
 
 export async function approveBriefBank(id, body, managerUser) {
   return updateBriefStatus(id, { ...body, status: "ManagerApproved" }, managerUser);
+}
+
+export async function setBriefCommandVisibility(id, visible, managerUser) {
+  const r = await pool.query(
+    `UPDATE tbl_analysis_brief_submissions
+     SET show_in_command = $2,
+         command_visible_at = CASE WHEN $2 THEN CURRENT_TIMESTAMP ELSE NULL END,
+         command_visible_by = CASE WHEN $2 THEN $3 ELSE NULL END,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND status IN ('ManagerApproved', 'EditorApproved', 'Published')
+     RETURNING id`,
+    [id, visible === true, managerUser.id],
+  );
+  if (!r.rows[0]) throw new Error("NOT_FOUND_OR_NOT_IN_BANK");
+  await logActivity(pool, {
+    userId: managerUser.id,
+    action: visible ? "show_in_command" : "hide_from_command",
+    entityType: "brief_submission",
+    entityId: Number(id),
+    details: { show_in_command: visible === true },
+  });
+  return getBriefSubmission(id, managerUser, { isManager: true });
 }
 
 export async function approveBriefForPublish(id, body, editorUser) {
@@ -729,6 +779,16 @@ export async function getContributorStats() {
   return r.rows.map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
+export async function resolveAnalystRoleSuggestions(userId, status = "accepted") {
+  if (!userId) return;
+  await pool.query(
+    `UPDATE tbl_analysis_role_suggestions
+     SET status = $2, updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = $1 AND suggested_role = 'analyst' AND status = 'pending'`,
+    [userId, status],
+  );
+}
+
 export async function getBriefStatsForUsers(userIds = []) {
   if (!userIds.length) return {};
   const r = await pool.query(
@@ -737,6 +797,11 @@ export async function getBriefStatsForUsers(userIds = []) {
             EXISTS (
               SELECT 1 FROM tbl_analysis_role_suggestions rs
               WHERE rs.user_id = b.author_id AND rs.suggested_role = 'analyst' AND rs.status = 'pending'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tbl_user_role_assignments ura
+              JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+              WHERE ura.user_id = b.author_id AND ura.active = TRUE AND rt.code = 'analyst'
             ) AS analyst_suggested
      FROM tbl_analysis_brief_submissions b
      WHERE author_id = ANY($1)
@@ -751,6 +816,20 @@ export async function getBriefStatsForUsers(userIds = []) {
     };
   }
   return map;
+}
+
+export async function countPendingAnalystRoleSuggestions() {
+  const r = await pool.query(
+    `SELECT COUNT(DISTINCT rs.user_id)::int AS count
+     FROM tbl_analysis_role_suggestions rs
+     WHERE rs.suggested_role = 'analyst' AND rs.status = 'pending'
+       AND NOT EXISTS (
+         SELECT 1 FROM tbl_user_role_assignments ura
+         JOIN tbl_role_templates rt ON rt.id = ura.role_template_id
+         WHERE ura.user_id = rs.user_id AND ura.active = TRUE AND rt.code = 'analyst'
+       )`,
+  );
+  return r.rows[0]?.count || 0;
 }
 
 export async function listPendingRoleSuggestions() {

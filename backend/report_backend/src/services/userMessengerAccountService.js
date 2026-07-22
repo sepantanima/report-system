@@ -10,6 +10,16 @@ import {
   FIELD_RESOLVED_USER_ID_SQL,
   NEWS_SENDER_SOURCE_MARKER_NOT_EXISTS_SQL,
 } from "../utils/senderResolveSql.js";
+import {
+  instanceNewsAndSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
+import {
+  instanceNewsAndSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 function mapAccountRow(row) {
   if (!row) return null;
@@ -169,7 +179,7 @@ export async function getUnmappedSenders({ limit = 200 } = {}) {
     WHERE NULLIF(trim(bk.sender), '') IS NOT NULL
       AND (bk.is_deleted IS NOT TRUE OR bk.is_deleted IS NULL)
       AND ${RESOLVED_USER_ID_SQL} IS NULL
-      AND ${NEWS_SENDER_SOURCE_MARKER_NOT_EXISTS_SQL}
+      AND ${NEWS_SENDER_SOURCE_MARKER_NOT_EXISTS_SQL}${instanceNewsAndSql("bk")}
     GROUP BY trim(bk.sender), COALESCE(NULLIF(trim(bk.sender_platform), ''), 'bale')
     ORDER BY news_count DESC, sender
     LIMIT $1
@@ -180,10 +190,12 @@ export async function getUnmappedSenders({ limit = 200 } = {}) {
            COALESCE(NULLIF(trim(ev.sender_platform), ''), 'bale') AS platform,
            COUNT(*)::int AS report_count
     FROM tbl_unit_events ev
+    ${fieldReportTypeJoinSql("ev")}
     ${FIELD_SENDER_RESOLVE_JOINS}
     WHERE NULLIF(trim(ev.sender_name), '') IS NOT NULL
       AND (ev.is_deleted IS NOT TRUE OR ev.is_deleted IS NULL)
       AND ${FIELD_RESOLVED_USER_ID_SQL} IS NULL
+      ${fieldReportListScopeSql("ev", "rt_scope")}
     GROUP BY trim(ev.sender_name), COALESCE(NULLIF(trim(ev.sender_platform), ''), 'bale')
     ORDER BY report_count DESC, sender
     LIMIT $1
@@ -207,7 +219,7 @@ export async function resolveSenderPreview(sender, platform = "bale") {
      FROM tbl_news bk
      ${SENDER_RESOLVE_JOINS}
      WHERE lower(trim(bk.sender)) = lower(trim($1))
-       AND COALESCE(NULLIF(trim(bk.sender_platform), ''), 'bale') = $2
+       AND COALESCE(NULLIF(trim(bk.sender_platform), ''), 'bale') = $2${instanceNewsAndSql("bk")}
      LIMIT 5`,
     [sender, platform],
   );

@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import pool from "../db.js";
 import { resolvePeriod, periodKindLabelFa } from "../utils/managementPeriod.js";
+import {
+  fieldEventsScopedFrom,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 export const SUMMARY_TYPES = new Set(["provincial", "special", "general"]);
 
@@ -217,10 +222,11 @@ export async function fetchReportsForFilters(f) {
            e.classification, e.unitcd,
            COALESCE(NULLIF(TRIM(u."Name"), ''), u."UnitShortName") AS "UnitName",
            COALESCE(u."StateName", e.province) AS "StateName"
-    FROM tbl_unit_events e
+    FROM ${fieldEventsScopedFrom("e")} 
     LEFT JOIN tbl_units u ON e.unitcd = u."UnitCode"
     WHERE e.date BETWEEN $1 AND $2
       AND (e.is_deleted = false OR e.is_deleted IS NULL)
+      ${fieldReportListScopeSql("e", "rt_scope")}
   `;
   if (f.provinces.length) {
     params.push(f.provinces);
@@ -517,8 +523,10 @@ export async function getSummaryById(id) {
             COALESCE(u."StateName", e.province) AS "StateName"
      FROM tbl_field_mgmt_summary_report_refs r
      LEFT JOIN tbl_unit_events e ON e.hash_key = r.hash_key
+     ${fieldReportTypeJoinSql("e")}
      LEFT JOIN tbl_units u ON e.unitcd = u."UnitCode"
      WHERE r.summary_id = $1
+       AND (e.id IS NULL OR (1=1 ${fieldReportListScopeSql("e", "rt_scope")}))
      ORDER BY e.date DESC NULLS LAST, e.time DESC NULLS LAST`,
     [id],
   );

@@ -13,6 +13,8 @@ import {
   analysisTypeLabelFa,
 } from "../constants/newsSmartAnalysisMeta.js";
 import { getPackById } from "./newsSmartAnalysisPackService.js";
+import { newSyncIdentity, syncIdentityInsertColumns, syncIdentityInsertValues } from "./syncIdentityService.js";
+import { instanceEntityAndSql } from "./instanceScopeService.js";
 import {
   resolveNewsSmartAnalysisAssembly,
   buildAutoAnalysisTitle,
@@ -228,8 +230,8 @@ export async function saveSmartAnalysis(body = {}, userId) {
     `INSERT INTO tbl_news_smart_analyses (
        title, analysis_type, body_html, body_plain, query_payload, selected_ids,
        news_count, period_from, period_to, filter_signature,
-       ai_prompt_key, created_by
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ai_prompt_key, created_by, ${syncIdentityInsertColumns().join(", ")}
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING *`,
     [
       title, analysisType, bodyHtml, bodyPlain,
@@ -237,6 +239,7 @@ export async function saveSmartAnalysis(body = {}, userId) {
       periodFrom, periodTo, filterSignature,
       body.ai_prompt_key || null,
       userId ?? null,
+      ...syncIdentityInsertValues(newSyncIdentity()),
     ],
   );
   return mapRow(ins.rows[0]);
@@ -247,7 +250,7 @@ export async function getSmartAnalysis(id) {
     `SELECT s.*, u.name AS creator_name
      FROM tbl_news_smart_analyses s
      LEFT JOIN tbl_users u ON u.id = s.created_by
-     WHERE s.id = $1`,
+     WHERE s.id = $1${instanceEntityAndSql("s")}`,
     [id],
   );
   return mapRow(r.rows[0]);
@@ -259,6 +262,7 @@ export async function listSmartAnalyses(query = {}) {
   const offset = (page - 1) * pageSize;
   const params = [];
   let where = " WHERE 1=1";
+  where += instanceEntityAndSql("s");
 
   const q = String(query.q || "").trim();
   if (q) {
@@ -297,7 +301,7 @@ export async function listSmartAnalyses(query = {}) {
 
 export async function deleteSmartAnalysis(id) {
   const r = await pool.query(
-    `DELETE FROM tbl_news_smart_analyses WHERE id = $1 RETURNING id`,
+    `DELETE FROM tbl_news_smart_analyses WHERE id = $1${instanceEntityAndSql("tbl_news_smart_analyses")} RETURNING id`,
     [id],
   );
   if (!r.rows.length) throw new Error("تحلیل یافت نشد");

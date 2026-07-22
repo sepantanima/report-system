@@ -22,6 +22,7 @@ import { findNewsDuplicateParentInScope } from "./duplicateCheckService.js";
 import { executeFormAiAction } from "./aiFormRunOrchestrator.js";
 import { NEWS_FIELD_LIMITS } from "../constants/newsFieldLimits.js";
 import { buildAiRunHttpError } from "../utils/aiErrorDiagnostics.js";
+import { instanceNewsSql } from "./instanceScopeService.js";
 
 const EDITORIAL_FORM = "news_editorial_batch";
 const EDITORIAL_ACTION = "run_editorial";
@@ -215,7 +216,10 @@ async function runEditorialScopedDedup(rows, userId, runId, query, settings) {
       );
       if (!match) continue;
 
-      const childRes = await client.query(`SELECT * FROM tbl_news WHERE id = $1 FOR UPDATE`, [rowId]);
+      const childRes = await client.query(
+        `SELECT * FROM tbl_news WHERE id = $1 AND ${instanceNewsSql("tbl_news")} FOR UPDATE`,
+        [rowId],
+      );
       const child = childRes.rows[0];
       if (!child || child.is_deleted) continue;
       if (normalizeDbEnum(child.duplicate_status) === "confirmed") continue;
@@ -346,7 +350,10 @@ async function applyEditorialUpdate(client, update, codeToId, userId, runId, sum
   const newsId = resolveEditorialNewsId(update?.id, chunkRows);
   if (!Number.isFinite(newsId)) return { ok: false, reason: "invalid_id" };
 
-  const beforeRes = await client.query(`SELECT * FROM tbl_news WHERE id = $1 FOR UPDATE`, [newsId]);
+  const beforeRes = await client.query(
+    `SELECT * FROM tbl_news WHERE id = $1 AND ${instanceNewsSql("tbl_news")} FOR UPDATE`,
+    [newsId],
+  );
   const before = beforeRes.rows[0];
   if (!before || before.is_deleted) return { ok: false, reason: "not_found" };
   const edState = normalizeDbEnum(before.editorial_state);
@@ -598,7 +605,10 @@ export async function restoreRelevanceBulk(newsIds, userId = null) {
   try {
     await client.query("BEGIN");
     for (const newsId of ids) {
-      const beforeRes = await client.query(`SELECT * FROM tbl_news WHERE id = $1 FOR UPDATE`, [newsId]);
+      const beforeRes = await client.query(
+        `SELECT * FROM tbl_news WHERE id = $1 AND ${instanceNewsSql("tbl_news")} FOR UPDATE`,
+        [newsId],
+      );
       const before = beforeRes.rows[0];
       if (!before) continue;
       const upd = await client.query(

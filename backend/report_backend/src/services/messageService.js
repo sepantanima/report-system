@@ -12,6 +12,11 @@ import {
   getMessengerPublishStatus,
   publishAlertToChannels,
 } from "./messageMessengerPublishService.js";
+import {
+  instanceNewsAndSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 const MANAGER_ROLES = ["admin", "Field_admin", "news_chief"];
 
@@ -58,8 +63,10 @@ async function attachEntityRefs(rows) {
   if (fieldKeys.size) {
     const r = await pool.query(
       `SELECT hash_key, title, chat_title, date
-       FROM tbl_unit_events
-       WHERE hash_key = ANY($1)`,
+       FROM tbl_unit_events e
+       ${fieldReportTypeJoinSql("e")}
+       WHERE hash_key = ANY($1)
+         ${fieldReportListScopeSql("e", "rt_scope")}`,
       [[...fieldKeys]],
     );
     for (const e of r.rows) {
@@ -76,7 +83,7 @@ async function attachEntityRefs(rows) {
   }
   if (newsIds.size) {
     const r = await pool.query(
-      `SELECT id, title FROM tbl_news WHERE id = ANY($1)`,
+      `SELECT id, title FROM tbl_news WHERE id = ANY($1)${instanceNewsAndSql("tbl_news")}`,
       [[...newsIds]],
     );
     for (const n of r.rows) {

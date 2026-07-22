@@ -35,6 +35,18 @@ export const FORM_PAGE_CSS = `
     gap: 8px;
     flex-wrap: nowrap;
   }
+  .page-font-root--fill > .form-page-header {
+    width: 100%;
+    min-width: 0;
+    align-self: stretch;
+    box-sizing: border-box;
+  }
+  .page-font-root--fill > main {
+    width: 100%;
+    min-width: 0;
+    align-self: stretch;
+    box-sizing: border-box;
+  }
   .form-page-header-title {
     overflow: hidden;
   }
@@ -97,8 +109,12 @@ export const FORM_PAGE_CSS = `
   }
   .form-page-btn-secondary {
     background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: inherit;
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #e2e8f0;
+  }
+  .form-page-btn-secondary:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.22);
   }
   body.light .form-page-btn-secondary {
     background: #f1f5f9;
@@ -109,6 +125,38 @@ export const FORM_PAGE_CSS = `
     background: #0ea5e9;
     border: none;
     color: #fff;
+  }
+  .form-page-btn-primary:disabled,
+  .form-page-btn-secondary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .page-font-root .v3-tab-btn {
+    color: #cbd5e1;
+    background: rgba(255,255,255,0.04);
+  }
+  .page-font-root .v3-tab-btn:hover:not(.active) {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.16);
+  }
+  body.light .page-font-root .v3-tab-btn {
+    color: #475569;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+  }
+  body.light .page-font-root .v3-tab-btn:hover:not(.active) {
+    background: #f1f5f9;
+  }
+  .page-font-root .v3-tab-btn.active {
+    background: rgba(56,189,248,0.18);
+    color: #38bdf8;
+    border-color: rgba(56,189,248,0.45);
+  }
+  body.light .page-font-root .v3-tab-btn.active {
+    background: rgba(14,165,233,0.12);
+    color: #0284c7;
+    border-color: rgba(14,165,233,0.35);
   }
 
   .form-page-filter-row {
@@ -165,6 +213,12 @@ export const FORM_PAGE_CSS = `
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.12);
+  }
+  body.light .form-page-table-wrap {
+    border-color: #e2e8f0;
+    background: #fff;
   }
   .form-page-table {
     width: 100%;
@@ -177,6 +231,37 @@ export const FORM_PAGE_CSS = `
     padding: 8px 10px;
     text-align: right;
     vertical-align: top;
+    color: inherit;
+  }
+  .form-page-table thead th {
+    background: rgba(255,255,255,0.06);
+    color: #94a3b8;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    white-space: nowrap;
+  }
+  body.light .form-page-table thead th {
+    background: #f1f5f9;
+    color: #475569;
+    border-bottom-color: #e2e8f0;
+  }
+  .form-page-table tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  body.light .form-page-table tbody tr {
+    border-bottom-color: #f1f5f9;
+  }
+  .form-page-table tbody tr:hover {
+    background: rgba(255,255,255,0.03);
+  }
+  body.light .form-page-table tbody tr:hover {
+    background: #f8fafc;
+  }
+  .form-page-table tbody td {
+    color: #e2e8f0;
+  }
+  body.light .form-page-table tbody td {
+    color: #334155;
   }
   .form-page-table .col-narrow { width: 56px; white-space: nowrap; }
   .form-page-table .col-short { min-width: 72px; white-space: nowrap; }

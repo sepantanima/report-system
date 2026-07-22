@@ -2,6 +2,11 @@
  * فاز ۳: فعالیت کاربران، عملکرد AI، Drill Down
  */
 import pool from "../db.js";
+import {
+  instanceNewsSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 async function safeCount(sql, params = []) {
   try {
@@ -51,14 +56,18 @@ export async function buildUsersLeaderboard(range) {
     LEFT JOIN tbl_units un ON un."UnitCode" = u.unit_cd
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS cnt FROM tbl_news_audit_log a
+      JOIN tbl_news n ON n.id = a.news_id
       WHERE a.user_id = u.id
         AND a.created_at::date >= $1::date AND a.created_at::date <= $2::date
+        AND ${instanceNewsSql("n")}
     ) na ON true
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS cnt FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
       WHERE e.sender_id = u.id::text
         AND e."createdAt"::date >= $1::date AND e."createdAt"::date <= $2::date
         AND (e.is_deleted = false OR e.is_deleted IS NULL)
+        ${fieldReportListScopeSql("e", "rt_scope")}
     ) fe ON true
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS cnt FROM tbl_analysis_assignments aa
@@ -199,17 +208,21 @@ export async function getUnitDrilldown(unitId, range) {
       [uid],
     ),
     safeCount(
-      `SELECT COUNT(*)::int AS c FROM tbl_unit_events
-       WHERE unitcd::text = $1
-         AND "createdAt"::date >= $2::date AND "createdAt"::date <= $3::date
-         AND (is_deleted = false OR is_deleted IS NULL)`,
+      `SELECT COUNT(*)::int AS c FROM tbl_unit_events e
+       ${fieldReportTypeJoinSql("e")}
+       WHERE e.unitcd::text = $1
+         AND e."createdAt"::date >= $2::date AND e."createdAt"::date <= $3::date
+         AND (e.is_deleted = false OR e.is_deleted IS NULL)
+         ${fieldReportListScopeSql("e", "rt_scope")}`,
       [uid, from, to],
     ),
     safeCount(
       `SELECT COUNT(*)::int AS c FROM tbl_news_audit_log a
        JOIN tbl_users u ON u.id = a.user_id
+       JOIN tbl_news n ON n.id = a.news_id
        WHERE u.unit_cd::text = $1
-         AND a.created_at::date >= $2::date AND a.created_at::date <= $3::date`,
+         AND a.created_at::date >= $2::date AND a.created_at::date <= $3::date
+         AND ${instanceNewsSql("n")}`,
       [uid, from, to],
     ),
     safeCount(
@@ -272,15 +285,19 @@ export async function getUserDrilldown(userId, range) {
 
   const [newsActions, fieldReports, analyses, recent] = await Promise.all([
     safeCount(
-      `SELECT COUNT(*)::int AS c FROM tbl_news_audit_log
-       WHERE user_id = $1 AND created_at::date >= $2::date AND created_at::date <= $3::date`,
+      `SELECT COUNT(*)::int AS c FROM tbl_news_audit_log a
+       JOIN tbl_news n ON n.id = a.news_id
+       WHERE a.user_id = $1 AND a.created_at::date >= $2::date AND a.created_at::date <= $3::date
+         AND ${instanceNewsSql("n")}`,
       [id, from, to],
     ),
     safeCount(
-      `SELECT COUNT(*)::int AS c FROM tbl_unit_events
-       WHERE sender_id = $1::text
-         AND "createdAt"::date >= $2::date AND "createdAt"::date <= $3::date
-         AND (is_deleted = false OR is_deleted IS NULL)`,
+      `SELECT COUNT(*)::int AS c FROM tbl_unit_events e
+       ${fieldReportTypeJoinSql("e")}
+       WHERE e.sender_id = $1::text
+         AND e."createdAt"::date >= $2::date AND e."createdAt"::date <= $3::date
+         AND (e.is_deleted = false OR e.is_deleted IS NULL)
+         ${fieldReportListScopeSql("e", "rt_scope")}`,
       [id, from, to],
     ),
     safeCount(
@@ -293,7 +310,9 @@ export async function getUserDrilldown(userId, range) {
     safeRows(
       `SELECT 'news_audit' AS kind, a.created_at, a.action AS detail
        FROM tbl_news_audit_log a
+       JOIN tbl_news n ON n.id = a.news_id
        WHERE a.user_id = $1 AND a.created_at::date >= $2::date AND a.created_at::date <= $3::date
+         AND ${instanceNewsSql("n")}
        ORDER BY a.created_at DESC LIMIT 15`,
       [id, from, to],
     ),

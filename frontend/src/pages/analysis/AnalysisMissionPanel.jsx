@@ -308,7 +308,22 @@ export default function AnalysisMissionPanel() {
     try {
       const updated = await analysisService.approveBriefBank(selectedBrief.id, payload);
       setSelectedBrief(updated);
-      showToast("در بانک تحلیل ذخیره شد");
+      showToast(payload?.show_in_command ? "در بانک ذخیره و برای اتاق فرمان انتخاب شد" : "در بانک تحلیل ذخیره شد");
+      loadData();
+    } catch (err) {
+      showToast(err.response?.data?.error || "خطا");
+    } finally {
+      setBriefActionLoading(false);
+    }
+  };
+
+  const handleToggleCommandVisibility = async (visible) => {
+    if (!selectedBrief) return;
+    setBriefActionLoading(true);
+    try {
+      const updated = await analysisService.setBriefCommandVisibility(selectedBrief.id, visible);
+      setSelectedBrief(updated);
+      showToast(visible ? "برای اتاق فرمان نمایش داده می‌شود" : "از نمایش اتاق فرمان حذف شد");
       loadData();
     } catch (err) {
       showToast(err.response?.data?.error || "خطا");
@@ -796,6 +811,7 @@ export default function AnalysisMissionPanel() {
                 onPromoteMission={handlePromoteMission}
                 onSuggestAnalyst={handleSuggestAnalyst}
                 onQualityTag={handleBriefQuality}
+                onToggleCommandVisibility={handleToggleCommandVisibility}
               />
             </div>
           </div>

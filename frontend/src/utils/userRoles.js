@@ -2,6 +2,8 @@
 
 export const ROLE_LABELS = {
   admin: "مدیر کل",
+  system_admin: "مدیر کل",
+  tech_admin: "مدیر فنی",
   analysis_manager: "مدیر تحلیل",
   analyst: "تحلیل‌گر",
   mentor: "راهنما",
@@ -14,12 +16,15 @@ export const ROLE_LABELS = {
   user: "کاربر واحد",
   strategy_viewer: "ناظر راهبردی",
   strategy_commander: "فرمانده راهبردی",
+  strategy_analysis_manager: "مدیر تحلیل راهبردی",
 };
 
 /** نگاشت برچسب فارسی یا نام‌های قدیمی به شناسه انگلیسی */
 const ROLE_ALIASES = {
   "مدیر کل": "admin",
   "مدیر کل سیستم": "admin",
+  system_admin: "system_admin",
+  tech_admin: "tech_admin",
   "مدیر تحلیل": "analysis_manager",
   "مدیر تحلیل / سردبیر": "analysis_manager",
   "تحلیل‌گر": "analyst",
@@ -41,12 +46,34 @@ const ROLE_ALIASES = {
   "کاربر واحد (ثبت گزارش)": "user",
   "ناظر راهبردی": "strategy_viewer",
   "فرمانده راهبردی": "strategy_commander",
+  "مدیر تحلیل راهبردی": "strategy_analysis_manager",
 };
 
 export const ROLE_PERMISSIONS = {
-  admin: [
+  system_admin: [
     "create_report", "manage_users", "monitor_reports", "news_entry", "news_review",
     "news_finalize", "news_duplicates", "ai_process",
+    "search_reports", "sys_settings", "analytics",
+    "analysis_manage", "analysis_topic_approve", "analysis_missions", "analysis_propose", "analysis_review",
+    "analysis_brief_submit",
+    "manage_prompts", "manage_ai_api", "manage_messenger", "manage_news_reports", "field_mgmt_summary", "news_report",
+    "manage_field_entry_limits", "manage_news_entry_limits",
+    "messages", "manage_announcements", "manage_message_settings",
+    "manage_messenger_accounts",
+    "command_center", "command_live_news", "command_annotate", "command_kpi",
+    "command_outputs", "command_outputs_manage", "command_manage_prompts",
+    "sync.view", "sync.export", "sync.import", "sync.reconcile", "sync.briefing", "sync.force_reapply",
+    "rbac.manage",
+  ],
+  tech_admin: [
+    "manage_prompts", "manage_ai_api", "manage_messenger", "manage_messenger_accounts",
+    "manage_news_reports", "manage_field_entry_limits", "manage_news_entry_limits",
+    "manage_message_settings", "sys_settings", "messages",
+    "command_manage_prompts", "command_outputs_manage",
+    "sync.view", "sync.export", "sync.import", "sync.reconcile", "sync.briefing", "sync.force_reapply",
+  ],
+  admin: [
+    "create_report", "manage_users", "monitor_reports", "news_entry", "news_review",
     "search_reports", "sys_settings", "analytics",
     "analysis_manage", "analysis_topic_approve", "analysis_missions", "analysis_propose", "analysis_review",
     "analysis_brief_submit",
@@ -62,6 +89,11 @@ export const ROLE_PERMISSIONS = {
   ],
   strategy_commander: [
     "command_center", "command_live_news", "command_annotate", "command_kpi",
+    "command_outputs",
+    "sys_settings", "messages",
+  ],
+  strategy_analysis_manager: [
+    "command_center", "command_live_news", "command_kpi",
     "command_outputs", "command_outputs_manage", "command_manage_prompts",
     "sys_settings", "messages",
   ],
@@ -81,7 +113,16 @@ export const ROLE_PERMISSIONS = {
     "field_mgmt_summary", "manage_field_entry_limits", "messages", "manage_announcements", "manage_message_settings",
     "manage_messenger_accounts",
   ],
-  user: ["create_report", "sys_settings", "analytics", "analysis_brief_submit", "messages"],
+  user: [
+    "create_report",
+    "monitor_reports",
+    "news_entry",
+    "analysis_brief_submit",
+    "analysis_propose",
+    "sys_settings",
+    "analytics",
+    "messages",
+  ],
 };
 
 export function decodeToken(token) {
@@ -166,15 +207,35 @@ export function getRoleLabelFa(roleKey) {
   return ROLE_LABELS[key] || roleKey || "نقش نامشخص";
 }
 
+export function getStoredPermissions() {
+  try {
+    const raw = localStorage.getItem("permissions");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getPermissionsForRoles(roles) {
+  const stored = getStoredPermissions();
+  if (stored?.length) return new Set(stored);
   const perms = new Set();
   normalizeRoles(roles).forEach((role) => {
-    (ROLE_PERMISSIONS[role] || []).forEach((p) => perms.add(p));
+    const key = role === "admin" ? "system_admin" : role;
+    (ROLE_PERMISSIONS[key] || ROLE_PERMISSIONS[role] || []).forEach((p) => perms.add(p));
   });
   return perms;
 }
 
 export function hasPermission(roles, permission) {
+  const stored = getStoredPermissions();
+  if (stored?.length) {
+    const set = new Set(stored);
+    if (set.has("rbac.manage")) return true;
+    return set.has(permission);
+  }
   return getPermissionsForRoles(roles).has(permission);
 }
 

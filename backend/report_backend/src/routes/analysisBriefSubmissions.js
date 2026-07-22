@@ -9,6 +9,7 @@ import {
   getBriefSubmission,
   updateBriefStatus,
   approveBriefBank,
+  setBriefCommandVisibility,
   approveBriefForPublish,
   publishBriefSubmission,
   editBriefBankContent,
@@ -125,6 +126,22 @@ router.post("/:id/approve-bank", requireRole(...BRIEF_MANAGER_ROLES), async (req
     res.json(row);
   } catch (err) {
     if (err.message === "NOT_FOUND") return res.status(404).json({ error: "یافت نشد" });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch("/:id/command-visibility", requireRole(...BRIEF_MANAGER_ROLES), async (req, res) => {
+  try {
+    const row = await setBriefCommandVisibility(
+      req.params.id,
+      req.body?.show_in_command === true,
+      req.user,
+    );
+    res.json(row);
+  } catch (err) {
+    if (err.message === "NOT_FOUND_OR_NOT_IN_BANK") {
+      return res.status(400).json({ error: "فقط تحلیل‌های ذخیره‌شده در بانک قابل نمایش در اتاق فرمان هستند" });
+    }
     res.status(400).json({ error: err.message });
   }
 });

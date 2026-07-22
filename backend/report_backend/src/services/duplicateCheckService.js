@@ -6,6 +6,11 @@ import { DuplicateCheckError } from "../utils/duplicateCheckErrors.js";
 import { getScopeDateRange, clampThreshold } from "../utils/duplicateCheckScope.js";
 import { getNewsEntrySettings } from "./newsEntrySettingsService.js";
 import { getFieldReportSettings } from "./fieldReportSettingsService.js";
+import {
+  appendInstanceNewsFilter,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 const MAX_SIMILAR_RESULTS = 5;
 const MAX_CANDIDATES = 150;
@@ -54,14 +59,17 @@ export async function checkNewsSimilarity(config, opts) {
     excludeClause = ` AND id <> $${exactParams.length}`;
   }
 
+  let exactWhere = ` WHERE hash_key = $1
+       AND COALESCE(is_deleted, false) = false
+       AND relay_date_jalali >= $2 AND relay_date_jalali <= $3
+       ${excludeClause}`;
+  ({ where: exactWhere, params: exactParams } = appendInstanceNewsFilter(exactWhere, exactParams, "tbl_news"));
+
   const exactRes = await pool.query(
     `SELECT id, source, relay_date_jalali, observer_username, observer_first_name,
             left(COALESCE(cleaned_text, raw_text, ''), 120) AS preview, hash_key
      FROM tbl_news
-     WHERE hash_key = $1
-       AND COALESCE(is_deleted, false) = false
-       AND relay_date_jalali >= $2 AND relay_date_jalali <= $3
-       ${excludeClause}`,
+     ${exactWhere}`,
     exactParams,
   );
 
@@ -78,16 +86,19 @@ export async function checkNewsSimilarity(config, opts) {
     candExclude = ` AND id <> $${candParams.length}`;
   }
 
+  let candWhere = ` WHERE COALESCE(is_deleted, false) = false
+       AND relay_date_jalali >= $1 AND relay_date_jalali <= $2
+       AND (hash_key IS NULL OR hash_key <> $3)
+       AND COALESCE(duplicate_status, 'none') <> 'confirmed'
+       ${candExclude}`;
+  ({ where: candWhere, params: candParams } = appendInstanceNewsFilter(candWhere, candParams, "tbl_news"));
+
   const candRes = await pool.query(
     `SELECT id, source, relay_date_jalali, observer_username, observer_first_name,
             raw_text, cleaned_text, hash_key,
             left(COALESCE(cleaned_text, raw_text, ''), 120) AS preview
      FROM tbl_news
-     WHERE COALESCE(is_deleted, false) = false
-       AND relay_date_jalali >= $1 AND relay_date_jalali <= $2
-       AND (hash_key IS NULL OR hash_key <> $3)
-       AND COALESCE(duplicate_status, 'none') <> 'confirmed'
-       ${candExclude}
+     ${candWhere}
      ORDER BY created_at DESC
      LIMIT ${MAX_CANDIDATES}`,
     candParams,
@@ -133,9 +144,11 @@ export async function checkFieldReportSimilarity(config, opts) {
     `SELECT hash_key, title, raw_text, date, sender_name,
             left(COALESCE(title, '') || ' — ' || COALESCE(raw_text, ''), 120) AS preview
      FROM tbl_unit_events
+     ${fieldReportTypeJoinSql("tbl_unit_events")}
      WHERE (is_deleted = false OR is_deleted IS NULL)
        AND date >= $1 AND date <= $2
        ${excludeClause}
+       ${fieldReportListScopeSql("tbl_unit_events", "rt_scope")}
      ORDER BY "createdAt" DESC
      LIMIT ${MAX_CANDIDATES}`,
     params,
@@ -278,14 +291,17 @@ export async function findEditorialDuplicateMatches(row, config, opts = {}) {
   const { start, end } = getScopeDateRange(config.scope, referenceDate);
 
   const exactParams = [hashKey, start, end, excludeArr];
-  const exactRes = await pool.query(
-    `SELECT *
-     FROM tbl_news
-     WHERE hash_key = $1
+  let exactWhere = ` WHERE hash_key = $1
        AND COALESCE(is_deleted, false) = false
        AND relay_date_jalali >= $2 AND relay_date_jalali <= $3
        AND id <> ALL($4::int[])
-       AND COALESCE(duplicate_status, 'none') <> 'confirmed'`,
+       AND COALESCE(duplicate_status, 'none') <> 'confirmed'`;
+  ({ where: exactWhere, params: exactParams } = appendInstanceNewsFilter(exactWhere, exactParams, "tbl_news"));
+
+  const exactRes = await pool.query(
+    `SELECT *
+     FROM tbl_news
+     ${exactWhere}`,
     exactParams,
   );
 
@@ -298,14 +314,17 @@ export async function findEditorialDuplicateMatches(row, config, opts = {}) {
   }
 
   const candParams = [start, end, hashKey, excludeArr];
-  const candRes = await pool.query(
-    `SELECT *
-     FROM tbl_news
-     WHERE COALESCE(is_deleted, false) = false
+  let candWhere = ` WHERE COALESCE(is_deleted, false) = false
        AND relay_date_jalali >= $1 AND relay_date_jalali <= $2
        AND (hash_key IS NULL OR hash_key <> $3)
        AND COALESCE(duplicate_status, 'none') <> 'confirmed'
-       AND id <> ALL($4::int[])
+       AND id <> ALL($4::int[])`;
+  ({ where: candWhere, params: candParams } = appendInstanceNewsFilter(candWhere, candParams, "tbl_news"));
+
+  const candRes = await pool.query(
+    `SELECT *
+     FROM tbl_news
+     ${candWhere}
      ORDER BY created_at DESC
      LIMIT ${MAX_CANDIDATES}`,
     candParams,

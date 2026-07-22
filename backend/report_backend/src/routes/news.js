@@ -1,7 +1,7 @@
 import express from "express";
 import pool from "../db.js";
 import auth from "../middleware/auth.js";
-import requireRole from "../middleware/requireRole.js";
+import requirePermission from "../middleware/requirePermission.js";
 import {
   listNewsMonitor,
   getSummaryStats,
@@ -47,13 +47,23 @@ import {
   getEditorialRun,
   restoreRelevanceBulk,
 } from "../services/newsEditorialService.js";
+import { appendInstanceNewsFilter } from "../services/instanceScopeService.js";
 
 const router = express.Router();
 
-const newsMonitor = requireRole("admin", "news_monitor", "news_editor", "news_chief");
-const newsEditor = requireRole("admin", "news_editor", "news_chief");
-const newsChief = requireRole("admin", "news_chief");
-const newsEntry = requireRole("admin", "news_monitor");
+const newsMonitor = requirePermission(null, {
+  anyOf: ["news_entry", "news_review", "news_finalize", "news_duplicates", "ai_process", "analytics"],
+  legacyRoles: ["admin", "news_monitor", "news_editor", "news_chief"],
+});
+const newsEditor = requirePermission(null, {
+  anyOf: ["news_review", "news_duplicates", "ai_process"],
+  legacyRoles: ["admin", "news_editor", "news_chief"],
+});
+const newsChief = requirePermission(null, {
+  anyOf: ["news_finalize"],
+  legacyRoles: ["admin", "news_chief"],
+});
+const newsEntry = requirePermission("news_entry", { legacyRoles: ["admin", "news_monitor", "user"] });
 
 router.use("/analytics", newsAnalyticsRoutes);
 router.use("/reports", newsReportRoutes);
@@ -64,26 +74,28 @@ router.use(newsSmartAnalysisRoutes);
 router.get("/", async (req, res) => {
   const { date, source, approval_filter } = req.query;
   try {
-    let query = `SELECT * FROM tbl_news WHERE 1=1`;
+    let where = " WHERE 1=1";
     const params = [];
 
     if (date) {
       params.push(date);
-      query += ` AND source_date_jalali = $${params.length}`;
+      where += ` AND source_date_jalali = $${params.length}`;
     }
     if (source && source !== "all") {
       params.push(source);
-      query += ` AND source = $${params.length}`;
+      where += ` AND source = $${params.length}`;
     }
     if (approval_filter && approval_filter !== "all") {
       let val = 0;
       if (approval_filter === "approved") val = 1;
       if (approval_filter === "rejected") val = 2;
       params.push(val);
-      query += ` AND is_approved = $${params.length}`;
+      where += ` AND is_approved = $${params.length}`;
     }
 
-    query += ` ORDER BY source_time_hm DESC`;
+    ({ where, params } = appendInstanceNewsFilter(where, params, "tbl_news"));
+
+    const query = `SELECT * FROM tbl_news${where} ORDER BY source_time_hm DESC`;
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {

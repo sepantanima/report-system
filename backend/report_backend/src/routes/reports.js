@@ -9,7 +9,7 @@ import {
 } from "../controllers/reportController.js";
 
 import auth from "../middleware/auth.js";
-import requireRole from "../middleware/requireRole.js";
+import requirePermission from "../middleware/requirePermission.js";
 import managementSummaryRoutes from "./managementSummaryRoutes.js";
 import { executeFormAiAction } from "../services/aiFormRunOrchestrator.js";
 import { buildAiRunHttpError } from "../utils/aiErrorDiagnostics.js";
@@ -23,10 +23,20 @@ import {
 import { assertFieldReportDuplicateAllowed } from "../services/duplicateCheckService.js";
 import { isDuplicateCheckError, sendDuplicateCheckResponse } from "../utils/duplicateCheckErrors.js";
 import { nowJalaliDate } from "../services/newsTextUtils.js";
+import { newSyncIdentity, syncIdentityInsertColumns, syncIdentityInsertValues } from "../services/syncIdentityService.js";
+import {
+  fieldReportOriginScopeSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+  reportTypesListWhereSql,
+} from "../services/instanceScopeService.js";
 
 const router = Router();
 
-const fieldMgmtAiRoles = requireRole("admin", "Field_admin");
+const fieldMgmtAiRoles = requirePermission(null, {
+  anyOf: ["field_mgmt_summary", "manage_field_entry_limits", "create_report"],
+  legacyRoles: ["admin", "Field_admin"],
+});
 
 // تابع کمکی برای فرمت لاگ زمانی شمسی در مسیرها
 const getPersianDateTimeLog = () => {
@@ -91,7 +101,7 @@ const mapClassificationToFa = (cNum) => {
 router.get("/types", auth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, title_fa, type_code FROM tbl_report_types ORDER BY id ASC",
+      `SELECT id, title_fa, type_code FROM tbl_report_types${reportTypesListWhereSql()} ORDER BY id ASC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -108,6 +118,7 @@ router.get("/by-topic", auth, async (req, res) => {
       SELECT title, raw_text, date, time 
       FROM tbl_unit_events 
       WHERE chat_title = $1 AND sender_id = $2 AND unitcd = $3 
+      ${fieldReportOriginScopeSql("tbl_unit_events")}
       ORDER BY id DESC LIMIT 3
     `;
     const result = await pool.query(query, [topic, id.toString(), unitcd || 0]);
@@ -131,6 +142,7 @@ router.get("/by-date", auth, async (req, res) => {
              priority, classification
       FROM tbl_unit_events 
       WHERE date = $1 AND sender_id = $2 AND unitcd = $3 AND (is_deleted = false OR is_deleted IS NULL)
+      ${fieldReportOriginScopeSql("tbl_unit_events")}
       ORDER BY id ASC
     `;
     
@@ -178,6 +190,7 @@ router.get("/rejected-list", auth, async (req, res) => {
              priority, classification
       FROM tbl_unit_events 
       WHERE sender_id = $1 AND unitcd = $2 AND state = 'rejected' AND (is_deleted = false OR is_deleted IS NULL)
+      ${fieldReportOriginScopeSql("tbl_unit_events")}
       ORDER BY id DESC
     `;
     
@@ -203,6 +216,7 @@ router.get("/rejected-count", auth, async (req, res) => {
       SELECT COUNT(*)::int as count 
       FROM tbl_unit_events 
       WHERE sender_id = $1 AND unitcd = $2 AND state = 'rejected' AND (is_deleted = false OR is_deleted IS NULL)
+      ${fieldReportOriginScopeSql("tbl_unit_events")}
     `;
     const result = await pool.query(query, [id.toString(), unitcd || 0]);
     res.json(result.rows[0]);
@@ -232,15 +246,17 @@ router.post("/", auth, async (req, res) => {
       now.getHours().toString() + now.getMinutes().toString().padStart(2, "0"),
     );
     const hash_key = "K-" + Math.random().toString(36).substring(2, 10);
+    const syncIdentity = newSyncIdentity();
 
     const query = `
       INSERT INTO tbl_unit_events (
         unitcd, chat_title, raw_text, title, 
         date, time, news_ts, sender_id, sender_name, 
         province, hash_key, priority, source, 
-        message_type, state, classification, "createdAt"
+        message_type, state, classification, "createdAt",
+        ${syncIdentityInsertColumns().join(", ")}
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, CURRENT_TIMESTAMP, $17, $18, $19, $20)
     `;
 
     const values = [
@@ -260,6 +276,7 @@ router.post("/", auth, async (req, res) => {
       message_type, 
       "pending",
       parseClassification(classification), // دامنه‌ی انتشار گزارش (عمومی/استانی/واحد/خاص)
+      ...syncIdentityInsertValues(syncIdentity),
     ];
 
     await pool.query(query, values);
@@ -280,7 +297,11 @@ router.put("/update/:hash_key", auth, async (req, res) => {
   const { id } = req.user;
 
   try {
-    const checkQuery = `SELECT state, workflow_logs FROM tbl_unit_events WHERE hash_key = $1 AND sender_id = $2 AND (is_deleted = false OR is_deleted IS NULL)`;
+    const checkQuery = `
+      SELECT state, workflow_logs FROM tbl_unit_events
+      WHERE hash_key = $1 AND sender_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+      ${fieldReportOriginScopeSql("tbl_unit_events")}
+    `;
     const result = await pool.query(checkQuery, [hash_key, id.toString()]);
 
     if (result.rows.length === 0) return res.status(404).json({ error: "گزارش یافت نشد" });
@@ -328,7 +349,11 @@ router.delete("/delete/:hash_key", auth, async (req, res) => {
   const { hash_key } = req.params;
   const { id } = req.user;
   try {
-    const checkQuery = `SELECT state FROM tbl_unit_events WHERE hash_key = $1 AND sender_id = $2 AND (is_deleted = false OR is_deleted IS NULL)`;
+    const checkQuery = `
+      SELECT state FROM tbl_unit_events
+      WHERE hash_key = $1 AND sender_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+      ${fieldReportOriginScopeSql("tbl_unit_events")}
+    `;
     const checkRes = await pool.query(checkQuery, [hash_key, id.toString()]);
 
     if (checkRes.rows.length === 0)
@@ -356,7 +381,12 @@ router.put("/admin/verify/:hash_key", auth, async (req, res) => {
   if (fieldErr) return res.status(400).json({ error: fieldErr });
 
   try {
-    const selectQuery = `SELECT workflow_logs FROM tbl_unit_events WHERE hash_key = $1`;
+    const selectQuery = `
+      SELECT e.workflow_logs FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
+      WHERE e.hash_key = $1
+        ${fieldReportListScopeSql("e", "rt_scope")}
+    `;
     const currentRes = await pool.query(selectQuery, [hash_key]);
     const oldComment = currentRes.rows[0]?.workflow_logs || "";
 
@@ -430,7 +460,9 @@ router.get("/admin/filters-data", auth, async (req, res) => {
       SELECT DISTINCT u."StateName", r.chat_title as "Topic", u."UnitCode", u."UnitShortName"
       FROM tbl_unit_events r
       LEFT JOIN tbl_units u ON r.unitcd = u."UnitCode"
+      ${fieldReportTypeJoinSql("r")}
       WHERE r.date BETWEEN $1 AND $2
+      ${fieldReportListScopeSql("r", "rt_scope")}
     `;
     const result = await pool.query(query, [startDate, endDate]);
     const states = [
@@ -452,7 +484,13 @@ router.get("/admin/filters-data", auth, async (req, res) => {
 
 router.get("/admin/provinces", auth, async (req, res) => {
   try {
-    const query = `SELECT DISTINCT u."StateName" FROM tbl_unit_events e JOIN tbl_units u ON e.unitcd = u."UnitCode" ORDER BY u."StateName"`;
+    const query = `SELECT DISTINCT u."StateName"
+      FROM tbl_unit_events e
+      JOIN tbl_units u ON e.unitcd = u."UnitCode"
+      ${fieldReportTypeJoinSql("e")}
+      WHERE 1=1
+      ${fieldReportListScopeSql("e", "rt_scope")}
+      ORDER BY u."StateName"`;
     const result = await pool.query(query);
     res.json(result.rows.map((row) => row.StateName).filter(Boolean));
   } catch (err) {
@@ -470,10 +508,12 @@ router.get("/admin/manager-notes-by-topic", auth, async (req, res) => {
     let query = `
       SELECT manager_notes, hash_key, "updatedAt", date, time
       FROM tbl_unit_events
+      ${fieldReportTypeJoinSql("tbl_unit_events")}
       WHERE chat_title = $1
         AND manager_notes IS NOT NULL
         AND TRIM(manager_notes) <> ''
         AND (is_deleted = false OR is_deleted IS NULL)
+        ${fieldReportListScopeSql("tbl_unit_events", "rt_scope")}
     `;
     if (excludeHash) {
       params.push(excludeHash);
@@ -516,7 +556,9 @@ router.get("/admin/monitor", auth, async (req, res) => {
     let query = `SELECT e.*, u."UnitShortName", u."StateName" 
                  FROM tbl_unit_events e 
                  LEFT JOIN tbl_units u ON e.unitcd = u."UnitCode" 
-                 WHERE 1=1`;
+                 ${fieldReportTypeJoinSql("e")}
+                 WHERE 1=1
+                 ${fieldReportListScopeSql("e", "rt_scope")}`;
     const params = [];
 
     if (startDate && endDate) {
@@ -604,7 +646,10 @@ router.get("/admin/summary-stats", auth, async (req, res) => {
     let query = `
       SELECT COUNT(*) as total_reports, COUNT(*) FILTER (WHERE state = 'verified') as verified_count,
       COUNT(*) FILTER (WHERE state = 'rejected') as rejected_count, ROUND(AVG(quality), 1) as avg_quality
-      FROM tbl_unit_events WHERE (is_deleted = false OR is_deleted IS NULL)
+      FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
+      WHERE (e.is_deleted = false OR e.is_deleted IS NULL)
+      ${fieldReportListScopeSql("e", "rt_scope")}
     `;
     const params = [];
     if (startDate && endDate) {

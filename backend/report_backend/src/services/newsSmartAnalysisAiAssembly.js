@@ -4,6 +4,7 @@ import { resolveReportPeriod, periodToQueryFilters } from "./newsReportPeriod.js
 import { fetchNewsReportRows, fetchNewsByIds } from "./newsReportQuery.js";
 import pool from "../db.js";
 import { analysisTypeLabelFa } from "../constants/newsSmartAnalysisMeta.js";
+import { instanceEntityAndSql } from "./instanceScopeService.js";
 
 const MAX_NEWS_ITEMS = 150;
 const MAX_DIGEST_CHARS = 80000;
@@ -74,7 +75,7 @@ export function computeQuerySignature(queryPayload = {}) {
 
 async function loadPackForAssembly(packId) {
   const r = await pool.query(
-    `SELECT * FROM tbl_news_smart_analysis_packs WHERE id = $1`,
+    `SELECT * FROM tbl_news_smart_analysis_packs WHERE id = $1${instanceEntityAndSql("tbl_news_smart_analysis_packs")}`,
     [packId],
   );
   return r.rows[0] || null;

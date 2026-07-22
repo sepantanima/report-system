@@ -24,7 +24,7 @@ export default function HelpModal({
       <style>{ANALYSIS_MONITOR_CSS}</style>
       <div
         className="v3-modal-box"
-        style={{ background: theme.card, border: `1px solid ${theme.border}`, maxWidth }}
+        style={{ background: theme.card, border: `1px solid ${theme.border}`, maxWidth, color: isDarkMode ? "#f1f5f9" : "#1e293b" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="v3-modal-header-new">

@@ -13,6 +13,8 @@ import {
   isCustomPromptAnalysisType,
 } from "../constants/newsSmartAnalysisMeta.js";
 import { hasAnyRole } from "../middleware/requireRole.js";
+import { newSyncIdentity, syncIdentityInsertColumns, syncIdentityInsertValues } from "./syncIdentityService.js";
+import { instanceEntityAndSql } from "./instanceScopeService.js";
 
 const ANALYSIS_TYPES = ["analyze_overview", "analyze_thematic", "analyze_trends", "analyze_risk"];
 const ALL_PACK_ANALYSIS_TYPES = [...ANALYSIS_TYPES, ...CUSTOM_PROMPT_SLOTS];
@@ -108,7 +110,7 @@ export async function getPackById(id) {
     `SELECT p.*, u.name AS creator_name
      FROM tbl_news_smart_analysis_packs p
      LEFT JOIN tbl_users u ON u.id = p.created_by
-     WHERE p.id = $1`,
+     WHERE p.id = $1${instanceEntityAndSql("p")}`,
     [packId],
   );
   if (!r.rows.length) return null;
@@ -122,6 +124,7 @@ export async function listPacks(query = {}) {
   const offset = (page - 1) * pageSize;
   const params = [];
   let where = " WHERE 1=1";
+  where += instanceEntityAndSql("p");
 
   const q = String(query.q || "").trim();
   if (q) {
@@ -197,8 +200,9 @@ export async function createAnalysisPack({ queryPayload, selectedIds = [], title
   const ins = await pool.query(
     `INSERT INTO tbl_news_smart_analysis_packs (
        title, query_payload, filter_signature, period_from, period_to,
-       selection_mode, news_ids, news_count, digest_hash, status, created_by
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10)
+       selection_mode, news_ids, news_count, digest_hash, status, created_by,
+       ${syncIdentityInsertColumns().join(", ")}
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10,$11,$12,$13,$14)
      RETURNING *`,
     [
       packTitle.slice(0, 500),
@@ -211,6 +215,7 @@ export async function createAnalysisPack({ queryPayload, selectedIds = [], title
       newsIds.length,
       digestHash,
       userId ?? null,
+      ...syncIdentityInsertValues(newSyncIdentity()),
     ],
   );
 
@@ -277,14 +282,16 @@ export async function upsertPackAnalysis(packId, analysisType, body = {}, userId
     `INSERT INTO tbl_news_smart_analyses (
        pack_id, title, analysis_type, body_html, body_plain,
        query_payload, selected_ids, news_count, period_from, period_to,
-       filter_signature, ai_prompt_key, custom_prompt, custom_prompt_title, created_by
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       filter_signature, ai_prompt_key, custom_prompt, custom_prompt_title, created_by,
+       ${syncIdentityInsertColumns().join(", ")}
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      RETURNING *`,
     [
       pid, title, type, bodyHtml, bodyPlain,
       JSON.stringify(queryPayload), JSON.stringify(selectedIds),
       pack.news_count, pack.period_from, pack.period_to,
       filterSignature, body.ai_prompt_key || null, customPrompt, customPromptTitle, userId ?? null,
+      ...syncIdentityInsertValues(newSyncIdentity()),
     ],
   );
   return mapAnalysisRow(ins.rows[0]);
@@ -345,7 +352,7 @@ export async function resolveAssemblyForPack(packId, userScope = {}) {
 export async function deletePack(packId) {
   const pid = parseInt(packId, 10);
   const r = await pool.query(
-    `DELETE FROM tbl_news_smart_analysis_packs WHERE id = $1 RETURNING id`,
+    `DELETE FROM tbl_news_smart_analysis_packs WHERE id = $1${instanceEntityAndSql("tbl_news_smart_analysis_packs")} RETURNING id`,
     [pid],
   );
   if (!r.rows.length) throw new Error("پک یافت نشد");

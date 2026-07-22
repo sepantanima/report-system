@@ -27,12 +27,14 @@ export default function BriefSubmissionDetail({
   onPromoteMission,
   onSuggestAnalyst,
   onQualityTag,
+  onToggleCommandVisibility,
   loading,
 }) {
   const { isDarkMode } = useAppTheme();
   const [managerNote, setManagerNote] = useState(item?.manager_note || "");
   const [rejectReason, setRejectReason] = useState(item?.reject_reason || "");
   const [editorNote, setEditorNote] = useState(item?.editor_note || "");
+  const [showInCommand, setShowInCommand] = useState(!!item?.show_in_command);
   const [channelIds, setChannelIds] = useState([]);
   const [editContent, setEditContent] = useState("");
   const [analystId, setAnalystId] = useState(item?.author_id ? String(item.author_id) : "");
@@ -46,6 +48,7 @@ export default function BriefSubmissionDetail({
     setManagerNote(item?.manager_note || "");
     setRejectReason(item?.reject_reason || "");
     setEditorNote(item?.editor_note || "");
+    setShowInCommand(!!item?.show_in_command);
     setAnalystId(item?.author_id ? String(item.author_id) : "");
     const bankStatuses = ["EditorApproved", "Published"];
     const initial = bankStatuses.includes(item?.status)
@@ -54,7 +57,7 @@ export default function BriefSubmissionDetail({
     setEditContent(initial);
     const prevChannel = item?.channel_config_id ? [String(item.channel_config_id)] : [];
     setChannelIds(prevChannel);
-  }, [item?.id, item?.manager_note, item?.reject_reason, item?.editor_note, item?.bank_content, item?.content, item?.author_id, item?.status, item?.channel_config_id]);
+  }, [item?.id, item?.manager_note, item?.reject_reason, item?.editor_note, item?.bank_content, item?.content, item?.author_id, item?.status, item?.channel_config_id, item?.show_in_command]);
 
   const publishChannelOptions = useMemo(
     () => (publishDestinations || []).map((d) => ({
@@ -198,8 +201,17 @@ export default function BriefSubmissionDetail({
             />
           </div>
 
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, margin: "4px 0 8px", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={showInCommand}
+              onChange={(e) => setShowInCommand(e.target.checked)}
+            />
+            نمایش در اتاق فرمان (گزیده؛ پیش‌فرض خاموش)
+          </label>
+
           <div className="v3-brief-action-row">
-            {btn(BRIEF_TERMS.approveBank, <CheckCircle size={14} />, () => onApproveBank?.({ manager_note: managerNote }), "#10b981")}
+            {btn(BRIEF_TERMS.approveBank, <CheckCircle size={14} />, () => onApproveBank?.({ manager_note: managerNote, show_in_command: showInCommand }), "#10b981")}
             {btn(BRIEF_TERMS.rejectBtn, <XCircle size={14} />, () => onReject?.({ reject_reason: rejectReason, manager_note: managerNote }), "#ef4444", !rejectReason.trim())}
             {btn("بایگانی", <Archive size={14} />, () => onArchive?.({ manager_note: managerNote }), "#64748b")}
             {isTopicProposal && btn(BRIEF_TERMS.promoteTopic, <ArrowUpCircle size={14} />, () => onPromoteTopic?.({ auto_approve: false }), "#059669")}
@@ -231,6 +243,20 @@ export default function BriefSubmissionDetail({
           </div>
         </>
       )}
+
+      {isBankItem && onToggleCommandVisibility ? (
+        <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={!!item.show_in_command}
+              disabled={loading}
+              onChange={(e) => onToggleCommandVisibility(e.target.checked)}
+            />
+            نمایش در اتاق فرمان (فقط موارد گزیده برای فرمانده)
+          </label>
+        </div>
+      ) : null}
 
       {item.status === "ManagerApproved" && (
         <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>

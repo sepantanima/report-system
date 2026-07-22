@@ -21,7 +21,7 @@ export const REGISTERED_FORM_ACTION_KEYS = [
   },
   {
     form_name: "strategy_command_outputs",
-    actions: ["generate_soft_war_annex"],
+    actions: ["generate_soft_war_annex", "generate_from_strategy_prompt"],
   },
   {
     form_name: "sample_form",

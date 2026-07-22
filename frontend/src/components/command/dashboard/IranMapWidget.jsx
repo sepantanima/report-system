@@ -1,6 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { toPersianDigits } from "../../../utils/analysisMonitorUtils.js";
-import { IRAN_PROVINCES_SVG, matchHeatToProvince } from "./iranProvincesSvg.js";
+import {
+  IRAN_MAP_VIEWBOX,
+  IRAN_MAP_SEAS,
+  IRAN_MAP_ISLANDS,
+  IRAN_PROVINCES_SVG,
+  matchHeatToProvince,
+  normalizeProvinceName,
+} from "./iranProvincesSvg.js";
 
 const FILL = {
   green: "#22c55e99",
@@ -15,7 +22,7 @@ const STROKE = {
   gray: "#64748b",
 };
 
-export default function IranMapWidget({ provinces = [], theme, onSelectProvince }) {
+export default function IranMapWidget({ provinces = [], theme, onSelectProvince, selectedProvince = "" }) {
   const [hover, setHover] = useState(null);
 
   const byMeta = useMemo(() => {
@@ -26,6 +33,8 @@ export default function IranMapWidget({ provinces = [], theme, onSelectProvince 
     }
     return map;
   }, [provinces]);
+
+  const selectedNorm = normalizeProvinceName(selectedProvince);
 
   const tip = hover
     ? {
@@ -41,19 +50,43 @@ export default function IranMapWidget({ provinces = [], theme, onSelectProvince 
         <span><span style={{ color: STROKE.yellow }}>■</span> نیازمند توجه</span>
         <span><span style={{ color: STROKE.red }}>■</span> بحرانی</span>
         <span><span style={{ color: STROKE.gray }}>■</span> بدون داده / غیرفعال</span>
+        {selectedProvince ? (
+          <span style={{ color: theme.accent, fontWeight: 700 }}>انتخاب: {selectedProvince} (کلیک مجدد = لغو)</span>
+        ) : (
+          <span>کلیک روی استان = فوکوس محلی (بدون رفرش کل داشبورد)</span>
+        )}
       </div>
 
       <svg
-        viewBox="0 0 1000 900"
+        viewBox={IRAN_MAP_VIEWBOX}
         width="100%"
-        style={{ maxHeight: 420, background: theme.bg, borderRadius: 12, border: `1px solid ${theme.border}` }}
+        style={{ maxHeight: 460, background: theme.bg, borderRadius: 12, border: `1px solid ${theme.border}` }}
         role="img"
         aria-label="نقشه استان‌های ایران"
       >
+        {IRAN_MAP_SEAS.map((s, i) =>
+          s.d ? (
+            <path key={`sea-${i}`} d={s.d} fill="#3b82f6" opacity={0.22} stroke="none" pointerEvents="none" />
+          ) : (
+            <polygon key={`sea-${i}`} points={s.points} fill="#3b82f6" opacity={0.22} stroke="none" pointerEvents="none" />
+          ),
+        )}
+        {IRAN_MAP_ISLANDS.map((s, i) =>
+          s.d ? (
+            <path key={`isl-${i}`} d={s.d} fill={FILL.gray} stroke={STROKE.gray} strokeWidth={0.5} pointerEvents="none" />
+          ) : (
+            <polygon key={`isl-${i}`} points={s.points} fill={FILL.gray} stroke={STROKE.gray} strokeWidth={0.5} pointerEvents="none" />
+          ),
+        )}
         {IRAN_PROVINCES_SVG.map((p) => {
           const heat = byMeta.get(p.id);
           const st = heat?.status || "gray";
-          const selected = hover?.id === p.id;
+          const isSelected =
+            selectedNorm &&
+            (normalizeProvinceName(p.name) === selectedNorm ||
+              normalizeProvinceName(heat?.id || heat?.name || "") === selectedNorm ||
+              matchHeatToProvince({ id: selectedProvince, name: selectedProvince }, p));
+          const selected = hover?.id === p.id || isSelected;
           return (
             <path
               key={p.id}
@@ -64,7 +97,7 @@ export default function IranMapWidget({ provinces = [], theme, onSelectProvince 
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHover(p)}
               onMouseLeave={() => setHover(null)}
-              onClick={() => onSelectProvince?.(heat?.id || p.name)}
+              onClick={() => onSelectProvince?.(heat?.id || heat?.name || p.name)}
             >
               <title>{p.name}</title>
             </path>
@@ -97,7 +130,7 @@ export default function IranMapWidget({ provinces = [], theme, onSelectProvince 
           </div>
         </div>
       ) : (
-        <div style={{ marginTop: 8, fontSize: 11, color: theme.muted }}>روی استان بروید یا کلیک کنید تا فیلتر شود</div>
+        <div style={{ marginTop: 8, fontSize: 11, color: theme.muted }}>روی استان بروید یا کلیک کنید تا فوکوس شود</div>
       )}
     </div>
   );

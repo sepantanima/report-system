@@ -1,4 +1,5 @@
 import pool from "../db.js";
+import { appendInstanceNewsFilter } from "./instanceScopeService.js";
 import { parseUserRoles } from "../middleware/requireRole.js";
 import {
   buildDailyQuota,
@@ -137,12 +138,14 @@ export async function updateNewsEntrySettings(body, userId) {
 }
 
 export async function countMonitorSubmissions(observerId, jalaliDate) {
-  const r = await pool.query(
-    `SELECT COUNT(*)::int AS cnt FROM tbl_news
-     WHERE observer_id = $1 AND relay_date_jalali = $2
+  let where = ` WHERE observer_id = $1 AND relay_date_jalali = $2
        AND workflow_status IN ('pending', 'reviewed', 'finalized')
-       AND COALESCE(is_deleted, false) = false`,
-    [observerId, jalaliDate],
+       AND COALESCE(is_deleted, false) = false`;
+  const params = [observerId, jalaliDate];
+  ({ where, params } = appendInstanceNewsFilter(where, params, "tbl_news"));
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM tbl_news${where}`,
+    params,
   );
   return r.rows[0]?.cnt ?? 0;
 }

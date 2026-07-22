@@ -93,6 +93,16 @@ const commandCenterService = {
     return res.data;
   },
 
+  listLibrary: async (params) => {
+    const res = await api.get(`${BASE}/outputs/library`, { params });
+    return res.data;
+  },
+
+  getLibraryItem: async (kind, id) => {
+    const res = await api.get(`${BASE}/outputs/library/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
+    return res.data;
+  },
+
   outputMeta: async () => {
     const res = await api.get(`${BASE}/outputs/meta`);
     return res.data;
@@ -118,6 +128,11 @@ const commandCenterService = {
     return res.data;
   },
 
+  approveOutput: async (id) => {
+    const res = await api.post(`${BASE}/outputs/${id}/approve`);
+    return res.data;
+  },
+
   publishOutput: async (id, channel_config_ids = []) => {
     const res = await api.post(`${BASE}/outputs/${id}/publish`, { channel_config_ids });
     return res.data;
@@ -125,6 +140,16 @@ const commandCenterService = {
 
   generateSoftWarAnnex: async (body) => {
     const res = await api.post(`${BASE}/outputs/generate/soft-war-annex`, body, { timeout: 180000 });
+    return res.data;
+  },
+
+  previewOutputSources: async (body) => {
+    const res = await api.post(`${BASE}/outputs/preview-sources`, body);
+    return res.data;
+  },
+
+  generateOutput: async (body) => {
+    const res = await api.post(`${BASE}/outputs/generate`, body, { timeout: 180000 });
     return res.data;
   },
 
@@ -138,8 +163,18 @@ const commandCenterService = {
     return res.data;
   },
 
+  createPrompt: async (body) => {
+    const res = await api.post(`${BASE}/prompts`, body);
+    return res.data;
+  },
+
   savePrompt: async (promptKey, body) => {
     const res = await api.put(`${BASE}/prompts/${encodeURIComponent(promptKey)}`, body);
+    return res.data;
+  },
+
+  deletePrompt: async (promptKey) => {
+    const res = await api.delete(`${BASE}/prompts/${encodeURIComponent(promptKey)}`);
     return res.data;
   },
 };

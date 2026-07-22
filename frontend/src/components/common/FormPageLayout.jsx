@@ -103,10 +103,14 @@ export default function FormPageLayout({
       <main
         style={{
           maxWidth: contentMaxWidth,
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
           margin: "0 auto",
           padding,
           flex: fillViewport ? 1 : undefined,
           overflow: fillViewport ? "auto" : undefined,
+          alignSelf: fillViewport ? "stretch" : undefined,
         }}
       >
         {children}
@@ -117,7 +121,7 @@ export default function FormPageLayout({
   return (
     <div
       dir="rtl"
-      className="page-font-root"
+      className={`page-font-root${fillViewport && !card ? " page-font-root--fill" : ""}`}
       style={{
         minHeight: fillViewport ? "100vh" : "100vh",
         background: theme.bg,

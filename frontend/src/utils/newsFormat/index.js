@@ -1,11 +1,11 @@
 import { FORMAT, SOURCE_PLATFORM, normalizeFormat, normalizeSourcePlatform } from "./dialects.js";
-import { isLikelyHtml, astToHtml, htmlToAst } from "./htmlUtils.js";
+import { isLikelyHtml, astToHtml, htmlToAst, sanitizeHtmlAllowlist } from "./htmlUtils.js";
 import { messengerToHtml } from "./messengerToHtml.js";
 import { htmlToMessenger, htmlToPlainFromContent } from "./htmlToMessenger.js";
 import { decodeHtmlEntities } from "../../constants/analysisFieldLimits.js";
 
 export { FORMAT, SOURCE_PLATFORM, normalizeFormat, normalizeSourcePlatform };
-export { messengerToHtml, htmlToMessenger, htmlToPlainFromContent, isLikelyHtml };
+export { messengerToHtml, htmlToMessenger, htmlToPlainFromContent, isLikelyHtml, sanitizeHtmlAllowlist };
 
 /**
  * تشخیص heuristic پلتفرم برای ingest

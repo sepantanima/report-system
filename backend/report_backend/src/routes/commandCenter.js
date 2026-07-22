@@ -20,20 +20,35 @@ import {
   resolveDashboardRange,
 } from "../services/commandKpiService.js";
 import {
-  listStrategyOutputs,
-  getStrategyOutput,
-  createStrategyOutput,
-  updateStrategyOutput,
-  publishStrategyOutput,
-  generateSoftWarAnnexDraft,
-  OUTPUT_TYPES,
-} from "../services/strategyOutputService.js";
-import {
   listPrompts,
   getPromptByKey,
   upsertPrompt,
   createPrompt,
+  createStrategyPrompt,
+  deletePrompt,
+  countPromptsByPrefix,
+  validateStrategyPromptPayload,
+  isSystemStrategyPrompt,
 } from "../services/promptRegistry.js";
+import {
+  STRATEGY_PROMPT_LIMITS,
+  STRATEGY_PROMPT_PREFIX,
+} from "../constants/promptFieldLimits.js";
+import { previewStrategySources } from "../services/strategySourceAssembleService.js";
+import {
+  listStrategyOutputs,
+  getStrategyOutput,
+  getStrategyOutputNormalized,
+  createStrategyOutput,
+  updateStrategyOutput,
+  approveStrategyOutput,
+  publishStrategyOutput,
+  generateSoftWarAnnexDraft,
+  generateStrategyOutputDraft,
+  listCommandLibrary,
+  getCommandLibraryItem,
+  OUTPUT_TYPES,
+} from "../services/strategyOutputService.js";
 import {
   getDashboardLayout,
   saveDashboardLayout,
@@ -47,16 +62,26 @@ import { buildAiRunHttpError } from "../utils/aiErrorDiagnostics.js";
 
 const router = Router();
 
-const VIEW_ROLES = ["strategy_viewer", "strategy_commander"];
-const COMMANDER_ROLES = ["strategy_commander"];
-const STRATEGY_PROMPT_PREFIX = "strategy.";
+const VIEW_ROLES = ["strategy_viewer", "strategy_commander", "strategy_analysis_manager"];
+/** حاشیه‌نویسی تالار زنده — فقط فرمانده */
+const ANNOTATE_ROLES = ["strategy_commander"];
+/** تولید/ویرایش/تأیید/انتشار خروجی و پرامپت‌های راهبردی */
+const MANAGE_ROLES = ["strategy_analysis_manager"];
 
 function requireCommandView(req, res, next) {
   return requireRole(...VIEW_ROLES)(req, res, next);
 }
 
 function requireCommander(req, res, next) {
-  return requireRole(...COMMANDER_ROLES)(req, res, next);
+  return requireRole(...ANNOTATE_ROLES)(req, res, next);
+}
+
+function requireStrategyManage(req, res, next) {
+  return requireRole(...MANAGE_ROLES)(req, res, next);
+}
+
+function canManageStrategyOutputs(user) {
+  return hasAnyRole(user, MANAGE_ROLES);
 }
 
 function assertStrategyPromptKey(key) {
@@ -289,11 +314,31 @@ router.get("/outputs/meta", auth, requireCommandView, (_req, res) => {
   res.json({ types: OUTPUT_TYPES });
 });
 
+router.get("/outputs/library", auth, requireCommandView, async (req, res) => {
+  try {
+    res.json(await listCommandLibrary(req.query || {}));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.get("/outputs/library/:kind/:id", auth, requireCommandView, async (req, res) => {
+  try {
+    const item = await getCommandLibraryItem(req.params.kind, req.params.id);
+    if (!item) return res.status(404).json({ error: "یافت نشد" });
+    res.json(item);
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
 router.get("/outputs", auth, requireCommandView, async (req, res) => {
   try {
     const items = await listStrategyOutputs(req.query);
-    if (!hasAnyRole(req.user, COMMANDER_ROLES)) {
-      return res.json({ items: items.filter((x) => x.status === "published") });
+    if (!canManageStrategyOutputs(req.user)) {
+      return res.json({
+        items: items.filter((x) => x.status === "approved" || x.status === "published"),
+      });
     }
     res.json({ items });
   } catch (e) {
@@ -303,9 +348,10 @@ router.get("/outputs", auth, requireCommandView, async (req, res) => {
 
 router.get("/outputs/:id", auth, requireCommandView, async (req, res) => {
   try {
-    const row = await getStrategyOutput(req.params.id);
+    const row = await getStrategyOutputNormalized(req.params.id);
     if (!row) return res.status(404).json({ error: "یافت نشد" });
-    if (row.status !== "published" && !hasAnyRole(req.user, COMMANDER_ROLES)) {
+    const visibleToViewer = row.status === "approved" || row.status === "published";
+    if (!visibleToViewer && !canManageStrategyOutputs(req.user)) {
       return res.status(403).json({ error: "دسترسی غیرمجاز" });
     }
     res.json(row);
@@ -314,7 +360,7 @@ router.get("/outputs/:id", auth, requireCommandView, async (req, res) => {
   }
 });
 
-router.post("/outputs", auth, requireCommander, async (req, res) => {
+router.post("/outputs", auth, requireStrategyManage, async (req, res) => {
   try {
     const row = await createStrategyOutput(req.body || {}, req.user);
     res.status(201).json(row);
@@ -323,7 +369,7 @@ router.post("/outputs", auth, requireCommander, async (req, res) => {
   }
 });
 
-router.patch("/outputs/:id", auth, requireCommander, async (req, res) => {
+router.patch("/outputs/:id", auth, requireStrategyManage, async (req, res) => {
   try {
     const row = await updateStrategyOutput(req.params.id, req.body || {}, req.user);
     res.json(row);
@@ -332,7 +378,16 @@ router.patch("/outputs/:id", auth, requireCommander, async (req, res) => {
   }
 });
 
-router.post("/outputs/:id/publish", auth, requireCommander, async (req, res) => {
+router.post("/outputs/:id/approve", auth, requireStrategyManage, async (req, res) => {
+  try {
+    const row = await approveStrategyOutput(req.params.id, req.user);
+    res.json(row);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post("/outputs/:id/publish", auth, requireStrategyManage, async (req, res) => {
   try {
     const data = await publishStrategyOutput(
       req.params.id,
@@ -345,7 +400,7 @@ router.post("/outputs/:id/publish", auth, requireCommander, async (req, res) => 
   }
 });
 
-router.post("/outputs/generate/soft-war-annex", auth, requireCommander, async (req, res) => {
+router.post("/outputs/generate/soft-war-annex", auth, requireStrategyManage, async (req, res) => {
   try {
     const data = await generateSoftWarAnnexDraft(req.body || {}, req.user);
     res.status(201).json(data);
@@ -355,42 +410,100 @@ router.post("/outputs/generate/soft-war-annex", auth, requireCommander, async (r
   }
 });
 
-// --- Strategy prompts (scoped) ---
-router.get("/prompts", auth, requireCommander, async (_req, res) => {
+router.post("/outputs/preview-sources", auth, requireStrategyManage, async (req, res) => {
   try {
-    const items = await listPrompts(STRATEGY_PROMPT_PREFIX);
-    res.json({ items });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
-router.get("/prompts/:promptKey", auth, requireCommander, async (req, res) => {
-  try {
-    const key = assertStrategyPromptKey(req.params.promptKey);
-    const row = await getPromptByKey(key);
-    if (!row) return res.status(404).json({ error: "پرامپت یافت نشد" });
-    res.json(row);
+    const data = await previewStrategySources(req.body || {});
+    res.json(data);
   } catch (e) {
     res.status(e.status || 400).json({ error: e.message });
   }
 });
 
-router.put("/prompts/:promptKey", auth, requireCommander, async (req, res) => {
+router.post("/outputs/generate", auth, requireStrategyManage, async (req, res) => {
+  try {
+    const data = await generateStrategyOutputDraft(req.body || {}, req.user);
+    res.status(201).json(data);
+  } catch (e) {
+    const { status, body } = buildAiRunHttpError(e);
+    res.status(status).json(body);
+  }
+});
+
+// --- Strategy prompts (scoped) ---
+router.get("/prompts", auth, requireStrategyManage, async (_req, res) => {
+  try {
+    const items = await listPrompts(STRATEGY_PROMPT_PREFIX);
+    const count = items.length;
+    res.json({
+      items,
+      count,
+      max_count: STRATEGY_PROMPT_LIMITS.maxCount,
+      limits: STRATEGY_PROMPT_LIMITS,
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post("/prompts", auth, requireStrategyManage, async (req, res) => {
+  try {
+    const row = await createStrategyPrompt(req.body || {}, req.user?.id);
+    res.status(201).json(row);
+  } catch (e) {
+    if (e.code === "DUPLICATE_PROMPT_KEY") {
+      return res.status(400).json({ error: "این کلید پرامپت قبلاً ثبت شده است" });
+    }
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+router.get("/prompts/:promptKey", auth, requireStrategyManage, async (req, res) => {
   try {
     const key = assertStrategyPromptKey(req.params.promptKey);
+    const row = await getPromptByKey(key);
+    if (!row) return res.status(404).json({ error: "پرامپت یافت نشد" });
+    res.json({ ...row, is_system: isSystemStrategyPrompt(key) });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+router.put("/prompts/:promptKey", auth, requireStrategyManage, async (req, res) => {
+  try {
+    const key = assertStrategyPromptKey(req.params.promptKey);
+    const payloadErr = validateStrategyPromptPayload(req.body || {}, { isCreate: false });
+    if (payloadErr) return res.status(400).json({ error: payloadErr });
+
     const existing = await getPromptByKey(key);
     const payload = {
       title_fa: req.body?.title_fa,
       description_fa: req.body?.description_fa,
       body: req.body?.body,
+      reference_slots: req.body?.reference_slots,
     };
     if (!existing) {
+      const count = await countPromptsByPrefix(STRATEGY_PROMPT_PREFIX);
+      if (count >= STRATEGY_PROMPT_LIMITS.maxCount) {
+        return res.status(400).json({
+          error: `حداکثر ${STRATEGY_PROMPT_LIMITS.maxCount} پرامپت راهبردی مجاز است`,
+        });
+      }
       await createPrompt(key, payload, req.user?.id);
     } else {
       await upsertPrompt(key, payload, req.user?.id);
     }
-    res.json(await getPromptByKey(key));
+    res.json({ ...(await getPromptByKey(key)), is_system: isSystemStrategyPrompt(key) });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+router.delete("/prompts/:promptKey", auth, requireStrategyManage, async (req, res) => {
+  try {
+    const key = assertStrategyPromptKey(req.params.promptKey);
+    const deleted = await deletePrompt(key);
+    if (!deleted) return res.status(404).json({ error: "پرامپت یافت نشد" });
+    res.json({ ok: true, prompt_key: key });
   } catch (e) {
     res.status(e.status || 400).json({ error: e.message });
   }
