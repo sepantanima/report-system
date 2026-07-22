@@ -4,9 +4,11 @@ import requireRole from "../middleware/requireRole.js";
 import fs from "fs";
 import {
   previewNewsReportCount,
+  previewNewsReportPackCounts,
   previewNewsReportRows,
   generateNewsReport,
   generateNewsReportsBatch,
+  generateNewsReportPack,
   getNewsReportForDownload,
   listNewsReports,
   sendSingleNewsReport,
@@ -15,11 +17,36 @@ import {
   deleteNewsReport,
   deleteAllNewsReports,
   publishExistingNewsReport,
+  getNewsReportWorkflowConfig,
 } from "../services/newsReportService.js";
 import { probePdfEngine } from "../services/newsReportPdf.js";
 
 const router = Router();
 const newsReportRoles = requireRole("admin", "news_editor", "news_chief");
+
+router.get("/workflow-config", auth, newsReportRoles, async (req, res) => {
+  try {
+    res.json(await getNewsReportWorkflowConfig());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/generate-pack", auth, newsReportRoles, async (req, res) => {
+  try {
+    res.status(201).json(await generateNewsReportPack(req.body, req.user));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post("/preview-pack-counts", auth, newsReportRoles, async (req, res) => {
+  try {
+    res.json(await previewNewsReportPackCounts(req.body, req.user));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
 
 router.post("/preview-count", auth, newsReportRoles, async (req, res) => {
   try {
@@ -121,9 +148,10 @@ router.get("/:id/download", auth, newsReportRoles, async (req, res) => {
     const row = await getNewsReportForDownload(id, req.user);
     if (!row) return res.status(404).json({ error: "فایل یافت نشد" });
     const mime =
-      row.format === "pdf" ? "application/pdf"
-        : ["html", "html_card", "html_table"].includes(row.format) ? "text/html; charset=utf-8"
-          : "text/plain; charset=utf-8";
+      row.format === "zip" ? "application/zip"
+        : row.format === "pdf" ? "application/pdf"
+          : ["html", "html_card", "html_table"].includes(row.format) ? "text/html; charset=utf-8"
+            : "text/plain; charset=utf-8";
     res.setHeader("Content-Type", mime);
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(row.file_name || "report")}`);
     fs.createReadStream(row.file_path).pipe(res);

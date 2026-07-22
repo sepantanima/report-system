@@ -10,13 +10,15 @@ function defaultUsageKeyForForm(formName) {
   if (formName === "field_management_summary_create") return AI_USAGE_KEYS.FIELD_MANAGEMENT_SUMMARY;
   if (formName === "news_monitor_manage") return AI_USAGE_KEYS.NEWS_SUMMARIZE;
   if (formName === "news_smart_analysis") return AI_USAGE_KEYS.NEWS_SMART_ANALYSIS;
+  if (formName === "news_editorial_batch") return AI_USAGE_KEYS.NEWS_EDITORIAL;
+  if (formName === "strategy_command_outputs") return AI_USAGE_KEYS.STRATEGY_COMMAND_OUTPUTS;
   return null;
 }
 
 /**
  * اجرای مرکزی یک اکشن AI بر اساس کانفیگ دیتابیس.
  */
-export async function executeFormAiAction({ formName, actionName, formData, userId }) {
+export async function executeFormAiAction({ formName, actionName, formData, userId, promptKeyOverride, appendPromptSuffix }) {
   const cfg = await getFormActionByFormAndAction(formName, actionName);
   if (!cfg) {
     const err = "کانفیگ اکشن برای این فرم یافت نشد یا غیرفعال است";
@@ -51,25 +53,31 @@ export async function executeFormAiAction({ formName, actionName, formData, user
     throw new Error("usage_key در کانفیگ تنظیم نشده است");
   }
 
+  const effectivePromptKey = String(promptKeyOverride || cfg.prompt_key || "").trim() || cfg.prompt_key;
+
   let promptKeyUsed = null;
   let promptTextForModel = "";
   let extra = null;
 
   try {
-    const built = await buildFinalPromptText(cfg.assembly_strategy, formData, cfg.source_fields, cfg.prompt_key, {
+    const built = await buildFinalPromptText(cfg.assembly_strategy, formData, cfg.source_fields, effectivePromptKey, {
       formName,
       actionName,
     });
     promptTextForModel = built.promptTextForModel;
     promptKeyUsed = built.promptKey;
     extra = built.extra;
+    const suffix = String(appendPromptSuffix || "").trim();
+    if (suffix) {
+      promptTextForModel = `${promptTextForModel}\n\n${suffix}`.trim();
+    }
   } catch (e) {
     try {
       await insertAiRunLog({
         user_id: userId,
         form_name: formName,
         action_name: actionName,
-        prompt_key: cfg.prompt_key,
+        prompt_key: effectivePromptKey,
         ai_config_id: cfg.ai_config_id,
         usage_key_used: usageKey,
         request_text: String(e.message),

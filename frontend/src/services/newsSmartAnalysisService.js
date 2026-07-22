@@ -14,11 +14,70 @@ export const ANALYSIS_ACTION_LABELS = {
 
   analyze_risk: "ریسک و تهدید",
 
+  analyze_custom: "تحلیل شخصی",
+
 };
 
 
 
-export const ANALYSIS_TYPES = Object.keys(ANALYSIS_ACTION_LABELS);
+export const CUSTOM_PROMPT_SLOTS = ["custom_prompt_1", "custom_prompt_2", "custom_prompt_3"];
+
+export const MAX_CUSTOM_PROMPT_ANALYSES = CUSTOM_PROMPT_SLOTS.length;
+
+export const CUSTOM_PROMPT_ACTION = "analyze_custom";
+
+export const MAX_CUSTOM_PROMPT_LEN = 4000;
+export const MAX_CUSTOM_PROMPT_TITLE_LEN = 200;
+export const MIN_CUSTOM_PROMPT_LEN = 8;
+
+
+
+export function isCustomPromptType(type) {
+
+  return CUSTOM_PROMPT_SLOTS.includes(String(type || "").trim());
+
+}
+
+
+
+export function customPromptLabel(type, customPrompt = "", customPromptTitle = "") {
+
+  const title = String(customPromptTitle || "").trim();
+
+  if (title) return title;
+
+  const slot = String(type || "").match(/^custom_prompt_(\d)$/)?.[1];
+
+  const base = slot ? `تحلیل شخصی ${slot}` : "تحلیل شخصی";
+
+  const snippet = String(customPrompt || "").trim().slice(0, 36);
+
+  if (!snippet) return base;
+
+  return `${base} — ${snippet}${String(customPrompt || "").trim().length > 36 ? "…" : ""}`;
+
+}
+
+
+
+export function analysisTypeLabel(type, customPrompt = "", customPromptTitle = "") {
+
+  if (isCustomPromptType(type)) return customPromptLabel(type, customPrompt, customPromptTitle);
+
+  return ANALYSIS_ACTION_LABELS[type] || type || "تحلیل";
+
+}
+
+
+
+export const STANDARD_ANALYSIS_TYPES = [
+  "analyze_overview",
+  "analyze_thematic",
+  "analyze_trends",
+  "analyze_risk",
+];
+
+export const ANALYSIS_TYPES = STANDARD_ANALYSIS_TYPES;
 
 
 
@@ -31,6 +90,14 @@ const newsSmartAnalysisService = {
       params: { form_name: FORM_AI_NAMES.NEWS_SMART_ANALYSIS },
 
     })
+
+    .then((r) => r.data),
+
+
+
+  getCustomPromptPolicy: () => api
+
+    .get("/news/smart-analysis/custom-prompt-policy")
 
     .then((r) => r.data),
 
@@ -71,6 +138,10 @@ const newsSmartAnalysisService = {
 
 
   deletePack: (id) => api.delete(`/news/smart-analysis/packs/${id}`).then((r) => r.data),
+
+  deletePackCustomAnalysis: (packId, analysisType) => api
+    .delete(`/news/smart-analysis/packs/${packId}/analyses/${analysisType}`)
+    .then((r) => r.data),
 
 
 

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
-import { usePageFontSize } from "../../utils/pageFontSize.js";
+import { BASE_PAGE_FONT_PX, usePageFontSize } from "../../utils/pageFontSize.js";
 import { ANALYSIS_MONITOR_CSS } from "../../theme/analysisMonitorStyles.js";
 import { FORM_PAGE_CSS } from "../../theme/formPageStyles.js";
 import { getFormPageTheme } from "../../theme/formPageTheme.js";
+import { PAGE_NARROW_CSS, PAGE_WIDE_CSS } from "../../constants/pageLayoutWidths.js";
 import StandardFormHeader from "./StandardFormHeader.jsx";
 import HelpModal from "./HelpModal.jsx";
 import GlobalAnnouncementBanner from "../messaging/GlobalAnnouncementBanner.jsx";
@@ -32,6 +33,8 @@ export default function FormPageLayout({
   contentPadding,
   fillViewport = false,
   headerVariant = "page",
+  showProfile = true,
+  showLogout = true,
 }) {
   const { isDarkMode } = useAppTheme();
   const { fontSizePx } = usePageFontSize();
@@ -43,8 +46,7 @@ export default function FormPageLayout({
     if (resolvedTitle) document.title = resolvedTitle;
   }, [resolvedTitle]);
 
-  const contentMaxWidth = maxWidth ?? (wide ? "min(1100px, 96vw)" : "min(640px, 94vw)");
-  const padding = contentPadding ?? (card ? undefined : "16px 16px 32px");
+  const contentMaxWidth = maxWidth ?? (wide ? PAGE_WIDE_CSS : PAGE_NARROW_CSS);  const padding = contentPadding ?? (card ? undefined : "16px 16px 32px");
 
   const openHelp = onHelp ? () => setHelpOpen(true) : undefined;
 
@@ -65,6 +67,8 @@ export default function FormPageLayout({
       toolbarExtra={toolbarExtra}
       subRow={subRow}
       variant={card ? "embedded" : headerVariant}
+      showProfile={showProfile}
+      showLogout={showLogout}
     />
   );
 
@@ -81,8 +85,7 @@ export default function FormPageLayout({
         style={{
           background: theme.card,
           borderRadius: 14,
-          maxWidth: wide ? "min(1100px, 96vw)" : "min(640px, 94vw)",
-          width: "100%",
+          maxWidth: wide ? PAGE_WIDE_CSS : PAGE_NARROW_CSS,          width: "100%",
           margin: "0 auto",
           border: `1px solid ${theme.border}`,
           overflow: "hidden",
@@ -100,10 +103,14 @@ export default function FormPageLayout({
       <main
         style={{
           maxWidth: contentMaxWidth,
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
           margin: "0 auto",
           padding,
           flex: fillViewport ? 1 : undefined,
           overflow: fillViewport ? "auto" : undefined,
+          alignSelf: fillViewport ? "stretch" : undefined,
         }}
       >
         {children}
@@ -114,14 +121,14 @@ export default function FormPageLayout({
   return (
     <div
       dir="rtl"
-      className="page-font-root"
+      className={`page-font-root${fillViewport && !card ? " page-font-root--fill" : ""}`}
       style={{
         minHeight: fillViewport ? "100vh" : "100vh",
         background: theme.bg,
         color: theme.text,
         fontFamily: "Tahoma, sans-serif",
-        fontSize: fontSizePx,
-        ["--page-font-size"]: fontSizePx,
+        fontSize: BASE_PAGE_FONT_PX,
+        ["--input-font-size"]: fontSizePx,
         display: fillViewport && !card ? "flex" : "block",
         flexDirection: fillViewport && !card ? "column" : undefined,
         overflow: fillViewport && !card ? "hidden" : undefined,

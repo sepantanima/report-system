@@ -66,7 +66,7 @@ export default function AnalysisMissionManage() {
 
   if (!assignment) {
     return (
-      <AnalysisPageShell title="مدیریت مأموریت" backTo={backTo}>
+      <AnalysisPageShell title={ANALYSIS_TERMS.missionManageDetailTitle} backTo={backTo}>
         <p style={{ color: S.subMuted, fontSize: 12 }}>در حال بارگذاری...</p>
       </AnalysisPageShell>
     );
@@ -75,7 +75,7 @@ export default function AnalysisMissionManage() {
   const st = MISSION_STATUS_META[assignment.status] || { label: assignment.status, color: "#94a3b8" };
 
   return (
-    <AnalysisPageShell title="مدیریت مأموریت" subtitle={assignment.topic_title} backTo={backTo} onHelp={MISSION_MANAGE_HELP} helpTitle="راهنمای مدیریت مأموریت">
+    <AnalysisPageShell title={ANALYSIS_TERMS.missionManageDetailTitle} subtitle={assignment.topic_title} backTo={backTo} onHelp={MISSION_MANAGE_HELP} helpTitle={ANALYSIS_TERMS.missionManageDetailHelpTitle}>
       <AnalysisWorkflowStepper currentStep="analyze" topicStatus="Assigned" compact />
       <div style={{ marginBottom: 16, fontSize: 12, color: S.subMuted, lineHeight: 1.8, padding: 12, borderRadius: 10, background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc", border: `1px solid ${S.inputBorder}` }}>
         <div style={{ marginBottom: 6 }}>
@@ -89,26 +89,28 @@ export default function AnalysisMissionManage() {
         <div>{ANALYSIS_TERMS.missionDeadline}: {formatPersianDateShort(assignment.deadline)}</div>
       </div>
 
-      <div style={S.inputWrapper}>
-        <label style={S.labelStyle}>مهلت جدید {ANALYSIS_TERMS.missionDeadline} (شمسی)</label>
-        <div style={{ ...S.inputStyle, padding: "6px 10px" }}>
-          <ThemedDatePicker
-            isDarkMode={isDarkMode}
-            value={gregorianToPersianPicker(deadline)}
-            onChange={(d) => setDeadline(d ? persianDateToGregorian(d) : "")}
-            calendar={persian}
-            locale={persian_fa}
-            calendarPosition="bottom-right"
-          />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+        <div style={S.inputWrapper}>
+          <label style={S.labelStyle}>مهلت جدید {ANALYSIS_TERMS.missionDeadline} (شمسی)</label>
+          <div style={{ ...S.inputStyle, padding: "6px 10px" }}>
+            <ThemedDatePicker
+              isDarkMode={isDarkMode}
+              value={gregorianToPersianPicker(deadline)}
+              onChange={(d) => setDeadline(d ? persianDateToGregorian(d) : "")}
+              calendar={persian}
+              locale={persian_fa}
+              calendarPosition="bottom-right"
+            />
+          </div>
         </div>
-      </div>
-      <div style={S.inputWrapper}>
-        <label style={S.labelStyle}>اولویت</label>
-        <select style={S.selectStyle} value={priority} onChange={(e) => setPriority(e.target.value)}>
-          <option value="high">فوری</option>
-          <option value="medium">متوسط</option>
-          <option value="low">عادی</option>
-        </select>
+        <div style={S.inputWrapper}>
+          <label style={S.labelStyle}>اولویت</label>
+          <select style={S.selectStyle} value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <option value="high">فوری</option>
+            <option value="medium">متوسط</option>
+            <option value="low">عادی</option>
+          </select>
+        </div>
       </div>
       <div style={S.inputWrapper}>
         <label style={S.labelStyle}>دستورالعمل</label>

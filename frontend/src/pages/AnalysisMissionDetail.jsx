@@ -4,6 +4,7 @@ import { Save, Send, MessageSquare, Award, Download, CheckCircle } from "lucide-
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import { getUnitReportFormStyles } from "../theme/unitReportFormStyles";
 import AnalysisPageShell from "../components/analysis/AnalysisPageShell.jsx";
+import AnalysisWorkflowStepper from "../components/analysis/AnalysisWorkflowStepper.jsx";
 import RichTextEditor from "../components/analysis/RichTextEditor.jsx";
 import StarRating from "../components/analysis/StarRating.jsx";
 import { MISSION_FIELD_LIMITS } from "../constants/analysisFieldLimits.js";
@@ -14,6 +15,7 @@ import analysisService from "../services/analysisService";
 import { getCurrentUser, parseUserRoles, canManageAnalysis } from "../utils/analysisAuth.js";
 import { ANALYSIS_TERMS } from "../constants/analysisTerminology.js";
 import { formatPersianDateShort, toPersianDigits } from "../utils/analysisMonitorUtils.js";
+import useAnalysisToast from "../hooks/useAnalysisToast.jsx";
 
 const STATUS_LABELS = {
   Draft: "پیش‌نویس", Submitted: "ارسال‌شده", ReturnedForRevision: "نیازمند اصلاح",
@@ -45,6 +47,7 @@ export default function AnalysisMissionDetail() {
   const [feedbackType, setFeedbackType] = useState("corrective");
   const [scoreForm, setScoreForm] = useState({});
   const [evaluatorComment, setEvaluatorComment] = useState("");
+  const { showToast, Toast } = useAnalysisToast();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -75,11 +78,11 @@ export default function AnalysisMissionDetail() {
         setCriteria(await analysisService.getCriteria());
       }
     } catch {
-      alert("خطا در بارگذاری");
+      showToast("خطا در بارگذاری");
     } finally {
       setLoading(false);
     }
-  }, [id, isManager, isMentorRole]);
+  }, [id, isManager, isMentorRole, showToast]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -87,7 +90,7 @@ export default function AnalysisMissionDetail() {
   const isAssignedMentor = isMentorRole && assignment?.mentor_id === user.id;
   const isReviewer = isManager || isAssignedMentor;
 
-  const backPath = isAnalystRole ? "/analysis/my-missions" : isManager ? "/analysis/management?tab=missions" : "/analysis/review";
+  const backPath = isAnalystRole ? "/analysis/my-missions" : isManager ? "/analysis/missions" : "/analysis/review";
 
   const editableStatuses = ["Draft", "ReturnedForRevision"];
   const canEdit = Boolean(
@@ -115,25 +118,32 @@ export default function AnalysisMissionDetail() {
     }
   }, [visibleSteps, activeStep]);
 
+  const workflowStep = useMemo(() => {
+    const st = assignment?.status;
+    if (st === "FinalApproved") return "finalize";
+    if (["Submitted", "UnderReview", "Revised"].includes(st)) return "review";
+    return "analyze";
+  }, [assignment?.status]);
+
   const handleSaveDraft = async () => {
     if (!currentVersion) return;
     try {
       const updated = await analysisService.saveVersion(currentVersion.id, { title, content, change_note: changeNote });
       setCurrentVersion(updated);
-      alert("پیش‌نویس ذخیره شد");
+      showToast("پیش‌نویس ذخیره شد");
     } catch (err) {
-      alert(err.response?.data?.error || "خطا");
+      showToast(err.response?.data?.error || "خطا");
     }
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !stripHtml(content).trim()) return alert("عنوان و متن الزامی است");
+    if (!title.trim() || !stripHtml(content).trim()) return showToast("عنوان و متن الزامی است");
     try {
       await analysisService.submitVersion(currentVersion.id, { title, content, change_note: changeNote });
       await loadData();
-      alert("برای بررسی ارسال شد");
+      showToast("برای بررسی ارسال شد");
     } catch (err) {
-      alert(err.response?.data?.error || "خطا");
+      showToast(err.response?.data?.error || "خطا");
     }
   };
 
@@ -143,8 +153,9 @@ export default function AnalysisMissionDetail() {
       await analysisService.addFeedback({ version_id: currentVersion.id, content: feedbackText, feedback_type: feedbackType, request_revision: requestRevision });
       setFeedbackText("");
       await loadData();
+      showToast(requestRevision ? "درخواست اصلاح ثبت شد" : "بازخورد ثبت شد");
     } catch (err) {
-      alert(err.response?.data?.error || "خطا");
+      showToast(err.response?.data?.error || "خطا");
     }
   };
 
@@ -155,17 +166,17 @@ export default function AnalysisMissionDetail() {
     }));
     const rated = scoreList.filter((s) => s.score > 0);
     if (!rated.length) {
-      return alert("حداقل یک معیار باید امتیاز ۱ تا ۵ دریافت کند");
+      return showToast("حداقل یک معیار باید امتیاز ۱ تا ۵ دریافت کند");
     }
     if (scoreList.some((s) => s.score < 0 || s.score > 5 || (s.score > 0 && s.score < 1))) {
-      return alert("امتیاز هر معیار باید ۰ (بدون امتیاز) یا بین ۱ تا ۵ باشد");
+      return showToast("امتیاز هر معیار باید ۰ (بدون امتیاز) یا بین ۱ تا ۵ باشد");
     }
     try {
       await analysisService.submitScores(currentVersion.id, { scores: scoreList, evaluator_comment: evaluatorComment });
       await loadData();
-      alert("امتیاز ثبت شد");
+      showToast("امتیاز ثبت شد");
     } catch (err) {
-      alert(err.response?.data?.error || "خطا");
+      showToast(err.response?.data?.error || "خطا");
     }
   };
 
@@ -175,8 +186,9 @@ export default function AnalysisMissionDetail() {
       await analysisService.approveFinal(analysis.id, { version_id: currentVersion.id });
       await loadData();
       setActiveStep("score");
+      showToast("تایید نهایی ثبت شد");
     } catch (err) {
-      alert(err.response?.data?.error || "خطا");
+      showToast(err.response?.data?.error || "خطا");
     }
   };
 
@@ -189,7 +201,7 @@ export default function AnalysisMissionDetail() {
       a.download = `analysis-${analysis.id}.pdf`;
       a.click();
     } catch (err) {
-      alert(err.response?.data?.error || "خطا");
+      showToast(err.response?.data?.error || "خطا");
     }
   };
 
@@ -214,6 +226,13 @@ export default function AnalysisMissionDetail() {
 
   return (
     <AnalysisPageShell title={`${ANALYSIS_TERMS.axisLabelPrefix} ${assignment?.topic_title || "—"}`} subtitle={STATUS_LABELS[assignment?.status] || assignment?.status} backTo={backPath} onHelp={MISSION_DETAIL_HELP} helpTitle="راهنمای مأموریت">
+      {Toast}
+      <AnalysisWorkflowStepper
+        currentStep={workflowStep}
+        topicStatus={assignment?.topic_status || "Assigned"}
+        missionStatus={assignment?.status}
+        compact
+      />
       <div style={{ fontSize: "11px", color: S.subMuted, marginBottom: "16px", lineHeight: 1.7, padding: 12, borderRadius: 10, background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc", border: `1px solid ${S.inputBorder}` }}>
         <div>{ANALYSIS_TERMS.missionDeadline}: {formatPersianDateShort(assignment?.deadline)}</div>
         <div>{ANALYSIS_TERMS.suggestedDeadline}: {formatPersianDateShort(assignment?.topic_suggested_deadline)}</div>
@@ -238,7 +257,7 @@ export default function AnalysisMissionDetail() {
             await analysisService.createAnalysis(id);
             await loadData();
           } catch (err) {
-            alert(err.response?.data?.error || "خطا");
+            showToast(err.response?.data?.error || "خطا");
           }
         }}>شروع تحلیل</button>
       )}

@@ -12,6 +12,11 @@ import {
   getMessengerPublishStatus,
   publishAlertToChannels,
 } from "./messageMessengerPublishService.js";
+import {
+  instanceNewsAndSql,
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "./instanceScopeService.js";
 
 const MANAGER_ROLES = ["admin", "Field_admin", "news_chief"];
 
@@ -34,6 +39,71 @@ function enrichMessageRow(row, extra = {}) {
     is_sender_deleted: !!row.sender_deleted_at,
     ...extra,
   };
+}
+
+/**
+ * به پیام‌های مرتبط با یک موجودیت (گزارش میدانی/خبر) یک مرجع خلاصه اضافه می‌کند
+ * تا گیرنده در کارتابل بفهمد پیام مربوط به کدام گزارش/خبر است.
+ */
+async function attachEntityRefs(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const fieldKeys = new Set();
+  const newsIds = new Set();
+  for (const row of list) {
+    if (!row?.entity_type || !row?.entity_id) continue;
+    if (row.entity_type === "field_report") fieldKeys.add(String(row.entity_id));
+    else if (row.entity_type === "news") {
+      const nid = parseInt(row.entity_id, 10);
+      if (Number.isFinite(nid)) newsIds.add(nid);
+    }
+  }
+  if (!fieldKeys.size && !newsIds.size) return list;
+
+  const refMap = new Map();
+  if (fieldKeys.size) {
+    const r = await pool.query(
+      `SELECT hash_key, title, chat_title, date
+       FROM tbl_unit_events e
+       ${fieldReportTypeJoinSql("e")}
+       WHERE hash_key = ANY($1)
+         ${fieldReportListScopeSql("e", "rt_scope")}`,
+      [[...fieldKeys]],
+    );
+    for (const e of r.rows) {
+      refMap.set(`field_report:${e.hash_key}`, {
+        type: "field_report",
+        id: e.hash_key,
+        code: String(e.hash_key).slice(0, 8).toUpperCase(),
+        topic: e.chat_title || null,
+        title: e.title || null,
+        date: e.date || null,
+        label: e.title || e.chat_title || "گزارش میدانی",
+      });
+    }
+  }
+  if (newsIds.size) {
+    const r = await pool.query(
+      `SELECT id, title FROM tbl_news WHERE id = ANY($1)${instanceNewsAndSql("tbl_news")}`,
+      [[...newsIds]],
+    );
+    for (const n of r.rows) {
+      refMap.set(`news:${n.id}`, {
+        type: "news",
+        id: n.id,
+        code: `#${n.id}`,
+        title: n.title || null,
+        label: n.title || "خبر",
+      });
+    }
+  }
+
+  return list.map((row) => {
+    if (row?.entity_type && row?.entity_id) {
+      const ref = refMap.get(`${row.entity_type}:${row.entity_id}`);
+      if (ref) return { ...row, entity_ref: ref };
+    }
+    return row;
+  });
 }
 
 export async function searchUsersForMessaging(q, limit = 20) {
@@ -286,7 +356,7 @@ export async function listInbox(userId, { unread_only = false, limit = 50, offse
   params.push(parseInt(offset, 10) || 0);
   q += ` OFFSET $${params.length}`;
   const r = await pool.query(q, params);
-  return r.rows.map((row) => enrichMessageRow(row));
+  return attachEntityRefs(r.rows.map((row) => enrichMessageRow(row)));
 }
 
 export async function getUnreadCount(userId) {
@@ -328,6 +398,19 @@ export async function markMessageRead(messageId, userId) {
   );
   if (!r.rows.length) throw new Error("پیام یافت نشد");
   return r.rows[0];
+}
+
+export async function bulkMarkRead(messageIds, userId) {
+  const ids = [...new Set((messageIds || []).map((x) => parseInt(x, 10)).filter(Number.isFinite))];
+  if (!ids.length) throw new Error("پیامی انتخاب نشده");
+  const r = await pool.query(
+    `UPDATE tbl_message_recipients
+     SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+     WHERE user_id = $1 AND message_id = ANY($2::int[]) AND deleted_at IS NULL
+     RETURNING message_id`,
+    [userId, ids],
+  );
+  return { marked: r.rows.length, ids: r.rows.map((x) => x.message_id) };
 }
 
 export async function dismissBanner(messageId, userId) {

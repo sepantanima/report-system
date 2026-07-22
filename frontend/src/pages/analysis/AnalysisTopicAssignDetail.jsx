@@ -13,10 +13,13 @@ import MissionAssignForm from "../../components/analysis/MissionAssignForm.jsx";
 import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { ASSIGN_DETAIL_HELP } from "../../content/analysisFormHelp.jsx";
 import analysisService from "../../services/analysisService";
+import { PAGE_NARROW_CSS } from "../../constants/pageLayoutWidths.js";
 import { useManagementBackUrl } from "../../hooks/useManagementBackUrl.js";
 import {
   MISSION_STATUS_META, PRIORITY_META, formatPersianDateShort,
   gregorianToPersianPicker, persianDateToGregorian, toDbDateString,
+  isTopicClosedForAssignment,
+  isTopicAssignableForMission,
 } from "../../utils/analysisMonitorUtils.js";
 
 function normalizeDeadline(value) {
@@ -27,7 +30,7 @@ function normalizeDeadline(value) {
 export default function AnalysisTopicAssignDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const backTo = useManagementBackUrl("assign");
+  const backTo = useManagementBackUrl("missions");
   const { isDarkMode } = useAppTheme();
   const S = getUnitReportFormStyles(isDarkMode);
   const theme = { card: isDarkMode ? "#1e293b" : "#fff", border: isDarkMode ? "#334155" : "#e2e8f0", text: isDarkMode ? "#f1f5f9" : "#1e293b" };
@@ -150,7 +153,7 @@ export default function AnalysisTopicAssignDetail() {
     );
   }
 
-  if (!["Approved", "Assigned"].includes(topic.status)) {
+  if (!isTopicAssignableForMission(topic) && !isTopicClosedForAssignment(topic)) {
     return (
       <AnalysisPageShell title={ANALYSIS_TERMS.assignPageTitle} backTo={backTo}>
         <p style={{ color: "#f59e0b", fontSize: 12 }}>{ANALYSIS_TERMS.assignGateMessage}</p>
@@ -158,15 +161,22 @@ export default function AnalysisTopicAssignDetail() {
     );
   }
 
+  const topicClosed = isTopicClosedForAssignment(topic);
   return (
     <AnalysisPageShell title={ANALYSIS_TERMS.assignPageTitle} subtitle={topic.topic_code} backTo={backTo} onHelp={ASSIGN_DETAIL_HELP} helpTitle="راهنمای ارجاع">
       <AnalysisWorkflowStepper currentStep="assign" topicStatus={topic.status} />
+
+      {topicClosed && (
+        <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, border: `1px solid ${tableBorder}`, background: "rgba(100,116,139,0.12)", fontSize: 12, color: "#64748b" }}>
+          {ANALYSIS_TERMS.topicCompletedMessage}
+        </div>
+      )}
 
       <TopicContextPanel topic={topic} variant="compact" theme={theme} isDarkMode={isDarkMode} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
         <h4 style={{ color: S.headingOnCard, fontSize: 13, margin: 0 }}>مأموریت‌های موجود ({assignments.length})</h4>
-        {!showNewForm && (
+        {!showNewForm && !topicClosed && (
           <button type="button" style={{ ...S.sendBtn, padding: "8px 14px", fontSize: 12, background: "#10b981", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowNewForm(true)}>
             <Plus size={14} /> ارجاع جدید
           </button>
@@ -208,7 +218,7 @@ export default function AnalysisTopicAssignDetail() {
                         <button type="button" style={actionBtn} onClick={() => openDeadlineModal(a)}>
                           <Calendar size={12} /> تغییر مهلت
                         </button>
-                        <button type="button" style={{ ...actionBtn, color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)" }} onClick={() => navigate(`/analysis/management/mission/${a.id}?fromTab=assign`)}>
+                        <button type="button" style={{ ...actionBtn, color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)" }} onClick={() => navigate(`/analysis/missions/mission/${a.id}?fromTab=missions`)}>
                           <ExternalLink size={12} /> مدیریت
                         </button>
                         {a.status === "Assigned" && (
@@ -226,7 +236,7 @@ export default function AnalysisTopicAssignDetail() {
         </div>
       )}
 
-      {showNewForm && (
+      {showNewForm && !topicClosed && (
         <MissionAssignForm
           assign={assign}
           onChange={setAssign}
@@ -242,7 +252,7 @@ export default function AnalysisTopicAssignDetail() {
 
       {deadlineModalId && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setDeadlineModalId(null)}>
-          <div style={{ background: isDarkMode ? "#1e293b" : "#fff", borderRadius: 12, border: `1px solid ${tableBorder}`, width: "100%", maxWidth: "min(640px, 94vw)", padding: 16 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: isDarkMode ? "#1e293b" : "#fff", borderRadius: 12, border: `1px solid ${tableBorder}`, width: "100%", maxWidth: PAGE_NARROW_CSS, padding: 16 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
               <strong style={{ fontSize: 13 }}>تغییر {ANALYSIS_TERMS.missionDeadline}</strong>
               <button type="button" onClick={() => setDeadlineModalId(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer" }}><X size={18} /></button>

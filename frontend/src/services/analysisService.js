@@ -13,7 +13,7 @@ const analysisService = {
   reviewTopic: (id, data) => api.post(`/analysis/topics/${id}/review`, data).then((r) => r.data),
   resubmitTopic: (id, data) => api.post(`/analysis/topics/${id}/resubmit`, data).then((r) => r.data),
   archiveTopic: (id, data) => api.post(`/analysis/topics/${id}/archive`, data).then((r) => r.data),
-  deleteTopic: (id) => api.delete(`/analysis/topics/${id}`).then((r) => r.data),
+  completeTopic: (id, data) => api.post(`/analysis/topics/${id}/complete`, data).then((r) => r.data),
 
   getPolicies: () => api.get("/analysis/policies").then((r) => r.data),
   createPolicy: (data) => api.post("/analysis/policies", data).then((r) => r.data),
@@ -66,6 +66,34 @@ const analysisService = {
     api.get("/analysis/users/analysts").then((r) => (Array.isArray(r.data) ? r.data : r.data?.users || [])),
   getMentors: () =>
     api.get("/analysis/users/mentors").then((r) => (Array.isArray(r.data) ? r.data : r.data?.users || [])),
+
+  getMenuBadges: () => api.get("/analysis/menu-badges").then((r) => r.data).catch(() => ({
+    my_missions: 0,
+    approve_topics: 0,
+    review_queue: 0,
+  })),
+
+  createBriefSubmission: (data) => api.post("/analysis/brief-submissions", data).then((r) => r.data),
+  cleanBriefContent: (content) => api.post("/analysis/brief-submissions/clean-content", { content }).then((r) => r.data),
+  getMyBriefSubmissions: (params) => api.get("/analysis/brief-submissions/mine", { params }).then((r) => r.data),
+  getBriefSubmissions: (params) => api.get("/analysis/brief-submissions", { params }).then((r) => r.data),
+  getBriefBank: (params) => api.get("/analysis/brief-submissions/bank", { params }).then((r) => r.data),
+  getBriefSubmission: (id) => api.get(`/analysis/brief-submissions/${id}`).then((r) => r.data),
+  updateBriefStatus: (id, data) => api.patch(`/analysis/brief-submissions/${id}/status`, data).then((r) => r.data),
+  approveBriefBank: (id, data) => api.post(`/analysis/brief-submissions/${id}/approve-bank`, data).then((r) => r.data),
+  setBriefCommandVisibility: (id, showInCommand) =>
+    api.patch(`/analysis/brief-submissions/${id}/command-visibility`, {
+      show_in_command: showInCommand === true,
+    }).then((r) => r.data),
+  approveBriefForPublish: (id, data) => api.post(`/analysis/brief-submissions/${id}/editor-approve`, data).then((r) => r.data),
+  publishBriefSubmission: (id, data) => api.post(`/analysis/brief-submissions/${id}/publish`, data).then((r) => r.data),
+  editBriefBankContent: (id, data) => api.patch(`/analysis/brief-submissions/${id}/bank-content`, data).then((r) => r.data),
+  editBriefContent: (id, data) => api.patch(`/analysis/brief-submissions/${id}/content`, data).then((r) => r.data),
+  promoteBriefToTopic: (id, data) => api.post(`/analysis/brief-submissions/${id}/promote-topic`, data).then((r) => r.data),
+  promoteBriefToMission: (id, data) => api.post(`/analysis/brief-submissions/${id}/promote-mission`, data).then((r) => r.data),
+  suggestAnalystFromBrief: (id, data) => api.post(`/analysis/brief-submissions/${id}/suggest-analyst`, data).then((r) => r.data),
+  getBriefContributorStats: () => api.get("/analysis/brief-submissions/contributors/stats").then((r) => r.data),
+  getPendingRoleSuggestions: () => api.get("/analysis/brief-submissions/role-suggestions/pending").then((r) => r.data),
 };
 
 export default analysisService;

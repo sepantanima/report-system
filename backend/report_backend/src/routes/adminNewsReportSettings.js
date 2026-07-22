@@ -13,7 +13,7 @@ import {
 } from "../services/newsReportSettingsService.js";
 
 const router = Router();
-const adminRoles = requireRole("admin");
+const adminRoles = requireRole("admin", "news_chief");
 
 router.get("/settings", auth, adminRoles, async (req, res) => {
   try {

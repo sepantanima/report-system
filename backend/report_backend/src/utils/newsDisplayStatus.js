@@ -3,6 +3,7 @@ import {
   NEWS_QUALITY,
   NEWS_REVIEW_STATES,
   NEWS_WORKFLOW_STATES,
+  NEWS_PUBLISH_STATUSES,
   DUPLICATE_STATUSES,
   normalizeDbEnum,
   resolveDuplicateStatus,
@@ -23,6 +24,17 @@ export function getNewsDisplayStatus(item) {
   if (ws === "new") {
     primaryLabel = NEWS_WORKFLOW_STATES.new.label;
     primaryColor = NEWS_WORKFLOW_STATES.new.color;
+  } else if (ws === "finalized" && rs === "rejected") {
+    primaryLabel = "برگشت نهایی — عدم انتشار";
+    primaryColor = NEWS_REVIEW_STATES.rejected.color;
+  } else if (ws === "finalized" && rs === "rumor") {
+    primaryLabel = normalizeDbEnum(item.publish_status) === "banked"
+      ? "بانک انتظار — شایعه"
+      : "آماده انتشار — شایعه";
+    primaryColor = NEWS_REVIEW_STATES.rumor.color;
+  } else if (ws === "finalized" && normalizeDbEnum(item.publish_status) === "banked") {
+    primaryLabel = NEWS_PUBLISH_STATUSES.banked.label;
+    primaryColor = NEWS_PUBLISH_STATUSES.banked.color;
   } else if (ws === "finalized") {
     primaryLabel = NEWS_WORKFLOW_STATES.finalized.label;
     primaryColor = NEWS_WORKFLOW_STATES.finalized.color;

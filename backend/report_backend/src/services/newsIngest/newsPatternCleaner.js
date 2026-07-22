@@ -1,4 +1,5 @@
 import { compilePatternRow } from "./newsPatternCompiler.js";
+import { DEFAULT_SUMMARIZE_CHAR_THRESHOLD } from "../../constants/newsFieldLimits.js";
 
 /** الگوهای ساختاری ثابت — معادل n8n Node 11 */
 const BUILTIN_REGEX = [
@@ -10,6 +11,7 @@ const BUILTIN_REGEX = [
   /\|?\s*akharinkhabar\.ir/giu,
   /FilimoSchool\.com/giu,
   /khabarmohem\.ir/giu,
+  /\bkhabarfoori\.com\b/giu,
   /\bble\.ir\/join\/[A-Za-z0-9_-]+\b/giu,
   /\*?\s*ble\.ir\/join\/[A-Za-z0-9]+\s*(?:ble\.ir\/join\/[A-Za-z0-9]+\s*)+\*?/giu,
   /[ـ\-_=]{5,}\s*نیوز/giu,
@@ -17,6 +19,13 @@ const BUILTIN_REGEX = [
   /\[کانال\s*تلگرام\s*خبرنامه\s*تهران\]/giu,
   /\[کانال\s*روبیکا\s*خبرنامه\s*تهران\]/giu,
   /\(\s*\[کانال\s*روبیکا\s*خبرنامه\s*تهران\]\s*\)/giu,
+  /@Artesh_Mardomi/giu,
+  /@KhabarFuri/giu,
+  /@khbar1fori/giu,
+  /قدس نیوز/giu,
+  /صابرین نیوز.*?👇/giu,
+  /پدرفتنه/giu,
+  /ایرانِ‌بیدار/giu,
   /┄┅═✧.*?✧═┅┄/giu,
   /\|\s*\|/giu,
   /\|\s*Link\b/giu,
@@ -25,7 +34,15 @@ const BUILTIN_REGEX = [
   /(?:\)\s*){2,}/gu,
   /[ـ]{2,}/giu,
   /\s*نیوز\s*/giu,
+  /\[?\s*کانال\s*ایتا\s*خبرنامه\s*(?:تهران)?\s*\]?/giu,
+  /\[?\s*کانال\s*روبیکا\s*خبرنامه\s*(?:تهران)?\s*\]?/giu,
+  /\[?\s*کانال\s*تلگرام\s*خبرنامه\s*(?:تهران)?\s*\]?/giu,
+  /\(\s*کانال\s*ایتا\s*خبرنامه\s*(?:تهران)?\s*\)/giu,
+  /\(\s*کانال\s*روبیکا\s*خبرنامه\s*(?:تهران)?\s*\)/giu,
+  /\(\s*کانال\s*تلگرام\s*خبرنامه\s*(?:تهران)?\s*\)/giu,
+  /ما را در سایت و تلگرام اسپوتنیک دنبال کنید/giu,
   /─+\s*منبع:.*?زمان:\s*[\d۰-۹]{1,2}:[\d۰-۹]{2}\s*\|\s*[\d۰-۹]{4}\/[\d۰-۹]{1,2}\/[\d۰-۹]{1,2}/giu,
+  /(کانال\s*ایتا\s*خبرنامه|کانال\s*روبیکا\s*خبرنامه|کانال\s*تلگرام\s*خبرنامه)/giu,
   /https?:\/\/[^\s]+/giu,
   /www\.[^\s]+/giu,
 ];
@@ -33,10 +50,11 @@ const BUILTIN_REGEX = [
 const EMOJI_REGEX = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
 const ALL_HASHTAG_REGEX = /#[\w\u0600-\u06FF_‌]+/gu;
 
-export function buildNewsSummary(text) {
+export function buildNewsSummary(text, threshold = DEFAULT_SUMMARIZE_CHAR_THRESHOLD) {
   const s = String(text ?? "").trim();
   if (!s) return "";
-  return s.length > 150 ? `${s.slice(0, 150)}… ادامه` : s;
+  const limit = Number.isFinite(Number(threshold)) ? Number(threshold) : DEFAULT_SUMMARIZE_CHAR_THRESHOLD;
+  return s.length > limit ? `${s.slice(0, limit)}… ادامه` : s;
 }
 
 function normalizeZwnj(text) {
@@ -46,8 +64,29 @@ function normalizeZwnj(text) {
     .replace(/\u200c{2,}/g, "\u200c");
 }
 
+/** حذف تگ‌های HTML با حفظ خطوط (برخلاف stripHtml که فاصله‌ها را یکدست می‌کند) */
+export function stripHtmlKeepNewlines(text) {
+  return String(text ?? "")
+    .replace(/&lt;(\/?)\s*p\s*&gt;/gi, "<$1p>")
+    .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 function finalWhitespaceCleanup(text) {
   return String(text ?? "")
+    .replace(/^\s*<\/?p>\s*/i, "")
+    .replace(/\s*<\/?p>\s*$/i, "")
+    .replace(/<\/?p>/gi, "\n")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -89,9 +128,11 @@ export function applyPatternRemove(text, regex, removeMode = "phrase") {
 /**
  * @param {string} text
  * @param {Array<{ id?: number, phrase?: string, match_kind?: string, is_regex?: boolean, remove_mode?: string, regex?: RegExp }>} [dynamicPatterns]
+ * @param {{ summarizeThreshold?: number }} [options]
  */
-export function cleanNewsPlainText(text, dynamicPatterns = []) {
-  let result = String(text ?? "");
+export function cleanNewsPlainText(text, dynamicPatterns = [], options = {}) {
+  const summarizeThreshold = options.summarizeThreshold ?? DEFAULT_SUMMARIZE_CHAR_THRESHOLD;
+  let result = stripHtmlKeepNewlines(text);
   const removedBuiltin = [];
   const removedPatternIds = [];
 
@@ -116,7 +157,7 @@ export function cleanNewsPlainText(text, dynamicPatterns = []) {
 
   return {
     text: result,
-    summary: buildNewsSummary(result),
+    summary: buildNewsSummary(result, summarizeThreshold),
     removedBuiltin,
     removedPatternIds,
   };

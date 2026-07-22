@@ -14,6 +14,12 @@ export default function PageToolbarButtons({
 
   return (
     <>
+      {showHelp && onHelp ? (
+        <button type="button" onClick={onHelp} className={btnClass} title="راهنما">
+          <HelpCircle size={18} />
+        </button>
+      ) : null}
+      <PageFontSizeButton level={fontLevel} onCycle={onCycleFont} className={btnClass} />
       <button
         type="button"
         onClick={toggleDarkMode}
@@ -22,12 +28,6 @@ export default function PageToolbarButtons({
       >
         {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
       </button>
-      <PageFontSizeButton level={fontLevel} onCycle={onCycleFont} className={btnClass} />
-      {showHelp && onHelp ? (
-        <button type="button" onClick={onHelp} className={btnClass} title="راهنما">
-          <HelpCircle size={18} />
-        </button>
-      ) : null}
     </>
   );
 }

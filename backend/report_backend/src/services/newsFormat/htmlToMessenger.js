@@ -77,6 +77,18 @@ function astToMessenger(nodes, platform) {
         out += "\n\n";
         continue;
       }
+      if (n.type === "ul" || n.type === "ol") {
+        if (out && !out.endsWith("\n")) out += "\n";
+        out += walk(n.children, true);
+        if (!out.endsWith("\n")) out += "\n";
+        continue;
+      }
+      if (n.type === "li") {
+        if (out && !out.endsWith("\n")) out += "\n";
+        const item = walkInline(n.children).trim() || walk(n.children, true).trim();
+        out += `• ${item}\n`;
+        continue;
+      }
       if (n.children) out += walk(n.children, blockContext);
     }
     return out;
@@ -87,10 +99,10 @@ function astToMessenger(nodes, platform) {
     for (const n of list) {
       if (n.type === "text") out += n.value;
       else if (n.type === "br") out += "\n";
-      else if (n.type === "strong" || n.type === "b") out += walkInline(n.children);
-      else if (n.type === "em" || n.type === "i") out += walkInline(n.children);
-      else if (n.type === "u") out += walkInline(n.children);
-      else if (n.type === "code") out += walkInline(n.children);
+      else if (n.type === "strong" || n.type === "b") out += wrap("bold", walkInline(n.children));
+      else if (n.type === "em" || n.type === "i") out += wrap("italic", walkInline(n.children));
+      else if (n.type === "u") out += wrap("underline", walkInline(n.children));
+      else if (n.type === "code") out += wrap("code", walkInline(n.children));
       else if (n.children) out += walkInline(n.children);
     }
     return out;

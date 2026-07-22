@@ -130,3 +130,56 @@ export async function getRawConfigForTest(id) {
   const r = await pool.query(`SELECT * FROM tbl_ai_api_configs WHERE id = $1`, [id]);
   return r.rows[0] || null;
 }
+
+/** ردیف متعارض با همان usage_key و sort_order */
+export async function findSortOrderConflict(usage_key, sort_order, excludeId = null) {
+  const uk = String(usage_key ?? "").trim();
+  const so = parseInt(sort_order, 10) || 0;
+  const params = [uk, so];
+  let q = `SELECT id, usage_key, sort_order, title_fa, provider_type, model_id
+           FROM tbl_ai_api_configs WHERE usage_key = $1 AND sort_order = $2`;
+  if (excludeId != null && Number.isFinite(Number(excludeId))) {
+    params.push(Number(excludeId));
+    q += ` AND id <> $3`;
+  }
+  const r = await pool.query(q, params);
+  return r.rows[0] || null;
+}
+
+function formatSortConflictError(conflict, usage_key, sort_order) {
+  const title = conflict.title_fa?.trim() || conflict.provider_type || "بدون عنوان";
+  return `ترتیب ${sort_order} برای کاربرد «${usage_key}» قبلاً در ردیف #${conflict.id} (${title}) استفاده شده — عدد ترتیب دیگری انتخاب کنید یا ابتدا آن ردیف را ویرایش کنید.`;
+}
+
+export async function moveAiConfigSort(id, direction, userId) {
+  const curR = await pool.query(`SELECT id, usage_key, sort_order FROM tbl_ai_api_configs WHERE id = $1`, [id]);
+  const cur = curR.rows[0];
+  if (!cur) return { ok: false, error: "یافت نشد" };
+
+  const sibR = await pool.query(
+    `SELECT id, sort_order FROM tbl_ai_api_configs WHERE usage_key = $1 ORDER BY sort_order ASC, id ASC`,
+    [cur.usage_key],
+  );
+  const siblings = sibR.rows;
+  const idx = siblings.findIndex((r) => r.id === cur.id);
+  const delta = direction === "up" ? -1 : 1;
+  const other = siblings[idx + delta];
+  if (!other) return { ok: false, error: direction === "up" ? "در بالاترین اولویت است" : "در پایین‌ترین اولویت است" };
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`UPDATE tbl_ai_api_configs SET sort_order = -9999, updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE id = $1`, [cur.id, userId ?? null]);
+    await client.query(`UPDATE tbl_ai_api_configs SET sort_order = $1, updated_at = CURRENT_TIMESTAMP, updated_by = $3 WHERE id = $2`, [cur.sort_order, other.id, userId ?? null]);
+    await client.query(`UPDATE tbl_ai_api_configs SET sort_order = $1, updated_at = CURRENT_TIMESTAMP, updated_by = $3 WHERE id = $2`, [other.sort_order, cur.id, userId ?? null]);
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export { formatSortConflictError };

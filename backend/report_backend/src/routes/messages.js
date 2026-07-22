@@ -28,6 +28,7 @@ import {
   bulkSoftDeleteInbox,
   bulkSoftDeleteSent,
   bulkPermanentDelete,
+  bulkMarkRead,
   updateMessage,
 } from "../services/messageService.js";
 
@@ -249,6 +250,15 @@ router.post("/bulk-delete", auth, async (req, res) => {
   } catch (e) {
     const code = e.message.includes("مدیر کل") ? 403 : 400;
     res.status(code).json({ error: e.message });
+  }
+});
+
+router.post("/bulk-read", auth, async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    res.json(await bulkMarkRead(ids, req.user.id));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 

@@ -3,7 +3,10 @@ import {
   NEWS_QUALITY,
   NEWS_REVIEW_STATES,
   NEWS_WORKFLOW_STATES,
+  NEWS_PUBLISH_STATUSES,
   DUPLICATE_STATUSES,
+  NEWS_RELEVANCE_STATUSES,
+  NEWS_EDITORIAL_STATES,
   normalizeDbEnum,
 } from "../constants/newsMonitorMeta.js";
 
@@ -33,6 +36,18 @@ export function getNewsDisplayStatus(item) {
   if (ws === "new") {
     primaryLabel = NEWS_WORKFLOW_STATES.new.label;
     primaryColor = NEWS_WORKFLOW_STATES.new.color;
+  } else if (ws === "finalized" && rs === "rejected") {
+    // تأیید نهایی سردبیر روی برگشت = پذیرش برگشت، نه آماده انتشار
+    primaryLabel = "برگشت نهایی — عدم انتشار";
+    primaryColor = NEWS_REVIEW_STATES.rejected.color;
+  } else if (ws === "finalized" && rs === "rumor") {
+    primaryLabel = normalizeDbEnum(item.publish_status) === "banked"
+      ? "بانک انتظار — شایعه"
+      : "آماده انتشار — شایعه";
+    primaryColor = NEWS_REVIEW_STATES.rumor.color;
+  } else if (ws === "finalized" && normalizeDbEnum(item.publish_status) === "banked") {
+    primaryLabel = NEWS_PUBLISH_STATUSES.banked.label;
+    primaryColor = NEWS_PUBLISH_STATUSES.banked.color;
   } else if (ws === "finalized") {
     primaryLabel = NEWS_WORKFLOW_STATES.finalized.label;
     primaryColor = NEWS_WORKFLOW_STATES.finalized.color;
@@ -63,6 +78,18 @@ export function getNewsDisplayStatus(item) {
   if (dup !== "none") {
     const dupMeta = DUPLICATE_STATUSES[dup] || DUPLICATE_STATUSES.suspicious;
     secondaryTags.push({ label: dupMeta.label, color: dupMeta.color });
+  }
+
+  const rel = normalizeDbEnum(item.relevance_status, "unset");
+  if (rel === "relevant") {
+    secondaryTags.push({ label: NEWS_RELEVANCE_STATUSES.relevant.label, color: NEWS_RELEVANCE_STATUSES.relevant.color });
+  } else if (rel === "irrelevant") {
+    secondaryTags.push({ label: NEWS_RELEVANCE_STATUSES.irrelevant.label, color: NEWS_RELEVANCE_STATUSES.irrelevant.color });
+  }
+
+  const ed = normalizeDbEnum(item.editorial_state, "pending");
+  if (ed && NEWS_EDITORIAL_STATES[ed]) {
+    secondaryTags.push({ label: NEWS_EDITORIAL_STATES[ed].label, color: NEWS_EDITORIAL_STATES[ed].color });
   }
 
   return { primaryLabel, primaryColor, secondaryTags };

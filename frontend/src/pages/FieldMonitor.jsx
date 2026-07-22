@@ -5,13 +5,11 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 // هنگام کپی کردن این فایل به پروژه محلی خود، کافیست خطوط زیر را از حالت کامنت خارج کنید:
 //
 import api from "../api/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAppTheme } from "../context/ThemeContext.jsx";
-import {
-  Search, Calendar, ChevronDown, ChevronUp, ArrowRight, Filter, X, Edit3, Type,
-  Sun, Moon, RotateCcw, Copy, History, Clock, MapPin, RefreshCw, SlidersHorizontal,
-  Trash2, CornerUpLeft, MessageSquare, Save, HelpCircle, ShieldAlert
-} from "lucide-react";
+import PageToolbarButtons from "../components/common/PageToolbarButtons.jsx";
+import PageUserMenu from "../components/common/PageUserMenu.jsx";
+import NotificationBell from "../components/messaging/NotificationBell.jsx";
 import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -20,7 +18,18 @@ import { FIELD_FIELD_LIMITS } from "../constants/fieldFieldLimits.js";
 import { clampText } from "../utils/limitInput.js";
 import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
 import EntityMessageComposeModal from "../components/messaging/EntityMessageComposeModal.jsx";
+import MonitorSortBar from "../components/MonitorSortBar.jsx";
+import { useMonitorSort } from "../hooks/useMonitorSort.js";
+import { sortItems } from "../utils/listSort.js";
+import {
+  FIELD_MONITOR_SORT_FIELDS,
+  FIELD_MONITOR_SORT_STORAGE_KEY,
+  fieldReportSortValue,
+} from "../constants/monitorSortFields.js";
+import { BASE_PAGE_FONT_PX, usePageFontSize } from "../utils/pageFontSize.js";
+import { FORM_PAGE_CSS } from "../theme/formPageStyles.js";
 import { getSessionRoles, hasRole } from "../utils/userRoles.js";
+import useAnalysisToast from "../hooks/useAnalysisToast.jsx";
 // =========================================================================
 
 // 🌟 تعریف متغیرهای پشتیبان جهت جلوگیری از خطای esbuild در زمان بیلد کانوس
@@ -97,9 +106,10 @@ const HelpCircleIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/
 
 export default function FieldMonitor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const sidebarRef = useRef(null); // رفرنس سایدبار فیلترها جهت بستن هوشمند با کلیک بیرون
-  const { isDarkMode, setIsDarkMode, toggleDarkMode } = useAppTheme();
-  const [fontSizeLevel, setFontSizeLevel] = useState(2);
+  const { isDarkMode, setIsDarkMode } = useAppTheme();
+  const { level: fontLevel, cycleFont, fontSizePx } = usePageFontSize();
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState([]);
   const [allProvinces, setAllProvinces] = useState([]);
@@ -109,6 +119,7 @@ export default function FieldMonitor() {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [pastNotes, setPastNotes] = useState([]);
+  const [showPastNotes, setShowPastNotes] = useState(false);
 
   // آمار کل بازه‌ی تاریخی مستقل از فیلتر وضعیت (برای جلوگیری از گیجی مدیر هنگام فیلتر بررسی‌نشده‌ها)
   const [summaryStats, setSummaryStats] = useState({
@@ -136,6 +147,7 @@ export default function FieldMonitor() {
   const [entityMsgCompose, setEntityMsgCompose] = useState(false);
   const [entityMsgRefresh, setEntityMsgRefresh] = useState(0);
   const canManageMessages = hasRole(getSessionRoles(), "admin", "Field_admin", "news_chief");
+  const [sortConfig, setSortConfig] = useMonitorSort(FIELD_MONITOR_SORT_STORAGE_KEY, FIELD_MONITOR_SORT_FIELDS);
   const [editForm, setEditForm] = useState({
     title: "", // قابلیت ویرایش عنوان توسط مدیر
     chat_title: "", // قابلیت ویرایش موضوع توسط مدیر
@@ -148,13 +160,8 @@ export default function FieldMonitor() {
     showRejectReason: false
   });
 
-  // --- وضعیت اعلان‌های توست داخلی ---
-  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
-
-  const showToast = (message, type = "success") => {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
-  };
+  // --- وضعیت اعلان‌های توست ---
+  const { showToast, Toast } = useAnalysisToast();
 
   // اولویت‌های مپ شده به ساختار ۱۰۰٪ یکسان با فرستنده
   const priorityLevels = {
@@ -302,6 +309,7 @@ export default function FieldMonitor() {
   useEffect(() => {
     if (!editingReport) {
       setPastNotes([]);
+      setShowPastNotes(false);
       return;
     }
     fetchPastNotesByTopic(editForm.chat_title, editingReport.hash_key);
@@ -402,15 +410,20 @@ export default function FieldMonitor() {
     }
   };
 
+  const sortedReports = useMemo(
+    () => sortItems(reports, sortConfig, fieldReportSortValue),
+    [reports, sortConfig],
+  );
+
   const groupedData = useMemo(() => {
-    return reports.reduce((acc, r) => {
+    return sortedReports.reduce((acc, r) => {
       const key = r.chat_title || "بدون موضوع";
       if (filters.topic !== "all" && key !== filters.topic) return acc;
       if (!acc[key]) acc[key] = [];
       acc[key].push(r);
       return acc;
     }, {});
-  }, [reports, filters.topic]);
+  }, [sortedReports, filters.topic]);
 
   const totalFilteredCount = useMemo(() => {
     return Object.values(groupedData).reduce((sum, items) => sum + items.length, 0);
@@ -434,24 +447,52 @@ export default function FieldMonitor() {
   };
 
   return (
-    <div style={{ background: theme.bg, height: "100vh", display: "flex", flexDirection: "column", direction: "rtl", color: theme.text, overflowX: "hidden" }}>
-      {toast.show && (
-        <div style={{
-          ...toastBoxStyle,
-          background: toast.type === "success" ? "#10b981" : "#ef4444"
-        }}>
-          {toast.message}
-        </div>
-      )}
+    <div
+      className="page-font-root"
+      style={{
+        background: theme.bg,
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        direction: "rtl",
+        color: theme.text,
+        overflowX: "hidden",
+        fontFamily: "Tahoma, sans-serif",
+        fontSize: BASE_PAGE_FONT_PX,
+        ["--input-font-size"]: fontSizePx,
+      }}
+    >
+      {Toast}
 
       {/* Header */}
       <header className="v3-navbar" style={{ background: theme.card, borderBottom: `1px solid ${theme.border}` }}>
         <div className="v3-nav-row">
-          <button onClick={() => navigate("/main")} className="v3-icon-btn"><ArrowRightIcon /></button>
+          <button
+            onClick={() => {
+              const returnTo = location.state?.returnTo;
+              if (typeof returnTo === "string" && returnTo.startsWith("/")) navigate(returnTo);
+              else navigate("/main");
+            }}
+            className="v3-icon-btn"
+          >
+            <ArrowRightIcon />
+          </button>
           <div className="v3-search-input" style={{ background: isDarkMode ? "rgba(0,0,0,0.2)" : "#fff", border: `1px solid ${theme.border}` }}>
             <SearchIcon /><input placeholder="جستجو در متن یا واحد..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <button onClick={() => setShowFilters(!showFilters)} className={`v3-icon-btn v3-filter-btn-trigger ${showFilters ? "active" : ""}`}><FilterIcon /></button>
+          <div className="v3-nav-tools">
+            <button onClick={() => setShowFilters(!showFilters)} className={`v3-icon-btn v3-filter-btn-trigger ${showFilters ? "active" : ""}`}><FilterIcon /></button>
+            {loading && <RefreshCwIcon className="v3-spin" />}
+            <NotificationBell isDarkMode={isDarkMode} />
+            <PageToolbarButtons
+              fontLevel={fontLevel}
+              onCycleFont={cycleFont}
+              onHelp={() => setShowManagerHelp(true)}
+              showHelp
+              btnClass="v3-icon-btn"
+            />
+            <PageUserMenu btnClass="v3-icon-btn" />
+          </div>
         </div>
         <div className="v3-nav-row sub">
           <div className="v3-date-box" style={{ border: `1px solid ${theme.border}` }}>
@@ -489,35 +530,15 @@ export default function FieldMonitor() {
               </div>
             )}
           </div>
-          {/* دکمه‌های کنترلی هدر - در دسکتاپ نمایش داده می‌شوند و در موبایل به ردیف پایین منتقل می‌شوند */}
-          <div className="v3-header-controls-desktop">
-            {loading && <RefreshCwIcon />}
-            <button onClick={toggleDarkMode} className="v3-icon-btn-gentle" title="تغییر تم رنگی">
-              {isDarkMode ? <SunIcon /> : <MoonIcon />}
-            </button>
-            <button onClick={() => setFontSizeLevel((l) => (l < 4 ? l + 1 : 1))} className="v3-icon-btn-gentle" title="تغییر اندازه قلم">
-              <TypeIcon />
-            </button>
-            <button onClick={() => setShowManagerHelp(true)} className="v3-icon-btn-gentle" title="دستورالعمل و راهنمای مانیتورینگ">
-              <HelpCircleIcon />
-            </button>
-          </div>
         </div>
-        
-        {/* 🌟 ردیف سوم کمکی و ظریف مخصوص موبایل جهت نمایش دکمه‌های کنترل تم، قلم و راهنما بدون بیرون‌زدگی */}
-        <div className="v3-header-controls-mobile">
-          {loading && <RefreshCwIcon style={{ marginLeft: "8px" }} />}
-          <div style={{ display: "flex", gap: "10px", width: "100%", justifyContent: "center" }}>
-            <button onClick={toggleDarkMode} className="v3-icon-btn-gentle-mobile">
-              {isDarkMode ? <><SunIcon size={14} /> <span>تم روشن</span></> : <><MoonIcon size={14} /> <span>تم تیره</span></>}
-            </button>
-            <button onClick={() => setFontSizeLevel((l) => (l < 4 ? l + 1 : 1))} className="v3-icon-btn-gentle-mobile">
-              <TypeIcon size={14} /> <span>اندازه قلم</span>
-            </button>
-            <button onClick={() => setShowManagerHelp(true)} className="v3-icon-btn-gentle-mobile">
-              <HelpCircleIcon size={14} /> <span>راهنما</span>
-            </button>
-          </div>
+        <div className="v3-nav-row sort">
+          <MonitorSortBar
+            fields={FIELD_MONITOR_SORT_FIELDS}
+            sortConfig={sortConfig}
+            onSortChange={setSortConfig}
+            theme={theme}
+            compact
+          />
         </div>
       </header>
 
@@ -582,7 +603,7 @@ export default function FieldMonitor() {
             <div className="v3-report-grid">
               {expandedGroups[topic] !== false &&
                 items.map((r) => (
-                  <InnerReportCard key={r.hash_key} r={r} theme={theme} priorityLevels={priorityLevels} qualityLevels={qualityLevels} classificationLevels={classificationLevels} statusLabels={statusLabels} fontSizeLevel={fontSizeLevel} onEdit={() => handleEditClick(r)} onQuickReject={(reason) => handleQuickAction(r, "rejected", reason)} cleanDateString={cleanDateString} />
+                  <InnerReportCard key={r.hash_key} r={r} theme={theme} priorityLevels={priorityLevels} qualityLevels={qualityLevels} classificationLevels={classificationLevels} statusLabels={statusLabels} onEdit={() => handleEditClick(r)} onQuickReject={(reason) => handleQuickAction(r, "rejected", reason)} cleanDateString={cleanDateString} />
                 ))}
             </div>
           </div>
@@ -643,7 +664,7 @@ export default function FieldMonitor() {
                   <label className="v3-label-new" style={{ color: "#fb923c", display: "flex", alignItems: "center", gap: "6px" }}>
                     <MessageSquareIcon /> سوابق تعاملات و چرخه رفت و برگشت این گزارش:
                   </label>
-                  <div style={{ background: "rgba(245, 158, 11, 0.04)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "10px", padding: "12px", fontSize: "12px", lineHeight: "1.8", color: isDarkMode ? "#cbd5e1" : "#334155", whiteSpace: "pre-line" }}>
+                  <div className="text-justify" style={{ background: "rgba(245, 158, 11, 0.04)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "10px", padding: "12px", fontSize: "12px", lineHeight: "1.8", color: isDarkMode ? "#cbd5e1" : "#334155", whiteSpace: "pre-line" }}>
                     {toPersianDigits(editingReport.workflow_logs)}
                   </div>
                 </div>
@@ -703,13 +724,20 @@ export default function FieldMonitor() {
               <div className="v3-input-group" style={{ marginTop: "20px" }}>
                 <div className="v3-flex-between">
                   <label className="v3-label-new" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <HistoryIcon size={14} /> یادداشت مدیریت — ۴ یادداشت آخر این موضوع
+                    <HistoryIcon size={14} /> یادداشت مدیریت
                   </label>
-                  <span style={{ fontSize: "10px", color: editForm.admin_note.length > FIELD_FIELD_LIMITS.adminNote ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
-                    {toPersianDigits(editForm.admin_note.length)} / {toPersianDigits(FIELD_FIELD_LIMITS.adminNote)}
-                  </span>
+                  <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                    <span style={{ fontSize: "10px", color: editForm.admin_note.length > FIELD_FIELD_LIMITS.adminNote ? "#ef4444" : "#64748b", fontWeight: "bold" }}>
+                      {toPersianDigits(editForm.admin_note.length)} / {toPersianDigits(FIELD_FIELD_LIMITS.adminNote)}
+                    </span>
+                    {editForm.chat_title && pastNotes.length > 0 && (
+                      <button type="button" className="v3-action-link" onClick={() => setShowPastNotes((v) => !v)}>
+                        <HistoryIcon /> {showPastNotes ? "بستن سوابق" : `${toPersianDigits(pastNotes.length)} یادداشت اخیر`}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {editForm.chat_title && (
+                {showPastNotes && editForm.chat_title && (
                   <div className="v3-history-panel">
                     {pastNotes.length === 0 ? (
                       <div style={{ fontSize: "11px", opacity: 0.6, padding: "6px 8px" }}>یادداشت قبلی برای موضوع «{editForm.chat_title}» ثبت نشده است.</div>
@@ -719,7 +747,10 @@ export default function FieldMonitor() {
                           key={n.hash_key || idx}
                           className="v3-history-chip"
                           title="کلیک برای استفاده در یادداشت"
-                          onClick={() => setEditForm({ ...editForm, admin_note: clampText(n.manager_notes || n.text || "", FIELD_FIELD_LIMITS.adminNote) })}
+                          onClick={() => {
+                            setEditForm({ ...editForm, admin_note: clampText(n.manager_notes || n.text || "", FIELD_FIELD_LIMITS.adminNote) });
+                            setShowPastNotes(false);
+                          }}
                         >
                           {n.manager_notes || n.text}
                         </div>
@@ -833,6 +864,7 @@ export default function FieldMonitor() {
         onSent={() => setEntityMsgRefresh((k) => k + 1)}
       />
 
+      <style>{FORM_PAGE_CSS}</style>
       <style>{`
         .v3-modal-box { width: 95%; max-width: 680px; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
         .v3-selection-section { display: flex; flex-direction: column; gap: 20px; margin-top: 24px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.08); }
@@ -937,50 +969,29 @@ export default function FieldMonitor() {
         .v3-close-btn-new { background: none; border: none; color: #f87171; cursor: pointer; transition: 0.2s; }
         .v3-close-btn-new:hover { transform: scale(1.1); }
         .v3-label-new { font-size: 12px; opacity: 0.7; margin-bottom: 8px; display: block; }
-        .v3-raw-box { background: rgba(0,0,0,0.15); padding: 12px; border-radius: 10px; font-size: 13px; color: #94a3b8; border: 1px solid rgba(255,255,255,0.05); line-height: 1.6; }
-        .v3-textarea-new { width: 100%; min-height: 120px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; font-family: inherit; resize: vertical; }
-        .v3-textarea-small-new { width: 100%; min-height: 80px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; color: #fff; font-size: 13px; font-family: inherit; resize: vertical; }
+        .v3-raw-box { background: rgba(0,0,0,0.15); padding: 12px; border-radius: 10px; font-size: 13px; color: #94a3b8; border: 1px solid rgba(255,255,255,0.05); line-height: 1.6; text-align: justify; }
+        .v3-textarea-new { width: 100%; min-height: 120px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; font-family: inherit; resize: vertical; text-align: justify; }
+        .v3-textarea-small-new { width: 100%; min-height: 80px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; color: #fff; font-size: 13px; font-family: inherit; resize: vertical; text-align: justify; }
         .v3-history-panel { background: rgba(255,255,255,0.03); backdrop-filter: blur(8px); border-radius: 12px; padding: 8px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.08); }
         .v3-history-chip { padding: 8px 12px; font-size: 11px; cursor: pointer; border-radius: 8px; transition: 0.2s; }
         .v3-history-chip:hover { background: rgba(255,255,255,0.1); color: #38bdf8; }
         .v3-action-link { background: none; border: none; color: #38bdf8; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-bottom: 5px; transition: 0.2s; }
         .v3-flex-between { display: flex; justify-content: space-between; align-items: center; }
         
-        /* مهار اختصاصی دکمه‌های کنترلی هدر در دسکتاپ و انتقال زیبا به ردیف پایین در موبایل */
-        .v3-header-controls-desktop { display: flex; gap: 6px; align-items: center; }
-        .v3-header-controls-mobile { display: none; }
+        /* دکمه‌های کنترلی آیکنی کنار جستجو/فیلتر — یکسان در دسکتاپ و موبایل */
+        .v3-header-control-icons { display: flex; align-items: center; gap: 6px; }
+        /* ردیف مرتب‌سازی: مرتب‌سازی + کمبو + فلش + صعودی/نزولی در یک خط */
+        .v3-nav-row.sort { padding-top: 2px; }
         
         @media (max-width: 768px) {
-          .v3-header-controls-desktop { display: none !important; }
-          .v3-header-controls-mobile { 
-            display: flex; 
-            width: 100%; 
-            margin-top: 4px; 
-            padding-top: 8px; 
-            border-top: 1px dashed rgba(255, 255, 255, 0.05); 
-            align-items: center; 
-          }
-          .v3-icon-btn-gentle-mobile {
-            flex: 1;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            height: 34px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            background: rgba(255, 255, 255, 0.02);
-            color: #94a3b8;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 11px;
-            transition: all 0.2s;
-          }
-          .v3-icon-btn-gentle-mobile:hover {
-            background: rgba(56, 189, 248, 0.08);
-            color: #38bdf8;
-            border-color: rgba(56, 189, 248, 0.2);
-          }
+          /* ردیف اول: جستجو + فیلتر + دکمه‌های کنترلی همگی کنار هم و در صورت نیاز wrap */
+          .v3-nav-row { flex-wrap: wrap; }
+          /* چیدمان عمودی: تاریخ، سپس آمار، سپس مرتب‌سازی — هرکدام تمام‌عرض */
+          .v3-nav-row.sub { flex-direction: column; align-items: stretch; gap: 8px; }
+          .v3-date-box { width: 100%; box-sizing: border-box; justify-content: flex-start; }
+          .v3-date-box .themed-date-picker { flex: 1; }
+          .v3-summary-bar { width: 100%; }
+          .v3-nav-row.sort { width: 100%; }
         }
         
         @keyframes userPulse {
@@ -998,10 +1009,9 @@ export default function FieldMonitor() {
 }
 
 // 🌟 کامپوننت کارت داخلی مجهز به سیستم تشخیص هوشمند گزارش‌های اصلاح‌شده
-function InnerReportCard({ r, theme, priorityLevels, qualityLevels, classificationLevels, statusLabels, fontSizeLevel, onEdit, onQuickReject, cleanDateString }) {
+function InnerReportCard({ r, theme, priorityLevels, qualityLevels, classificationLevels, statusLabels, onEdit, onQuickReject, cleanDateString }) {
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-  const fSizes = { 1: "12px", 2: "14px", 3: "16px", 4: "18px" };
 
   // بررسی هوشمند: آیا گزارش در وضعیت در انتظار است اما سابقه مرجوعی و اصلاحیه کاربر را دارد؟
   const isUserAmendment = useMemo(() => {
@@ -1056,7 +1066,7 @@ function InnerReportCard({ r, theme, priorityLevels, qualityLevels, classificati
         </div>
       )}
 
-      <p style={{ fontSize: fSizes[fontSizeLevel], flex: 1, lineHeight: "1.7", textAlign: "justify", margin: "5px 0", whiteSpace: "pre-line" }}>
+      <p className="page-scalable-text" style={{ flex: 1, lineHeight: "1.7", textAlign: "justify", margin: "5px 0", whiteSpace: "pre-line" }}>
         {r.cleaned_text || r.raw_text}
       </p>
 
@@ -1108,5 +1118,3 @@ const inputTextStyle = {
   outline: "none",
   boxSizing: "border-box"
 };
-
-const toastBoxStyle = { position: "fixed", top: "20px", left: "50%", transform: "translateX(-50%)", padding: "12px 24px", borderRadius: "10px", color: "#fff", zIndex: 9999, fontWeight: "bold", boxShadow: "0 10px 25px rgba(0,0,0,0.35)", direction: "rtl" };

@@ -1,0 +1,53 @@
+/** fallback توضیح مجوزها — هم‌راستا با backend/rbacSeed.js */
+export const PERMISSION_DESCRIPTIONS = {
+  create_report: "ثبت و ارسال گزارش میدانی جدید برای واحد سازمانی.",
+  manage_users: "ایجاد، ویرایش، غیرفعال‌سازی کاربران و تعیین نقش/مجوز.",
+  monitor_reports: "صفحه پایش گزارش‌های میدانی؛ تأیید، برگشت یا پیگیری وضعیت.",
+  news_entry: "ثبت خبر جدید (منوی ورود خبر / پایشگر).",
+  news_review: "بازبینی و ویرایش خبر در گردش کار دبیر (مدیریت اخبار).",
+  news_finalize: "نهایی‌سازی و تأیید نهایی خبر توسط سردبیر.",
+  news_duplicates: "مدیریت خبرهای تکراری، ادغام و رفع تکرار.",
+  ai_process: "اجرای پردازش هوشمند روی اخبار (Smart AI Processor).",
+  search_reports: "جستجوی پیشرفته در آرشیو گزارش‌های میدانی.",
+  sys_settings: "دسترسی به تنظیمات سیستم، پروفایل و تغییر رمز.",
+  analytics: "مشاهده داشبوردها و آمار (اخبار یا میدان بسته به منو).",
+  analysis_manage: "مدیریت محورها، مأموریت‌ها و گردش کار تحلیل.",
+  analysis_topic_approve: "تصویب یا رد موضوعات/محورهای پیشنهادی تحلیل.",
+  analysis_missions: "مشاهده و انجام مأموریت‌های تحلیل اختصاص‌یافته.",
+  analysis_propose: "پیشنهاد موضوع یا محور جدید برای تحلیل.",
+  analysis_review: "بازبینی، داوری و بازخورد به تحلیل‌های ارسالی.",
+  analysis_brief_submit: "ارسال تحلیل کوتاه یا پیشنهاد محور از منوی تحلیل.",
+  manage_prompts: "ویرایش پرامپت‌ها و الگوهای پاکسازی خبر.",
+  manage_ai_api: "تنظیم API، کلید و اولویت سرویس‌های هوش مصنوعی.",
+  manage_messenger: "مدیریت کانال‌ها و مقصدهای پیام‌رسان (بله و …).",
+  manage_news_reports: "تنظیمات گزارش خبری و قالب انتشار.",
+  field_mgmt_summary: "خلاصه مدیریتی دوره‌ای گزارشات میدانی.",
+  news_report: "تهیه، پیش‌نمایش و انتشار گزارش خبری.",
+  manage_field_entry_limits: "تعیین سقف تعداد ثبت روزانه گزارش میدانی.",
+  manage_news_entry_limits: "تعیین سقف تعداد ثبت روزانه خبر.",
+  messages: "صندوق پیام، اعلان‌ها و پیام‌های دریافتی.",
+  manage_announcements: "صدور ابلاغ یا اطلاع‌رسانی سراسری.",
+  manage_message_settings: "تنظیمات سامانه پیام، ابلاغ و محدودیت‌ها.",
+  manage_messenger_accounts: "اتصال و مدیریت حساب پیام‌رسان کاربران.",
+  command_center: "ورود به مرکز فرماندهی راهبردی.",
+  command_live_news: "تالار اخبار زنده در مرکز فرماندهی.",
+  command_annotate: "حاشیه‌نویسی و برچسب‌گذاری روی اخبار راهبردی.",
+  command_kpi: "مشاهده شاخص‌ها و KPI راهبردی.",
+  command_outputs: "کتابخانه خروجی‌ها و گزارش‌های راهبرد.",
+  command_outputs_manage: "ایجاد و مدیریت خروجی/تحلیل راهبردی.",
+  command_manage_prompts: "پرامپت‌های اختصاصی ماژول راهبرد.",
+  "sync.view": "مشاهده وضعیت همگام‌سازی — روی هر دو hub (آنلاین و آفلاین). شامل تعداد pending، تاریخچه و exportهای بدون ack.",
+  "sync.export": "ساخت و دانلود pack — فقط روی سرور آنلاین. فایل را به USB ببرید و روی آفلاین import کنید.",
+  "sync.import": "آپلود و اعمال pack — فقط روی سرور آفلاین. pack باید قبلاً از آنلاین export شده باشد.",
+  "sync.reconcile": "تأیید دستی تحویل pack روی آفلاین — وقتی فایل ack را نمی‌توانید از شبکه داخلی بیاورید؛ فقط روی آنلاین.",
+  "sync.briefing": "دانلود گزارش HTML تغییرات کاربر/نقش — فقط روی آفلاین؛ برای اعمال دستی روی آنلاین.",
+  "sync.force_reapply": "اعمال مجدد اجباری pack قبلاً import‌شده — فقط در موارد خاص، hub آفلاین.",
+  "sync.purge": "حذف دائمی رکوردهای آرشیوشده و تأییدشده از تاریخچه sync — فقط آنلاین، با قوانین امن.",
+  "rbac.manage": "ویرایش نقش‌ها، مجوزها و الگوهای دسترسی.",
+};
+
+export function getPermissionDescription(code, apiDescription) {
+  const fromApi = String(apiDescription || "").trim();
+  if (fromApi) return fromApi;
+  return PERMISSION_DESCRIPTIONS[code] || "";
+}

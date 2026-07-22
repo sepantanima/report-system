@@ -5,7 +5,7 @@ import {
   PRIORITY_META, MISSION_STATUS_META, getDeadlineMeta, formatPersianDateShort,
 } from "../../utils/analysisMonitorUtils.js";
 
-export default function MissionCard({ mission, theme, onOpen, actionLabel = "مدیریت مأموریت" }) {
+export default function MissionCard({ mission, theme, onOpen, actionLabel = ANALYSIS_TERMS.missionManageDetailTitle }) {
   const priority = PRIORITY_META[mission.priority] || PRIORITY_META.medium;
   const status = MISSION_STATUS_META[mission.status] || { label: mission.status, color: "#94a3b8" };
   const deadline = getDeadlineMeta(mission.deadline);
@@ -23,7 +23,7 @@ export default function MissionCard({ mission, theme, onOpen, actionLabel = "م�
         <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 6, background: `${status.color}22`, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
       </div>
 
-      <p style={{ fontSize: 11, opacity: 0.75, margin: "0 0 10px", lineHeight: 1.6 }}>
+      <p className="page-scalable-text-sm" style={{ opacity: 0.75, margin: "0 0 10px", lineHeight: 1.6 }}>
         {mission.topic_desc?.slice(0, 120)}{(mission.topic_desc?.length > 120 ? "..." : "")}
       </p>
 
@@ -34,8 +34,10 @@ export default function MissionCard({ mission, theme, onOpen, actionLabel = "م�
         {mission.mentor_name && (
           <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(168,85,247,0.12)", color: "#a855f7" }}>راهنما: {mission.mentor_name}</span>
         )}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: `${deadline.color}18`, color: deadline.color }}>
+        <span className="v3-mission-list-row-deadline-priority" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: `${deadline.color}18`, color: deadline.color }}>
           <Clock size={10} /> {deadline.label}
+          <span style={{ opacity: 0.45 }}>·</span>
+          <span style={{ color: priority.color }}>{priority.label}</span>
         </span>
         {isDelayed && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: "#ef444422", color: "#ef4444" }}>

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { X, Copy, Check } from "lucide-react";
 import { exportCleanedText, FORMAT } from "../../utils/newsFormat/index.js";
 import { pxToEm } from "../../utils/pageFontSize.js";
+import { PAGE_NARROW_MAX } from "../../constants/pageLayoutWidths.js";
 
 const LABELS = {
   [FORMAT.BALE]: "بله (Markdown کلاسیک)",
@@ -50,7 +51,7 @@ export default function NewsFormatPreviewModal({
   };
 
   const panel = {
-    width: "min(640px, 100%)",
+    width: `min(${PAGE_NARROW_MAX}px, 100%)`,
     maxHeight: "min(80vh, 560px)",
     display: "flex",
     flexDirection: "column",

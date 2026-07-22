@@ -1,6 +1,8 @@
 /** استایل‌های مشترک فرم‌های پیام */
 
-export const MESSAGE_FORM_WIDTH = "min(96vw, 920px)";
+import { PAGE_MESSAGE_CSS } from "../../constants/pageLayoutWidths.js";
+
+export const MESSAGE_FORM_WIDTH = PAGE_MESSAGE_CSS;
 
 export const MESSAGE_PAGE_CSS = `
   .message-inbox-grid {

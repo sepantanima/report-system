@@ -30,17 +30,18 @@ export async function updateNewsReportSettings(body, userId) {
   const fields = [
     "system_name", "organization_name", "system_link", "signature_text",
     "hashtags", "pdf_paper_size", "report_color", "default_label",
-    "messenger_template", "news_item_template",
+    "messenger_template", "document_caption_template", "news_item_template", "brief_submission_messenger_template",
     "html_card_template", "html_table_template", "txt_output_template",
-    "print_settings",
+    "print_settings", "custom_prompt_policy", "pack_defaults", "report_default_filters",
   ];
+  const jsonFields = new Set(["print_settings", "custom_prompt_policy", "pack_defaults", "report_default_filters"]);
   const sets = [];
   const params = [];
   for (const f of fields) {
     if (body[f] !== undefined) {
-      const val = f === "print_settings" ? JSON.stringify(body[f]) : body[f];
+      const val = jsonFields.has(f) ? JSON.stringify(body[f]) : body[f];
       params.push(val);
-      sets.push(`${f} = $${params.length}${f === "print_settings" ? "::jsonb" : ""}`);
+      sets.push(`${f} = $${params.length}${jsonFields.has(f) ? "::jsonb" : ""}`);
     }
   }
   if (!sets.length) return getNewsReportSettings();
@@ -103,4 +104,12 @@ export async function deleteNewsReportTemplate(id) {
 
 export function getReportSettingsDefaults() {
   return getAllReportDefaults();
+}
+
+export async function getNewsReportWorkflowConfig() {
+  const settings = await getNewsReportSettings();
+  return {
+    pack_defaults: settings.pack_defaults,
+    report_default_filters: settings.report_default_filters,
+  };
 }

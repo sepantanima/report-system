@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 // هنگام کپی کردن این فایل به پروژه محلی خود، کافیست خطوط زیر را از حالت کامنت خارج کنید:
 //
 import api from "../api/api";
-import { useNavigate } from "react-router-dom";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import DatePicker from "react-multi-date-picker";
 import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
@@ -208,8 +208,7 @@ const faJoin = (items) => {
 };
 
 export default function FieldReportDashboard() {
-  const navigate = useNavigate();
-  const { isDarkMode: darkMode, toggleDarkMode } = useAppTheme();
+  const { isDarkMode: darkMode } = useAppTheme();
   const user = getUserInfo();
   
   // 🌟 متد بومی پارس و تحلیل پویای ساختارهای گوناگون نقش پستگرس (شامل آرایه‌ها، متون رشته‌ای و ماتریس نقش‌ها)
@@ -567,29 +566,11 @@ export default function FieldReportDashboard() {
   ], []);
 
   return (
-    <div style={{ ...styles.container, backgroundColor: theme.bg, color: theme.text }}>
-      {/* هدر */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-          <button
-            onClick={() => navigate("/main")}
-            style={{ ...styles.backBtn, color: theme.text, borderColor: theme.border }}
-          >
-            بازگشت
-          </button>
-          <h2 style={styles.title}>داشبورد گزارشات میدانی</h2>
-        </div>
-        <div
-          onClick={toggleDarkMode}
-          style={{ ...styles.themeToggle, backgroundColor: darkMode ? "#3b82f6" : "#cbd5e1" }}
-        >
-          <div style={{ ...styles.toggleCircle, transform: darkMode ? "translateX(-24px)" : "translateX(0px)" }}>
-            {darkMode ? "🌙" : "☀️"}
-          </div>
-        </div>
-      </div>
-
-      {/* فیلترهای پیشرفته */}
+    <FormPageLayout
+      title="داشبورد گزارشات میدانی"
+      wide
+      contentPadding="15px 15px 32px"
+    >
       <div style={{ ...styles.filterCard, backgroundColor: theme.card, borderColor: theme.border }}>
         <div style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
           <div style={styles.datePickerWrapper}>
@@ -911,7 +892,7 @@ export default function FieldReportDashboard() {
           transform: translateY(0);
         }
       `}</style>
-    </div>
+    </FormPageLayout>
   );
 }
 

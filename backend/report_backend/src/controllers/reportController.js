@@ -1,4 +1,8 @@
 import pool from "../db.js";
+import {
+  fieldReportListScopeSql,
+  fieldReportTypeJoinSql,
+} from "../services/instanceScopeService.js";
 
 // تابع کمکی لاگ زمانی شمسی برای ردیابی خطاها در بک‌باند
 const getPersianDateTimeLog = () => {
@@ -46,7 +50,9 @@ export const getAdvancedReports = async (req, res) => {
       SELECT r.*, u."UnitShortName", u."StateName"
       FROM tbl_unit_events r
       LEFT JOIN tbl_units u ON r.unitcd = u."UnitCode"
+      ${fieldReportTypeJoinSql("r")}
       WHERE 1=1
+      ${fieldReportListScopeSql("r", "rt_scope")}
     `;
     const params = [];
 
@@ -107,7 +113,12 @@ export const returnReport = async (req, res) => {
 
   try {
     // واکشی جریان‌کاری فعلی گزارش جهت الحاق لاگ جدید به صورت ترتیبی
-    const selectQuery = `SELECT workflow_logs FROM tbl_unit_events WHERE id = $1 OR hash_key = $1`;
+    const selectQuery = `
+      SELECT e.workflow_logs FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
+      WHERE (e.id::text = $1 OR e.hash_key = $1)
+        ${fieldReportListScopeSql("e", "rt_scope")}
+    `;
     const currentRes = await pool.query(selectQuery, [id]);
     
     if (currentRes.rows.length === 0) {
@@ -141,7 +152,12 @@ export const updateReportByManager = async (req, res) => {
   const { title, chat_title, cleaned_text, admin_note, priority, quality, state, manager_comment, classification } = req.body;
 
   try {
-    const selectQuery = `SELECT workflow_logs FROM tbl_unit_events WHERE id = $1 OR hash_key = $1`;
+    const selectQuery = `
+      SELECT e.workflow_logs FROM tbl_unit_events e
+      ${fieldReportTypeJoinSql("e")}
+      WHERE (e.id::text = $1 OR e.hash_key = $1)
+        ${fieldReportListScopeSql("e", "rt_scope")}
+    `;
     const currentRes = await pool.query(selectQuery, [id]);
     
     if (currentRes.rows.length === 0) {
@@ -213,7 +229,9 @@ export const getUnitRankings = async (req, res) => {
         AVG(r.priority)::float as avg_priority
       FROM tbl_unit_events r
       LEFT JOIN tbl_units u ON r.unitcd = u."UnitCode"
+      ${fieldReportTypeJoinSql("r")}
       WHERE (r.is_deleted = false OR r.is_deleted IS NULL)
+      ${fieldReportListScopeSql("r", "rt_scope")}
     `;
     const params = [];
 
@@ -232,7 +250,13 @@ export const getUnitRankings = async (req, res) => {
       rangeDays = getJalaaliDiff(startDate, endDate);
     } else {
       // در صورتی که به هر دلیلی بازه فرستاده نشده باشد، بازه پیش‌فرض کل گزارشات ثبت شده محاسبه می‌شود
-      const dateBoundaries = await pool.query(`SELECT MIN(date) as min_d, MAX(date) as max_d FROM tbl_unit_events WHERE (is_deleted = false OR is_deleted IS NULL)`);
+      const dateBoundaries = await pool.query(
+        `SELECT MIN(e.date) as min_d, MAX(e.date) as max_d
+         FROM tbl_unit_events e
+         ${fieldReportTypeJoinSql("e")}
+         WHERE (e.is_deleted = false OR e.is_deleted IS NULL)
+           ${fieldReportListScopeSql("e", "rt_scope")}`,
+      );
       const minD = dateBoundaries.rows[0]?.min_d;
       const maxD = dateBoundaries.rows[0]?.max_d;
       if (minD && maxD) {

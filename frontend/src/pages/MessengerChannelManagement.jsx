@@ -5,17 +5,20 @@ import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import MultiSelect from "../components/MultiSelect.jsx";
 import messengerAdminService from "../services/messengerAdminService.js";
 import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme } from "../theme/formPageTheme.js";
 import { ANALYSIS_MONITOR_CSS } from "../theme/analysisMonitorStyles.js";
 import {
   MESSENGER_USAGE_KEY_OPTIONS,
   DESTINATION_KIND_OPTIONS,
   MESSENGER_USAGE_KEYS,
 } from "../constants/messengerUsageKeys.js";
+import { PAGE_CHANNEL_MAX } from "../constants/pageLayoutWidths.js";
 
 const MESSENGER_MODAL_CSS = `
   .messenger-channel-modal-box {
-    width: min(760px, 96vw);
-    max-width: 760px;
+    width: min(${PAGE_CHANNEL_MAX}px, 96vw);
+    max-width: ${PAGE_CHANNEL_MAX}px;
     max-height: min(90vh, 860px);
   }
   .messenger-channel-modal-grid {
@@ -43,6 +46,16 @@ const MESSENGER_MODAL_CSS = `
   @media (max-width: 640px) {
     .mc-col-8, .mc-col-7, .mc-col-6, .mc-col-5, .mc-col-4 { grid-column: span 12; }
   }
+  body.light .messenger-channel-modal-box .v3-modal-header-new {
+    border-bottom-color: #e2e8f0;
+  }
+  body.light .messenger-channel-modal-box .v3-modal-footer-new {
+    border-top-color: #e2e8f0;
+  }
+  body.light .messenger-channel-modal-box .v3-secondary-btn {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+  }
 `;
 
 const usageLabelMap = Object.fromEntries(
@@ -56,13 +69,10 @@ function formatUsageKeys(row) {
   return keys.map((k) => usageLabelMap[k] || k).join("، ");
 }
 
-const inp = {
+const inpBase = {
   width: "100%",
   padding: "8px 10px",
   borderRadius: 6,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#fff",
   boxSizing: "border-box",
   fontFamily: "inherit",
 };
@@ -98,6 +108,21 @@ function buildEmptyForm(templates) {
 
 export default function MessengerChannelManagement() {
   const allowed = hasPermission(getSessionRoles(), "manage_messenger");
+  const { isDarkMode } = useAppTheme();
+  const theme = useMemo(() => getFormPageTheme(isDarkMode), [isDarkMode]);
+  const inp = useMemo(() => ({
+    ...inpBase,
+    background: theme.inputBg,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+  }), [theme]);
+  const multiSelectTheme = useMemo(() => ({
+    isDarkMode,
+    card: theme.card,
+    border: theme.border,
+    text: theme.text,
+    bg: theme.inputBg,
+  }), [isDarkMode, theme]);
   const [rows, setRows] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -228,7 +253,7 @@ export default function MessengerChannelManagement() {
 
   if (!allowed) {
     return (
-      <div style={{ padding: 24, color: "#e2e8f0", fontFamily: "inherit" }}>
+      <div style={{ padding: 24, color: theme.text, fontFamily: "inherit" }}>
         دسترسی به این بخش فقط برای راهبر مجاز است.
       </div>
     );
@@ -264,7 +289,7 @@ export default function MessengerChannelManagement() {
         <div className="form-page-table-wrap">
         <table className="form-page-table">
           <thead>
-            <tr style={{ background: "#1e293b" }}>
+            <tr style={{ background: isDarkMode ? theme.card : "#f1f5f9" }}>
               {[
                 ["عنوان", "col-title"],
                 ["پلتفرم", "col-short"],
@@ -275,21 +300,21 @@ export default function MessengerChannelManagement() {
                 ["فعال", "col-short"],
                 ["", "col-actions"],
               ].map(([h, cls]) => (
-                <th key={h || "actions"} className={cls} style={{ borderBottom: "1px solid #334155" }}>{h}</th>
+                <th key={h || "actions"} className={cls} style={{ borderBottom: `1px solid ${theme.border}` }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id}>
-                <td className="col-title" style={{ borderBottom: "1px solid #1e293b" }}>{row.title_fa}</td>
-                <td className="col-short" style={{ borderBottom: "1px solid #1e293b" }}>{row.provider_type}</td>
-                <td className="col-short" style={{ borderBottom: "1px solid #1e293b" }}>{row.destination_kind}</td>
-                <td className="col-mono" style={{ borderBottom: "1px solid #1e293b" }}>{row.extra_config?.chat_id}</td>
-                <td className="col-wide" style={{ borderBottom: "1px solid #1e293b" }}>{formatUsageKeys(row)}</td>
-                <td className="col-text" style={{ borderBottom: "1px solid #1e293b" }}>{row.extra_config?.bot_username || "—"}</td>
-                <td className="col-short" style={{ borderBottom: "1px solid #1e293b" }}>{row.is_enabled ? "بله" : "خیر"}</td>
-                <td className="col-actions" style={{ borderBottom: "1px solid #1e293b" }}>
+                <td className="col-title" style={{ borderBottom: `1px solid ${theme.border}` }}>{row.title_fa}</td>
+                <td className="col-short" style={{ borderBottom: `1px solid ${theme.border}` }}>{row.provider_type}</td>
+                <td className="col-short" style={{ borderBottom: `1px solid ${theme.border}` }}>{row.destination_kind}</td>
+                <td className="col-mono" style={{ borderBottom: `1px solid ${theme.border}` }}>{row.extra_config?.chat_id}</td>
+                <td className="col-wide" style={{ borderBottom: `1px solid ${theme.border}` }}>{formatUsageKeys(row)}</td>
+                <td className="col-text" style={{ borderBottom: `1px solid ${theme.border}` }}>{row.extra_config?.bot_username || "—"}</td>
+                <td className="col-short" style={{ borderBottom: `1px solid ${theme.border}` }}>{row.is_enabled ? "بله" : "خیر"}</td>
+                <td className="col-actions" style={{ borderBottom: `1px solid ${theme.border}` }}>
                   <button type="button" onClick={() => openEdit(row)} style={{ marginLeft: 6, cursor: "pointer" }}>ویرایش</button>
                   <button type="button" onClick={() => onTest(row.id)} style={{ marginLeft: 6, cursor: "pointer" }} title="تست"><FlaskConical size={14} /></button>
                   <button type="button" onClick={async () => { if (window.confirm("حذف؟")) { await messengerAdminService.deleteChannel(row.id); fetchAll(); } }} style={{ marginLeft: 6, cursor: "pointer", color: "#f87171" }}><Trash2 size={14} /></button>
@@ -300,7 +325,7 @@ export default function MessengerChannelManagement() {
         </table>
         </div>
       )}
-      {testMsg && <p style={{ marginTop: 12, color: "#86efac" }}>{testMsg}</p>}
+      {testMsg && <p style={{ marginTop: 12, color: isDarkMode ? "#86efac" : "#15803d" }}>{testMsg}</p>}
 
       {modal && typeof document !== "undefined" ? createPortal(
         <>
@@ -311,7 +336,7 @@ export default function MessengerChannelManagement() {
               role="dialog"
               aria-modal="true"
               className="v3-modal-box messenger-channel-modal-box"
-              style={{ background: "#1e293b", border: "1px solid #334155" }}
+              style={{ background: theme.card, border: `1px solid ${theme.border}`, color: theme.text }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="v3-modal-header-new">
@@ -324,7 +349,7 @@ export default function MessengerChannelManagement() {
                 >
                   <X size={18} />
                 </button>
-                <span style={{ fontWeight: 700 }}>{modal === "create" ? "مقصد جدید" : "ویرایش مقصد"}</span>
+                <span style={{ fontWeight: 700, color: theme.text }}>{modal === "create" ? "مقصد جدید" : "ویرایش مقصد"}</span>
               </div>
               <div className="v3-modal-body">
                 <div className="messenger-channel-modal-grid">
@@ -357,7 +382,7 @@ export default function MessengerChannelManagement() {
                       values={form.usage_keys || []}
                       onChange={(v) => setForm((f) => ({ ...f, usage_keys: v }))}
                       placeholder="انتخاب کاربرد..."
-                      theme={{ isDarkMode: true, card: "#1e293b", border: "#334155", text: "#fff", bg: "#0f172a" }}
+                      theme={multiSelectTheme}
                     />
                   </McField>
                   <McField label="نام کاربری ربات" col={6}>
@@ -390,7 +415,7 @@ export default function MessengerChannelManagement() {
                 </div>
               </div>
               <div className="v3-modal-footer-new">
-                <button type="button" onClick={() => setModal(null)} className="v3-btn-footer">انصراف</button>
+                <button type="button" onClick={() => setModal(null)} className="v3-btn-footer v3-secondary-btn">انصراف</button>
                 <button type="button" disabled={saving} onClick={submit} className="v3-btn-footer v3-primary-solid" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <Save size={14} /> ذخیره
                 </button>

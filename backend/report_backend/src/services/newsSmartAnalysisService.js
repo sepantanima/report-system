@@ -1,6 +1,20 @@
 import pool from "../db.js";
 import { executeFormAiAction } from "./aiFormRunOrchestrator.js";
-import { NEWS_SMART_ANALYSIS_FORM, MANUAL_FALLBACK_NOTICE_FA } from "../constants/newsSmartAnalysisMeta.js";
+import {
+  NEWS_SMART_ANALYSIS_FORM,
+  MANUAL_FALLBACK_NOTICE_FA,
+  CUSTOM_PROMPT_ACTION,
+  CUSTOM_PROMPT_SLOTS,
+  MAX_CUSTOM_PROMPT_LEN,
+  MAX_CUSTOM_PROMPT_TITLE_LEN,
+  MIN_CUSTOM_PROMPT_LEN,
+  customPromptTypeFromSlot,
+  isCustomPromptAnalysisType,
+  analysisTypeLabelFa,
+} from "../constants/newsSmartAnalysisMeta.js";
+import { getPackById } from "./newsSmartAnalysisPackService.js";
+import { newSyncIdentity, syncIdentityInsertColumns, syncIdentityInsertValues } from "./syncIdentityService.js";
+import { instanceEntityAndSql } from "./instanceScopeService.js";
 import {
   resolveNewsSmartAnalysisAssembly,
   buildAutoAnalysisTitle,
@@ -10,6 +24,11 @@ import { buildSmartAnalysisDocx, buildSmartAnalysisPrintHtml } from "./newsSmart
 import { buildAnalysisMessengerTextWithSettings } from "./newsSmartAnalysisMessenger.js";
 import { htmlToPdfBuffer } from "./newsReportPdf.js";
 import { getNewsReportSettings } from "./newsReportSettingsService.js";
+import { getCustomPromptPolicy } from "./newsSmartCustomPromptPolicyService.js";
+import {
+  augmentCustomPromptForAi,
+  truncateAiOutputText,
+} from "../constants/newsSmartCustomPromptPolicy.js";
 import { sendMessengerText } from "./messengerSend.js";
 import { insertMessengerSendLog } from "./messengerSendLogService.js";
 import { MESSENGER_USAGE_KEYS } from "../constants/messengerUsageKeys.js";
@@ -30,6 +49,8 @@ function mapRow(row) {
     period_from: row.period_from,
     period_to: row.period_to,
     ai_prompt_key: row.ai_prompt_key,
+    custom_prompt: row.custom_prompt || null,
+    custom_prompt_title: row.custom_prompt_title || null,
     publish_status: row.publish_status,
     published_at: row.published_at,
     error_message: row.error_message,
@@ -54,21 +75,117 @@ export async function runSmartAnalysisAi({ actionName, formData, userId, userRol
 /** اجرای AI با fallback دستی: در صورت شکست همه providerها، عنوان پیشنهادی + فرم خالی */
 export async function runSmartAnalysisAiWithFallback({ actionName, formData, userId, userRole }) {
   const scope = { userId, role: userRole };
-  const suggestedTitle = await buildSuggestedTitle(actionName, formData, scope);
+  const resolved = await resolveCustomPromptRun(actionName, formData);
+  const suggestedTitle = await buildSuggestedTitle(
+    resolved.actionName,
+    resolved.formData,
+    scope,
+    resolved.analysisType,
+  );
   try {
-    const data = await runSmartAnalysisAi({ actionName, formData, userId, userRole });
-    return { ...data, suggested_title: suggestedTitle, analysis_type: actionName };
+    const data = await runSmartAnalysisAi({
+      actionName: resolved.actionName,
+      formData: resolved.formData,
+      userId,
+      userRole,
+    });
+    const policy = await getCustomPromptPolicy();
+    if (isCustomPromptAnalysisType(resolved.analysisType) && policy.enabled && policy.max_output_chars > 0) {
+      if (data.draft) data.draft = truncateAiOutputText(data.draft, policy.max_output_chars);
+      if (data.result_text) data.result_text = truncateAiOutputText(data.result_text, policy.max_output_chars);
+    }
+    return {
+      ...data,
+      suggested_title: suggestedTitle,
+      analysis_type: resolved.analysisType,
+      custom_prompt: resolved.customPrompt || null,
+      custom_prompt_title: resolved.customPromptTitle || null,
+    };
   } catch (e) {
     return {
       status: "manual_fallback",
       suggested_title: suggestedTitle,
-      analysis_type: actionName,
+      analysis_type: resolved.analysisType,
+      custom_prompt: resolved.customPrompt || null,
+      custom_prompt_title: resolved.customPromptTitle || null,
       draft: "",
       result_text: "",
       manual_notice_fa: MANUAL_FALLBACK_NOTICE_FA,
       ai_error: e.message,
     };
   }
+}
+
+async function resolveCustomPromptRun(actionName, formData = {}) {
+  const an = String(actionName || "").trim();
+  if (an !== CUSTOM_PROMPT_ACTION) {
+    return {
+      actionName: an,
+      formData,
+      analysisType: an,
+      customPrompt: null,
+      customPromptTitle: null,
+    };
+  }
+
+  const customPrompt = String(formData?.custom_prompt || "").trim();
+  const customPromptTitle = String(formData?.custom_prompt_title || "").trim().slice(0, MAX_CUSTOM_PROMPT_TITLE_LEN);
+  if (!customPrompt) throw new Error("پرامپت شخصی الزامی است");
+  if (!customPromptTitle) throw new Error("عنوان پرامپت شخصی الزامی است");
+  if (customPrompt.length < MIN_CUSTOM_PROMPT_LEN) {
+    throw new Error(`پرامپت شخصی باید حداقل ${MIN_CUSTOM_PROMPT_LEN} کاراکتر باشد`);
+  }
+  if (customPrompt.length > MAX_CUSTOM_PROMPT_LEN) {
+    throw new Error(`پرامپت شخصی بیش از حد مجاز است (حداکثر ${MAX_CUSTOM_PROMPT_LEN} کاراکتر)`);
+  }
+
+  const packId = formData?.pack_id != null ? parseInt(formData.pack_id, 10) : null;
+  if (!Number.isFinite(packId)) throw new Error("pack_id برای تحلیل شخصی الزامی است");
+
+  const pack = await getPackById(packId);
+  if (!pack) throw new Error("پک یافت نشد");
+
+  let slot = parseInt(formData?.custom_slot, 10);
+  const existingType = String(formData?.analysis_type || "").trim();
+  if (isCustomPromptAnalysisType(existingType)) {
+    slot = parseInt(existingType.replace("custom_prompt_", ""), 10);
+  }
+  if (![1, 2, 3].includes(slot)) {
+    const used = new Set(
+      Object.keys(pack.analyses || {}).filter((t) => isCustomPromptAnalysisType(t)),
+    );
+    slot = CUSTOM_PROMPT_SLOTS.map((t) => parseInt(t.replace("custom_prompt_", ""), 10))
+      .find((n) => !used.has(`custom_prompt_${n}`));
+    if (!slot) throw new Error(`حداکثر ${CUSTOM_PROMPT_SLOTS.length} تحلیل شخصی برای هر بسته مجاز است`);
+  }
+
+  const analysisType = customPromptTypeFromSlot(slot);
+  if (!analysisType) throw new Error("اسلات تحلیل شخصی نامعتبر است");
+
+  const existing = pack.analyses?.[analysisType];
+  if (!existing) {
+    const customCount = Object.keys(pack.analyses || {}).filter((t) => isCustomPromptAnalysisType(t)).length;
+    if (customCount >= CUSTOM_PROMPT_SLOTS.length) {
+      throw new Error(`حداکثر ${CUSTOM_PROMPT_SLOTS.length} تحلیل شخصی برای هر بسته مجاز است`);
+    }
+  }
+
+  const policy = await getCustomPromptPolicy();
+  const augmentedPrompt = augmentCustomPromptForAi(customPrompt, policy);
+
+  return {
+    actionName: CUSTOM_PROMPT_ACTION,
+    formData: {
+      ...formData,
+      pack_id: packId,
+      custom_prompt: augmentedPrompt,
+      custom_slot: slot,
+      custom_prompt_title: customPromptTitle,
+    },
+    analysisType,
+    customPrompt,
+    customPromptTitle,
+  };
 }
 
 export async function saveSmartAnalysis(body = {}, userId) {
@@ -113,8 +230,8 @@ export async function saveSmartAnalysis(body = {}, userId) {
     `INSERT INTO tbl_news_smart_analyses (
        title, analysis_type, body_html, body_plain, query_payload, selected_ids,
        news_count, period_from, period_to, filter_signature,
-       ai_prompt_key, created_by
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ai_prompt_key, created_by, ${syncIdentityInsertColumns().join(", ")}
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING *`,
     [
       title, analysisType, bodyHtml, bodyPlain,
@@ -122,6 +239,7 @@ export async function saveSmartAnalysis(body = {}, userId) {
       periodFrom, periodTo, filterSignature,
       body.ai_prompt_key || null,
       userId ?? null,
+      ...syncIdentityInsertValues(newSyncIdentity()),
     ],
   );
   return mapRow(ins.rows[0]);
@@ -132,7 +250,7 @@ export async function getSmartAnalysis(id) {
     `SELECT s.*, u.name AS creator_name
      FROM tbl_news_smart_analyses s
      LEFT JOIN tbl_users u ON u.id = s.created_by
-     WHERE s.id = $1`,
+     WHERE s.id = $1${instanceEntityAndSql("s")}`,
     [id],
   );
   return mapRow(r.rows[0]);
@@ -144,6 +262,7 @@ export async function listSmartAnalyses(query = {}) {
   const offset = (page - 1) * pageSize;
   const params = [];
   let where = " WHERE 1=1";
+  where += instanceEntityAndSql("s");
 
   const q = String(query.q || "").trim();
   if (q) {
@@ -182,7 +301,7 @@ export async function listSmartAnalyses(query = {}) {
 
 export async function deleteSmartAnalysis(id) {
   const r = await pool.query(
-    `DELETE FROM tbl_news_smart_analyses WHERE id = $1 RETURNING id`,
+    `DELETE FROM tbl_news_smart_analyses WHERE id = $1${instanceEntityAndSql("tbl_news_smart_analyses")} RETURNING id`,
     [id],
   );
   if (!r.rows.length) throw new Error("تحلیل یافت نشد");
@@ -273,9 +392,16 @@ export async function publishSmartAnalysis(id, { channelConfigId, userId }) {
   }
 }
 
-export async function buildSuggestedTitle(actionName, formData, userScope = {}) {
+export async function buildSuggestedTitle(actionName, formData, userScope = {}, analysisTypeOverride = null) {
   const assembly = await resolveNewsSmartAnalysisAssembly(formData, userScope);
-  return buildAutoAnalysisTitle(actionName, assembly);
+  const type = analysisTypeOverride || actionName;
+  const typeFa = analysisTypeLabelFa(type, "", formData?.custom_prompt_title);
+  const from = assembly.periodFrom || "";
+  const to = assembly.periodTo || from;
+  const count = assembly.newsCount ?? 0;
+  const range = from === to ? from : `${from} — ${to}`;
+  return `${typeFa} — ${range} (${count} خبر)`;
 }
 
 export { resolveNewsSmartAnalysisAssembly, buildAutoAnalysisTitle };
+export { getCustomPromptPolicy } from "./newsSmartCustomPromptPolicyService.js";

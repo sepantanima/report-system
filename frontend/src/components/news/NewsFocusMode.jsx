@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, ChevronLeft, ChevronRight, Check, Copy } from "lucide-react";
 import { NEWS_REVIEW_STATES } from "../../constants/newsMonitorMeta.js";
+import { PAGE_CONTENT_MAX } from "../../constants/pageLayoutWidths.js";
 import NewsHtmlPreview from "./NewsHtmlPreview.jsx";
 import { resolveNewsDisplayHtml } from "../../utils/newsDisplayHtml.js";
 
@@ -36,7 +37,7 @@ export default function NewsFocusMode({
         <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}><X size={22} /></button>
       </header>
 
-      <main style={{ flex: 1, overflowY: "auto", padding: 16, maxWidth: 800, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <main style={{ flex: 1, overflowY: "auto", padding: 16, maxWidth: PAGE_CONTENT_MAX, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
           {item.source} · {item.sender} · {toPersianDigits(String(item.source_date_jalali || "").replace(/-/g, "/"))}
         </div>

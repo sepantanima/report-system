@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import api from "../api/api";
+import { PAGE_CONTENT_MAX, scalePageWidth } from "../constants/pageLayoutWidths.js";
 import {
   ArrowRight,
   ArrowLeft,
@@ -354,7 +355,7 @@ export default function NewsCardManager() {
       >
         <div
           style={{
-            maxWidth: "800px",
+            maxWidth: `${PAGE_CONTENT_MAX}px`,
             margin: "0 auto",
             width: "100%",
             flexGrow: 1,
@@ -681,7 +682,7 @@ export default function NewsCardManager() {
             style={{
               background: "#1e293b",
               width: "100%",
-              maxWidth: "450px",
+              maxWidth: `${scalePageWidth(450)}px`,
               maxHeight: "90dvh",
               borderRadius: "20px",
               padding: "25px",

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import api from "../api/api";
 import { useNavigate } from "react-router-dom";
 import { normalizeRoles, persistSessionRoles } from "../utils/userRoles.js";
-import "./login.css";
+import { normalizeGender } from "../utils/userGreeting.js";
+import "./Login.css";
 
 function Login() {
 
@@ -10,6 +11,17 @@ function Login() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [sessionNotice, setSessionNotice] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const session = params.get("session");
+    if (session === "expired") {
+      setSessionNotice("نشست شما منقضی شده است. لطفاً دوباره وارد شوید.");
+    } else if (session === "invalid") {
+      setSessionNotice("ورود شما نامعتبر است. لطفاً دوباره وارد شوید.");
+    }
+  }, []);
 
   const handleLogin = async () => {
   if (!username || !password) return alert("لطفاً فیلدها را پر کنید");
@@ -20,9 +32,19 @@ function Login() {
 
     localStorage.setItem("token", res.data.token);
     persistSessionRoles(roles);
+    if (res.data.permissions) {
+      localStorage.setItem("permissions", JSON.stringify(res.data.permissions));
+    }
+    if (res.data.permission_version != null) {
+      localStorage.setItem("permission_version", String(res.data.permission_version));
+    }
+    if (res.data.instance_mode) localStorage.setItem("instance_mode", res.data.instance_mode);
+    if (res.data.org_code) localStorage.setItem("org_code", res.data.org_code);
+    if (res.data.org_role) localStorage.setItem("org_role", res.data.org_role);
     localStorage.setItem("unitcd", res.data.unitcd || "");
     localStorage.setItem("username", res.data.userName || res.data.username || username);
     localStorage.setItem("name", res.data.name || res.data.userName || username);
+    localStorage.setItem("gender", normalizeGender(res.data.gender));
 
     navigate("/main"); 
   } catch (err) {
@@ -55,6 +77,22 @@ function Login() {
         </div>
 
         <div className="loginCard">
+
+          {sessionNotice ? (
+            <div style={{
+              marginBottom: 12,
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: "rgba(245,158,11,0.12)",
+              border: "1px solid rgba(245,158,11,0.35)",
+              color: "#b45309",
+              fontSize: 13,
+              textAlign: "center",
+            }}
+            >
+              {sessionNotice}
+            </div>
+          ) : null}
 
           <div className="loginForm">
 

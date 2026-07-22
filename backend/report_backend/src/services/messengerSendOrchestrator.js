@@ -19,7 +19,7 @@ export async function publishNewsReport({
   const usageKey = MESSENGER_USAGE_KEYS.NEWS_REPORT_PUBLISH;
   const messengerBody = meta.messengerText
     || buildMessengerReportBody(settings, slot, rows);
-  const header = messengerBody.split("\n").slice(0, 4).join("\n");
+  const documentCaption = meta.documentCaption || messengerBody;
 
   const logStart = async (kind, status, extra = {}) => {
     try {
@@ -37,14 +37,11 @@ export async function publishNewsReport({
   };
 
   try {
-    const start = await sendMessengerText(channelConfigId, `▶️ شروع ارسال گزارش\n\n${header}`);
-    await logStart("text", "ok", { platform_message_id: start.messageId, request_meta: { step: "start" } });
-
     if (format === "txt" && messengerBody.length <= TXT_INLINE_MAX) {
       const body = await sendMessengerText(channelConfigId, messengerBody);
       await logStart("text", "ok", { platform_message_id: body.messageId, request_meta: { step: "body_text" } });
     } else if (filePath) {
-      const doc = await sendMessengerDocument(channelConfigId, filePath, fileName, header);
+      const doc = await sendMessengerDocument(channelConfigId, filePath, fileName, documentCaption);
       await logStart("document", "ok", {
         platform_message_id: doc.messageId,
         request_meta: { step: "document", fileName },
@@ -53,9 +50,6 @@ export async function publishNewsReport({
       const body = await sendMessengerText(channelConfigId, messengerBody);
       await logStart("text", "ok", { platform_message_id: body.messageId, request_meta: { step: "body_text" } });
     }
-
-    const end = await sendMessengerText(channelConfigId, "پایان گزارش.");
-    await logStart("text", "ok", { platform_message_id: end.messageId, request_meta: { step: "end" } });
 
     return { ok: true };
   } catch (e) {
@@ -68,8 +62,10 @@ export async function publishSingleNews({
   channelConfigId,
   userId,
   message,
+  newsId = null,
 }) {
   const usageKey = MESSENGER_USAGE_KEYS.NEWS_REPORT_PUBLISH;
+  const newsMeta = newsId != null ? { news_id: newsId } : {};
   try {
     const res = await sendMessengerText(channelConfigId, message);
     await insertMessengerSendLog({
@@ -79,7 +75,7 @@ export async function publishSingleNews({
       payload_kind: "text",
       status: "ok",
       platform_message_id: res.messageId,
-      request_meta: { step: "single_news" },
+      request_meta: { step: "single_news", ...newsMeta },
     });
     return { ok: true };
   } catch (e) {
@@ -90,7 +86,7 @@ export async function publishSingleNews({
       payload_kind: "text",
       status: "error",
       error_message: e.message,
-      request_meta: { step: "single_news_failed" },
+      request_meta: { step: "single_news_failed", ...newsMeta },
     });
     throw e;
   }

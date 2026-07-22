@@ -9,7 +9,13 @@ import {
   sanitizeNewsReportPayload,
   jalaliStr,
 } from "../newsReport/newsReportUtils.js";
-import { ANALYSIS_ACTION_LABELS } from "../../services/newsSmartAnalysisService.js";
+import {
+  ANALYSIS_ACTION_LABELS,
+  CUSTOM_PROMPT_SLOTS,
+  isCustomPromptType,
+  customPromptLabel,
+} from "../../services/newsSmartAnalysisService.js";
+import { getSessionRoles, hasRole } from "../../utils/userRoles.js";
 import { MESSENGER_TEXT_MAX } from "../../constants/messengerUsageKeys.js";
 
 export { DEFAULT_CONTENT_FILTERS as SMART_ANALYSIS_DEFAULT_FILTERS };
@@ -31,10 +37,12 @@ export function buildSmartAnalysisPeriodPayload(state) {
   });
 }
 
-export function buildSmartAnalysisTitle(state, meta, analysisType, newsCount) {
+export function buildSmartAnalysisTitle(state, meta, analysisType, newsCount, customPrompt = "", customPromptTitle = "") {
   const fromLabel = formatJalaliRangeLabel(state.fromDate);
   const toLabel = formatJalaliRangeLabel(state.toDate);
-  const typeFa = ANALYSIS_ACTION_LABELS[analysisType] || "تحلیل";
+  const typeFa = isCustomPromptType(analysisType)
+    ? customPromptLabel(analysisType, customPrompt, customPromptTitle)
+    : (ANALYSIS_ACTION_LABELS[analysisType] || "تحلیل");
   const range = fromLabel === toLabel ? fromLabel : `از ${fromLabel} تا ${toLabel}`;
   const count = toPersianDigits(newsCount ?? 0);
 
@@ -51,6 +59,15 @@ export function buildSmartAnalysisTitle(state, meta, analysisType, newsCount) {
     title += ` · ${filterLabels.slice(0, 3).join(" · ")}`;
   }
   return title;
+}
+
+/** عنوان پیشنهادی بسته تحلیلی — هم‌خوان با buildPackTitle در بک‌اند */
+export function buildSuggestedPackTitle(queryPayload, newsCount) {
+  const from = queryPayload?.from_date || "";
+  const to = queryPayload?.to_date || from;
+  const range = from === to ? from : `${from} — ${to}`;
+  const count = Number(newsCount) || 0;
+  return `پک تحلیلی — ${range} (${count} خبر)`;
 }
 
 export function buildSmartAnalysisApiBody(queryPayload, extra = {}) {
@@ -94,6 +111,21 @@ export function hasAnalysisContent(state) {
   const plain = String(state.bodyPlain ?? "").trim();
   const title = String(state.title ?? "").trim();
   return Boolean(plain || title);
+}
+
+export function isPackEffectivelyEmpty(packMeta, analysisDrafts) {
+  const saved = packMeta?.types_done?.length
+    || packMeta?.analysis_types_done?.length
+    || 0;
+  if (saved > 0) return false;
+  return !Object.values(analysisDrafts || {}).some(hasAnalysisContent);
+}
+
+export function packStatusLabel(row) {
+  const done = row?.types_done?.length || row?.analysis_types_done?.length || 0;
+  if (done === 0) return { text: "بدون تحلیل", tone: "muted" };
+  if (row?.types_complete) return { text: "کامل", tone: "success" };
+  return { text: `ناقص (${done}/4)`, tone: "warning" };
 }
 
 export function smartAnalysisStateFromRow(row) {
@@ -142,8 +174,48 @@ export function analysisStateFromPackAnalysis(analysis, packId) {
     bodyHtml: analysis.body_html || "",
     bodyPlain: analysis.body_plain || "",
     aiPromptKey: analysis.ai_prompt_key,
+    customPrompt: analysis.custom_prompt || "",
+    customPromptTitle: analysis.custom_prompt_title || "",
+    createdBy: analysis.created_by ?? null,
     manualFallback: false,
   };
+}
+
+/** مدیر کل یا ایجادکنندهٔ تحلیل ذخیره‌شده؛ پیش‌نویس محلی برای همه قابل حذف است */
+export function canDeleteCustomAnalysis(item, userId) {
+  if (!item) return false;
+  const savedId = item.savedId ?? item.id ?? null;
+  const createdBy = item.createdBy ?? item.created_by ?? null;
+  if (!savedId) return true;
+  if (hasRole(getSessionRoles(), "admin")) return true;
+  return userId != null && createdBy != null && Number(createdBy) === Number(userId);
+}
+
+export function listUsedCustomSlots(packMeta, analysisDrafts = {}) {
+  const used = new Set();
+  const packTypes = packMeta?.analysis_types_done || packMeta?.types_done || [];
+  for (const t of packTypes) {
+    if (isCustomPromptType(t)) used.add(t);
+  }
+  if (packMeta?.analyses) {
+    for (const t of Object.keys(packMeta.analyses)) {
+      if (isCustomPromptType(t)) used.add(t);
+    }
+  }
+  for (const t of Object.keys(analysisDrafts)) {
+    if (isCustomPromptType(t)) used.add(t);
+  }
+  return [...used].sort();
+}
+
+export function nextCustomSlot(packMeta, analysisDrafts = {}) {
+  const used = new Set(listUsedCustomSlots(packMeta, analysisDrafts));
+  return CUSTOM_PROMPT_SLOTS.find((slot) => !used.has(slot)) || null;
+}
+
+export function countCustomAnalysesFromRow(row) {
+  if (row?.custom_analyses_count != null) return row.custom_analyses_count;
+  return (row?.types_done || row?.analysis_types_done || []).filter(isCustomPromptType).length;
 }
 
 export function draftsFromPack(pack) {

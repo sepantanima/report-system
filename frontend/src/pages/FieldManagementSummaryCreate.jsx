@@ -18,6 +18,9 @@ import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
 import { MANAGEMENT_SUMMARY_BODY_MAX } from "../constants/promptFieldLimits.js";
 import { clampText } from "../utils/limitInput.js";
 import { aiMarkdownToHtml } from "../utils/managementSummaryAiText.js";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme } from "../theme/formPageTheme.js";
+import { getFieldManagementSummaryStyles } from "../theme/fieldManagementSummaryPageStyles.js";
 
 const toPersianDigits = (val) =>
   String(val ?? "").replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
@@ -56,42 +59,15 @@ const faJoin = (items) => {
   return `${arr.slice(0, -1).join("، ")} و ${arr[arr.length - 1]}`;
 };
 
-const inputStyle = {
-  padding: "8px 10px",
-  borderRadius: 8,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#e2e8f0",
-  width: "100%",
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-};
-
-const btnStyle = (variant = "ghost") => ({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 14px",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: 13,
-  border: variant === "ghost" ? "1px solid #334155" : "none",
-  background:
-    variant === "primary" ? "#0ea5e9" : variant === "purple" ? "#7c3aed" : "#1e293b",
-  color: variant === "ghost" ? "#e2e8f0" : "#fff",
-});
-
-const cardStyle = {
-  border: "1px solid #334155",
-  borderRadius: 12,
-  background: "#111c2e",
-  padding: 14,
-  marginBottom: 14,
-};
-
 export default function FieldManagementSummaryCreate() {
   const navigate = useNavigate();
+  const { isDarkMode } = useAppTheme();
+  const theme = getFormPageTheme(isDarkMode);
+  const styles = useMemo(
+    () => getFieldManagementSummaryStyles(theme, isDarkMode),
+    [theme, isDarkMode],
+  );
+  const { inp, btn, panel, readOnlyBox, nestedCard, tableRowBorder } = styles;
   const roles = getSessionRoles();
   const allowed = hasPermission(roles, "field_mgmt_summary");
 
@@ -442,9 +418,9 @@ export default function FieldManagementSummaryCreate() {
 
   if (!allowed) {
     return (
-      <div style={{ padding: 24, textAlign: "center", color: "#e2e8f0", background: "#0f172a", minHeight: "100vh" }}>
+      <div style={{ padding: 24, textAlign: "center", color: theme.text, background: theme.bg, minHeight: "100vh" }}>
         <p>دسترسی مجاز نیست.</p>
-        <button type="button" style={btnStyle()} onClick={() => navigate("/main")}>
+        <button type="button" style={btn()} onClick={() => navigate("/main")}>
           بازگشت
         </button>
       </div>
@@ -457,7 +433,7 @@ export default function FieldManagementSummaryCreate() {
       documentTitle="خلاصه مدیریتی میدانی"
       contentPadding="20px"
       toolbarExtra={(
-        <button type="button" style={btnStyle()} onClick={() => navigate("/field-management-summary/list")}>
+        <button type="button" style={btn()} onClick={() => navigate("/field-management-summary/list")}>
           <ListOrdered size={17} />
           گزارشات قبلی
         </button>
@@ -465,12 +441,12 @@ export default function FieldManagementSummaryCreate() {
     >
       {savedSummary ? (
         <div style={{
-          ...cardStyle,
-          borderColor: "rgba(34,197,94,0.45)",
-          background: "rgba(34,197,94,0.08)",
+          ...panel,
+          borderColor: isDarkMode ? "rgba(34,197,94,0.45)" : "rgba(34,197,94,0.5)",
+          background: isDarkMode ? "rgba(34,197,94,0.08)" : "rgba(34,197,94,0.1)",
         }}
         >
-          <strong style={{ fontSize: 15, color: "#86efac" }}>خلاصه با موفقیت ثبت شد</strong>
+          <strong style={{ fontSize: 15, color: isDarkMode ? "#86efac" : "#15803d" }}>خلاصه با موفقیت ثبت شد</strong>
           <p style={{ margin: "8px 0", fontSize: 13, lineHeight: 1.8 }}>
             شناسه {toPersianDigits(savedSummary.id)} — {savedSummary.title}
           </p>
@@ -485,39 +461,39 @@ export default function FieldManagementSummaryCreate() {
             </label>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" style={btnStyle("primary")} disabled={exportBusy} onClick={() => doExport("pdf")}>
+            <button type="button" style={btn("primary")} disabled={exportBusy} onClick={() => doExport("pdf")}>
               <FileDown size={15} />
               PDF
             </button>
-            <button type="button" style={btnStyle("primary")} disabled={exportBusy} onClick={() => doExport("docx")}>
+            <button type="button" style={btn("primary")} disabled={exportBusy} onClick={() => doExport("docx")}>
               <FileDown size={15} />
               Word
             </button>
-            <button type="button" style={btnStyle()} disabled={exportBusy} onClick={doPrint}>
+            <button type="button" style={btn()} disabled={exportBusy} onClick={doPrint}>
               <Printer size={15} />
               چاپ
             </button>
-            <button type="button" style={btnStyle()} onClick={startNewSummary}>
+            <button type="button" style={btn()} onClick={startNewSummary}>
               ایجاد خلاصه جدید
             </button>
           </div>
         </div>
       ) : null}
 
-      {err ? <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div> : null}
+      {err ? <div style={{ color: theme.danger || "#dc2626", marginBottom: 12 }}>{err}</div> : null}
 
       {!savedSummary ? (
       <>
       {/* انتخاب بازه */}
-      <div style={cardStyle}>
+      <div style={panel}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 12 }}>
           <strong style={{ fontSize: 14 }}>بازه گزارش</strong>
-          <div style={{ display: "inline-flex", borderRadius: 10, overflow: "hidden", border: "1px solid #334155" }}>
+          <div style={{ display: "inline-flex", borderRadius: 10, overflow: "hidden", border: `1px solid ${theme.border}` }}>
             <button
               type="button"
               onClick={() => setPeriodMode("auto")}
               style={{
-                ...btnStyle(periodMode === "auto" ? "primary" : "ghost"),
+                ...btn(periodMode === "auto" ? "primary" : "ghost"),
                 borderRadius: 0,
                 border: "none",
               }}
@@ -528,7 +504,7 @@ export default function FieldManagementSummaryCreate() {
               type="button"
               onClick={() => setPeriodMode("custom")}
               style={{
-                ...btnStyle(periodMode === "custom" ? "primary" : "ghost"),
+                ...btn(periodMode === "custom" ? "primary" : "ghost"),
                 borderRadius: 0,
                 border: "none",
               }}
@@ -543,7 +519,7 @@ export default function FieldManagementSummaryCreate() {
             <div>
               <label style={{ fontSize: 12, opacity: 0.8 }}>نوع گزارش (بازه)</label>
               <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 4 }}>روزانه، هفتگی، ماهانه، شش‌ماهه یا سالانه</div>
-              <select style={inputStyle} value={periodKind} onChange={(e) => setPeriodKind(e.target.value)}>
+              <select style={inp} value={periodKind} onChange={(e) => setPeriodKind(e.target.value)}>
                 <option value="daily">روزانه</option>
                 <option value="weekly">هفتگی</option>
                 <option value="monthly">ماهانه</option>
@@ -564,7 +540,7 @@ export default function FieldManagementSummaryCreate() {
             </div>
             <div>
               <label style={{ fontSize: 12, opacity: 0.8 }}>تاریخ شروع (محاسبه خودکار)</label>
-              <div style={{ ...inputStyle, background: "#0d1626", opacity: 0.85 }}>
+              <div style={readOnlyBox}>
                 {resolvedPeriod ? faSlash(resolvedPeriod.start) : "—"}
               </div>
             </div>
@@ -604,7 +580,7 @@ export default function FieldManagementSummaryCreate() {
       </div>
 
       {/* فیلترها */}
-      <div style={cardStyle}>
+      <div style={panel}>
         <strong style={{ fontSize: 14, display: "block", marginBottom: 12 }}>فیلتر گزارشات</strong>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
           <div>
@@ -612,6 +588,7 @@ export default function FieldManagementSummaryCreate() {
             <MultiSelect
               options={CLASSIFICATION_OPTIONS}
               values={classifications}
+              theme={theme}
               onChange={(vals) => {
                 setClassifications(vals);
                 if (vals.length === 1 && vals[0] === "1") {
@@ -631,6 +608,7 @@ export default function FieldManagementSummaryCreate() {
               <MultiSelect
                 options={provinceOptions}
                 values={provinces}
+                theme={theme}
                 onChange={setProvinces}
                 placeholder="همه استان‌ها"
               />
@@ -642,6 +620,7 @@ export default function FieldManagementSummaryCreate() {
               <MultiSelect
                 options={unitOptions}
                 values={units}
+                theme={theme}
                 onChange={setUnits}
                 placeholder="همه یگان‌ها"
               />
@@ -652,6 +631,7 @@ export default function FieldManagementSummaryCreate() {
             <MultiSelect
               options={topicOptions}
               values={topics}
+              theme={theme}
               onChange={setTopics}
               placeholder="همه موضوعات"
             />
@@ -678,7 +658,7 @@ export default function FieldManagementSummaryCreate() {
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <button type="button" style={btnStyle("primary")} disabled={busy} onClick={runPreview}>
+          <button type="button" style={btn("primary")} disabled={busy} onClick={runPreview}>
             {busy ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Search size={15} />}
             بررسی گزارشات
           </button>
@@ -692,7 +672,7 @@ export default function FieldManagementSummaryCreate() {
 
       {/* لیست گزارشات برای مطالعه */}
       {preview ? (
-        <div style={cardStyle}>
+        <div style={panel}>
           <strong style={{ fontSize: 14, display: "block", marginBottom: 10 }}>
             گزارشات فیلترشده ({toPersianDigits(preview.count)})
           </strong>
@@ -701,7 +681,7 @@ export default function FieldManagementSummaryCreate() {
               {preview.reports.map((r, i) => {
                 const open = expandedReport === r.hash_key;
                 return (
-                  <div key={r.hash_key} style={{ border: "1px solid #28395a", borderRadius: 10, background: "#0d1626" }}>
+                  <div key={r.hash_key} style={nestedCard}>
                     <button
                       type="button"
                       onClick={() => setExpandedReport(open ? null : r.hash_key)}
@@ -714,7 +694,7 @@ export default function FieldManagementSummaryCreate() {
                         padding: "9px 12px",
                         background: "transparent",
                         border: "none",
-                        color: "#e2e8f0",
+                        color: theme.text,
                         cursor: "pointer",
                         fontFamily: "inherit",
                         fontSize: 13,
@@ -723,11 +703,11 @@ export default function FieldManagementSummaryCreate() {
                     >
                       <span style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                         <span style={{ opacity: 0.55, fontSize: 11 }}>{toPersianDigits(i + 1)}</span>
-                        <span style={{ fontWeight: 700, color: "#fbbf24", fontSize: 13 }}>
+                        <span style={{ fontWeight: 700, color: isDarkMode ? "#fbbf24" : "#b45309", fontSize: 13 }}>
                           {r.UnitName || r.UnitShortName || "—"}
                         </span>
                         <span style={{ whiteSpace: "nowrap", fontSize: 12, opacity: 0.8 }}>{faSlash(r.date)}</span>
-                        <span style={{ color: "#7dd3fc", fontSize: 12 }}>{r.chat_title}</span>
+                        <span style={{ color: isDarkMode ? "#7dd3fc" : "#0369a1", fontSize: 12 }}>{r.chat_title}</span>
                         <span>{r.title}</span>
                         {r.StateName ? (
                           <span style={{ fontSize: 11, opacity: 0.65 }}>{r.StateName}</span>
@@ -743,7 +723,7 @@ export default function FieldManagementSummaryCreate() {
                           fontSize: 13,
                           lineHeight: 1.95,
                           whiteSpace: "pre-wrap",
-                          borderTop: "1px solid #1f2c44",
+                          borderTop: tableRowBorder,
                         }}
                       >
                         <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 6 }}>متن پاک‌سازی‌شده</div>
@@ -769,10 +749,10 @@ export default function FieldManagementSummaryCreate() {
       ) : null}
 
       {/* نوشتن خلاصه */}
-      <div style={cardStyle}>
+      <div style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
           <strong style={{ fontSize: 14 }}>متن خلاصه مدیریتی</strong>
-          <button type="button" style={btnStyle("purple")} disabled={aiBusy} onClick={runAiDraft}>
+          <button type="button" style={btn("purple")} disabled={aiBusy} onClick={runAiDraft}>
             {aiBusy ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={15} />}
             {aiActionLabel}
           </button>
@@ -782,7 +762,7 @@ export default function FieldManagementSummaryCreate() {
           با تغییر فیلترها همان «عنوان تولیدی» بالا در این فیلد کپی می‌شود؛ اگر خودتان عنوان را عوض کنید، دیگر به‌صورت خودکار بازنویسی نمی‌شود.
         </div>
         <input
-          style={{ ...inputStyle, marginBottom: 12 }}
+          style={{ ...inp, marginBottom: 12 }}
           value={title}
           maxLength={480}
           placeholder="خلاصه مدیریتی گزارشات میدانی"
@@ -796,12 +776,13 @@ export default function FieldManagementSummaryCreate() {
           onChange={setSummaryBody}
           maxLength={MANAGEMENT_SUMMARY_BODY_MAX}
           minHeight={240}
+          isDarkMode={isDarkMode}
           placeholder="پس از مطالعه گزارشات، خلاصه مدیریتی را اینجا بنویسید..."
         />
         <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
           <button
             type="button"
-            style={btnStyle("primary")}
+            style={btn("primary")}
             disabled={busy || !stripHtml(summaryBody).trim() || Boolean(savedSummary)}
             onClick={save}
           >
@@ -809,7 +790,7 @@ export default function FieldManagementSummaryCreate() {
             {busy ? "در حال ثبت..." : "ثبت خلاصه"}
           </button>
           {!savedSummary ? (
-            <button type="button" style={btnStyle()} onClick={() => navigate("/main")}>
+            <button type="button" style={btn()} onClick={() => navigate("/main")}>
               <X size={15} />
               انصراف
             </button>

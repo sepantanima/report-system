@@ -1,6 +1,10 @@
 import { getPromptBody } from "./promptRegistry.js";
 import { buildManagementSummaryPromptForModel } from "./managementSummaryAiAssembly.js";
-import { isFieldManagementSummaryGenerateAction } from "../constants/aiFormRegistry.js";
+import { buildNewsEditorialPromptForModel } from "./newsEditorialAiAssembly.js";
+import {
+  isFieldManagementSummaryGenerateAction,
+  isNewsEditorialRunAction,
+} from "../constants/aiFormRegistry.js";
 import {
   buildFormTemplateVars,
   resolveCatalogServerVars,
@@ -55,6 +59,13 @@ export async function buildFinalPromptText(strategy, formData, sourceFields, con
       promptKey: configPromptKey,
     });
     return { promptTextForModel: built.promptTextForModel, promptKey: built.promptKey, extra: built };
+  }
+
+  if (isNewsEditorialRunAction(fn, an) || s === "news_editorial_v1") {
+    const built = await buildNewsEditorialPromptForModel(formData, {
+      promptKey: configPromptKey,
+    });
+    return { promptTextForModel: built.promptTextForModel, promptKey: built.promptKey, extra: null };
   }
 
   if (s === "unified_v1" || s === "labeled_fields") {

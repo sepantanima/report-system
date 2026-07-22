@@ -1,9 +1,10 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { usePageFontSize } from "../../utils/pageFontSize.js";
 import PageToolbarButtons from "./PageToolbarButtons.jsx";
+import PageUserMenu from "./PageUserMenu.jsx";
 import { getFormPageTheme } from "../../theme/formPageTheme.js";
 
 /**
@@ -18,6 +19,8 @@ export default function StandardFormHeader({
   onBack,
   onHelp,
   showHelp = true,
+  showProfile = true,
+  showLogout = true,
   headerEnd,
   toolbarExtra,
   subRow,
@@ -25,13 +28,22 @@ export default function StandardFormHeader({
   sticky = true,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkMode } = useAppTheme();
   const { level: fontLevel, cycleFont } = usePageFontSize();
   const theme = getFormPageTheme(isDarkMode);
 
   const handleBack = () => {
-    if (onBack) onBack();
-    else navigate(backTo);
+    if (onBack) {
+      onBack();
+      return;
+    }
+    const returnTo = location.state?.returnTo;
+    if (typeof returnTo === "string" && returnTo.startsWith("/")) {
+      navigate(returnTo);
+      return;
+    }
+    navigate(backTo);
   };
 
   const titleBlock = (
@@ -60,6 +72,7 @@ export default function StandardFormHeader({
           showHelp={showHelp && !!onHelp}
           btnClass="v3-icon-btn"
         />
+        <PageUserMenu showProfile={showProfile} showLogout={showLogout} btnClass="v3-icon-btn" />
       </div>
     </div>
   );

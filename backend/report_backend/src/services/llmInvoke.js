@@ -139,22 +139,17 @@ export async function invokeLlm({ usageKey, promptText, preferredConfigId = null
 
   const attempts = [];
   let lastDiagnostic = null;
-  const isRetriable = (status, code) => (
-    status === 401
-    || status === 403
-    || status === 404
-    || status === 429
-    || (status >= 500 && status < 600)
-    || code === "ECONNABORTED"
-  );
 
-  for (const row of rows) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const hasMore = i < rows.length - 1;
     try {
       return await invokeOneRow(row, promptText);
     } catch (e) {
       const diagnostic = classifyLlmFailure(e, row);
       lastDiagnostic = diagnostic;
-      const willRetry = isRetriable(e.response?.status, e.code);
+      // هر خطای مربوط به یک provider باید به provider بعدی در زنجیره fallback شود
+      const willRetry = hasMore;
       attempts.push({
         config_id: row.id,
         provider_type: row.provider_type,

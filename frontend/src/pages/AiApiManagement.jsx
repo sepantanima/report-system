@@ -1,13 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { HelpCircle, Plus, Trash2, Save, FlaskConical, Wallet } from "lucide-react";
+import { Plus, Trash2, Save, FlaskConical, Wallet, ChevronUp, ChevronDown, AlertTriangle } from "lucide-react";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import api from "../api/api";
 import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 import { AI_API_FIELD_LIMITS } from "../constants/promptFieldLimits.js";
 import { AI_USAGE_KEYS } from "../constants/aiUsageKeys.js";
+import {
+  AI_USAGE_KEY_OPTIONS,
+  findSortConflict,
+  groupConfigsByUsage,
+  isKnownUsageKey,
+  priorityLabel,
+  suggestNextSortOrder,
+  usageKeyLabelFa,
+  usageKeyWhereFa,
+} from "../constants/aiUsageKeyMeta.js";
 import { clampText } from "../utils/limitInput.js";
 import { AI_API_FORM_HELP } from "../content/aiApiFormHelp.jsx";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme, FORM_PAGE_MODAL_Z_INDEX } from "../theme/formPageTheme.js";
 import {
   EMPTY_CREDIT_FORM,
   creditFieldsFromExtra,
@@ -17,6 +29,109 @@ import {
   rowHasCreditCheck,
   buildTemplateCreditMap,
 } from "../utils/aiCreditCheckConfig.js";
+
+function getAiApiManagementStyles(theme, isDarkMode) {
+  const inp = {
+    width: "100%",
+    padding: "8px 10px",
+    marginBottom: 12,
+    borderRadius: 6,
+    background: theme.inputBg,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+    fontSize: 14,
+  };
+
+  const btnBase = {
+    fontFamily: "inherit",
+    fontSize: 13,
+    fontWeight: 500,
+    borderRadius: 8,
+    cursor: "pointer",
+    border: "1px solid transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    lineHeight: 1.25,
+  };
+
+  const btnGhost = {
+    ...btnBase,
+    padding: "8px 14px",
+    background: isDarkMode ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+    borderColor: theme.border,
+    color: theme.text,
+  };
+
+  const btnPrimary = {
+    ...btnBase,
+    padding: "8px 16px",
+    background: "#0ea5e9",
+    borderColor: "#0284c7",
+    color: "#fff",
+  };
+
+  const btnTable = {
+    ...btnGhost,
+    padding: "4px 10px",
+    minHeight: 30,
+    fontSize: 12,
+  };
+
+  const btnDanger = {
+    ...btnBase,
+    padding: "4px 8px",
+    background: "transparent",
+    borderColor: "transparent",
+    color: isDarkMode ? "#f87171" : "#dc2626",
+  };
+
+  const hintBox = {
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+    background: isDarkMode ? "rgba(0,0,0,0.2)" : "#f8fafc",
+  };
+
+  const conflictBox = {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    background: isDarkMode ? "rgba(248,113,113,0.12)" : "#fef2f2",
+    border: `1px solid ${isDarkMode ? "rgba(248,113,113,0.4)" : "#fecaca"}`,
+    color: isDarkMode ? "#fca5a5" : "#b91c1c",
+    fontSize: 13,
+    lineHeight: 1.6,
+  };
+
+  const warningText = isDarkMode ? "#fbbf24" : "#92400e";
+  const warningBox = {
+    fontSize: 13,
+    color: warningText,
+    border: `1px solid ${isDarkMode ? "#854d0e" : "#fcd34d"}`,
+    background: isDarkMode ? "rgba(0,0,0,0.2)" : "#fffbeb",
+    padding: "8px 10px",
+    borderRadius: 6,
+  };
+
+  return {
+    inp,
+    btnGhost,
+    btnPrimary,
+    btnTable,
+    btnDanger,
+    hintBox,
+    conflictBox,
+    warningText,
+    warningBox,
+    errorText: isDarkMode ? "#f87171" : "#dc2626",
+    mutedText: theme.muted,
+    groupRowBg: isDarkMode ? "rgba(56,189,248,0.12)" : "rgba(14,165,233,0.08)",
+  };
+}
 
 function CharCounter({ value, max }) {
   const n = value != null ? String(value).length : 0;
@@ -51,46 +166,25 @@ function buildEmptyForm(templates) {
   };
 }
 
-const inp = {
-  width: "100%",
-  padding: 8,
-  marginBottom: 12,
-  borderRadius: 6,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#fff",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-};
-
-const btnGhost = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#e2e8f0",
-  padding: "8px 14px",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
-const btnPrimary = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 16px",
-  cursor: "pointer",
-  background: "#0ea5e9",
-  border: "none",
-  borderRadius: 8,
-  color: "#fff",
-  fontFamily: "inherit",
-};
-
 export default function AiApiManagement() {
   const navigate = useNavigate();
+  const { isDarkMode } = useAppTheme();
+  const theme = getFormPageTheme(isDarkMode);
+  const styles = useMemo(() => getAiApiManagementStyles(theme, isDarkMode), [theme, isDarkMode]);
+  const {
+    inp,
+    btnGhost,
+    btnPrimary,
+    btnTable,
+    btnDanger,
+    hintBox,
+    conflictBox,
+    warningText,
+    warningBox,
+    errorText,
+    mutedText,
+    groupRowBg,
+  } = styles;
   const allowed = hasRole(getSessionRoles(), "admin");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -107,6 +201,21 @@ export default function AiApiManagement() {
 
   const [filterUsageKey, setFilterUsageKey] = useState("");
   const [filterProviderType, setFilterProviderType] = useState("");
+  const [highlightId, setHighlightId] = useState(null);
+  const [usageKeyCustom, setUsageKeyCustom] = useState(false);
+
+  const groupedRows = useMemo(() => groupConfigsByUsage(rows), [rows]);
+
+  const usageKeysInDb = useMemo(() => {
+    const keys = new Set(rows.map((r) => r.usage_key));
+    return [...keys].sort((a, b) => a.localeCompare(b, "fa"));
+  }, [rows]);
+
+  const editId = modal?.mode === "edit" ? modal.id : null;
+  const formConflict = useMemo(
+    () => (modal ? findSortConflict(rows, form.usage_key, form.sort_order, editId) : null),
+    [modal, rows, form.usage_key, form.sort_order, editId],
+  );
 
   const fetchConfigs = async (explicit) => {
     if (!allowed) return;
@@ -145,9 +254,13 @@ export default function AiApiManagement() {
   }, [allowed]);
 
   const openCreate = () => {
-    setForm(buildEmptyForm(providerTemplates));
+    const empty = buildEmptyForm(providerTemplates);
+    empty.sort_order = suggestNextSortOrder(rows, empty.usage_key);
+    setForm(empty);
+    setUsageKeyCustom(false);
     setModal("create");
     setTestMsg("");
+    setHighlightId(null);
   };
 
   const openEdit = (row) => {
@@ -172,8 +285,10 @@ export default function AiApiManagement() {
       is_enabled: row.is_enabled,
       ...creditFields,
     });
+    setUsageKeyCustom(!isKnownUsageKey(row.usage_key));
     setModal({ mode: "edit", id: row.id });
     setTestMsg("");
+    setHighlightId(null);
   };
 
   const onProviderTypeChange = (slug) => {
@@ -219,7 +334,31 @@ export default function AiApiManagement() {
     return out;
   }, [sortedTemplates, form.provider_type]);
 
+  const onUsageKeyChange = (key) => {
+    const uk = String(key || "").trim();
+    setForm((f) => ({
+      ...f,
+      usage_key: uk,
+      sort_order: modal === "create" ? suggestNextSortOrder(rows, uk) : f.sort_order,
+    }));
+  };
+
+  const moveRow = async (id, direction) => {
+    setErr("");
+    try {
+      await api.post(`/admin/ai-api-configs/${id}/move`, { direction });
+      await fetchConfigs();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message);
+    }
+  };
+
   const submit = async () => {
+    if (formConflict) {
+      setHighlightId(formConflict.id);
+      setErr(`ترتیب ${form.sort_order} برای این کاربرد قبلاً در ردیف #${formConflict.id} (${formConflict.title_fa || formConflict.provider_type}) است.`);
+      return;
+    }
     setSaving(true);
     setErr("");
     let extra_config = {};
@@ -251,8 +390,11 @@ export default function AiApiManagement() {
         await api.put(`/admin/ai-api-configs/${modal.id}`, payload);
       }
       setModal(null);
+      setHighlightId(null);
       await fetchConfigs();
     } catch (e) {
+      const cid = e.response?.data?.conflict_id;
+      if (cid) setHighlightId(cid);
       setErr(e.response?.data?.error || e.message);
     } finally {
       setSaving(false);
@@ -328,16 +470,27 @@ export default function AiApiManagement() {
       helpTitle="راهنمای مدیریت API هوش مصنوعی"
       contentPadding="20px"
     >
+      <p style={{ margin: "0 0 14px", fontSize: 13, opacity: 0.85, lineHeight: 1.7 }}>
+        هر <b>کاربرد</b> (مثلاً خلاصه خبر) می‌تواند چند API داشته باشد. عدد ترتیب فقط <b>داخل همان کاربرد</b> یکتا است — کاربردهای مختلف می‌توانند ترتیب یکسان داشته باشند.
+        عدد کوچکتر = اولویت بالاتر (اول امتحان می‌شود).
+      </p>
+
       <div className="form-page-filter-row">
         <div className="form-page-filter-field">
-          <label style={{ display: "block", fontSize: "0.86em", opacity: 0.85, marginBottom: 4 }}>فیلتر کاربرد (usage_key)</label>
-          <input
+          <label style={{ display: "block", fontSize: "0.86em", opacity: 0.85, marginBottom: 4 }}>فیلتر کاربرد</label>
+          <select
             style={{ ...inp, marginBottom: 0, width: "100%" }}
             value={filterUsageKey}
             onChange={(e) => setFilterUsageKey(e.target.value)}
-            placeholder="مثلاً field.management_summary"
-            dir="ltr"
-          />
+          >
+            <option value="">همه کاربردها</option>
+            {AI_USAGE_KEY_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>{o.labelFa}</option>
+            ))}
+            {usageKeysInDb.filter((k) => !isKnownUsageKey(k)).map((k) => (
+              <option key={k} value={k}>{k} (قدیمی/سفارشی)</option>
+            ))}
+          </select>
         </div>
         <div className="form-page-filter-field">
           <label style={{ display: "block", fontSize: "0.86em", opacity: 0.85, marginBottom: 4 }}>فیلتر نوع ارائه‌دهنده</label>
@@ -382,19 +535,19 @@ export default function AiApiManagement() {
         </button>
       </div>
 
-      {err ? <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div> : null}
-      {testMsg ? <div style={{ marginBottom: 12, color: "#94a3b8" }}>نتیجه تست: {testMsg}</div> : null}
+      {err ? <div style={{ color: errorText, marginBottom: 12 }}>{err}</div> : null}
+      {testMsg ? <div style={{ marginBottom: 12, color: mutedText }}>نتیجه تست: {testMsg}</div> : null}
       {loading ? <div>در حال بارگذاری…</div> : null}
 
       <div className="form-page-table-wrap">
         <table className="form-page-table">
           <thead>
-            <tr style={{ background: "#1e293b" }}>
+            <tr style={{ background: isDarkMode ? theme.card : "#f1f5f9" }}>
               <th className="col-narrow">id</th>
-              <th className="col-wide">کاربرد</th>
+              <th className="col-short">اولویت</th>
               <th className="col-short">ترتیب</th>
               <th className="col-title">عنوان</th>
-              <th className="col-text">نوع</th>
+              <th className="col-text">نوع API</th>
               <th className="col-text">مدل</th>
               <th className="col-short">فعال</th>
               <th className="col-text">اعتبارنامه</th>
@@ -403,68 +556,91 @@ export default function AiApiManagement() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} style={{ borderTop: "1px solid #334155" }}>
-                <td className="col-narrow">{r.id}</td>
-                <td className="col-wide col-mono" dir="ltr">
-                  {r.usage_key}
-                </td>
-                <td className="col-short">{r.sort_order}</td>
-                <td className="col-title">{r.title_fa}</td>
-                <td className="col-text col-mono" dir="ltr">
-                  {r.provider_type}
-                </td>
-                <td className="col-text">{r.model_id}</td>
-                <td className="col-short">{r.is_enabled ? "بله" : "خیر"}</td>
-                <td className="col-text">
-                  {r.credential_mode === "env_ref" ? (
-                    <span className="col-mono" dir="ltr">
-                      env: {r.credential_env_name || "—"}
-                    </span>
-                  ) : (
-                    <span>
-                      DB
-                      {r.has_stored_secret && r.stored_secret_hint ? (
-                        <span style={{ opacity: 0.85 }}> ({r.stored_secret_hint})</span>
+            {groupedRows.map(([usageKey, group]) => (
+              <React.Fragment key={usageKey}>
+                <tr style={{ background: groupRowBg, borderTop: `2px solid ${theme.border}` }}>
+                  <td colSpan={10} style={{ padding: "10px 12px" }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{usageKeyLabelFa(usageKey)}</div>
+                    <div style={{ fontSize: 12, opacity: 0.8, fontFamily: "monospace", direction: "ltr", textAlign: "right" }}>{usageKey}</div>
+                    {usageKeyWhereFa(usageKey) ? (
+                      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{usageKeyWhereFa(usageKey)}</div>
+                    ) : null}
+                    {!isKnownUsageKey(usageKey) ? (
+                      <div style={{ fontSize: 12, color: warningText, marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                        <AlertTriangle size={14} />
+                        این کاربرد در سیستم شناخته‌شده نیست — ممکن است برنامه از آن استفاده نکند (مثلاً news_summary به‌جای news.summarize).
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+                {group.map((r, idx) => (
+                  <tr
+                    key={r.id}
+                    style={{
+                      borderTop: `1px solid ${theme.border}`,
+                      background: highlightId === r.id
+                        ? (isDarkMode ? "rgba(248,113,113,0.15)" : "#fef2f2")
+                        : undefined,
+                      outline: highlightId === r.id ? `2px solid ${errorText}` : undefined,
+                    }}
+                  >
+                    <td className="col-narrow">{r.id}</td>
+                    <td className="col-short" style={{ fontSize: 12, fontWeight: 600 }}>{priorityLabel(idx)}</td>
+                    <td className="col-short">{r.sort_order}</td>
+                    <td className="col-title">{r.title_fa}</td>
+                    <td className="col-text col-mono" dir="ltr">{r.provider_type}</td>
+                    <td className="col-text">{r.model_id}</td>
+                    <td className="col-short">{r.is_enabled ? "بله" : "خیر"}</td>
+                    <td className="col-text">
+                      {r.credential_mode === "env_ref" ? (
+                        <span className="col-mono" dir="ltr">env: {r.credential_env_name || "—"}</span>
+                      ) : (
+                        <span>
+                          DB
+                          {r.has_stored_secret && r.stored_secret_hint ? (
+                            <span style={{ opacity: 0.85 }}> ({r.stored_secret_hint})</span>
+                          ) : null}
+                        </span>
+                      )}
+                    </td>
+                    <td className="col-short" style={{ fontSize: 12 }}>
+                      {creditById[r.id]?.error ? (
+                        <span style={{ color: errorText }} title={creditById[r.id].error}>خطا</span>
+                      ) : creditById[r.id]?.balance != null ? (
+                        <span title={creditById[r.id].checked_at || ""}>{creditById[r.id].balance}</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="col-actions">
+                      <button type="button" onClick={() => moveRow(r.id, "up")} disabled={idx === 0} title="بالا (اولویت بیشتر)" style={{ cursor: idx === 0 ? "not-allowed" : "pointer", marginLeft: 4, opacity: idx === 0 ? 0.35 : 1 }}>
+                        <ChevronUp size={14} />
+                      </button>
+                      <button type="button" onClick={() => moveRow(r.id, "down")} disabled={idx === group.length - 1} title="پایین (اولویت کمتر)" style={{ cursor: idx === group.length - 1 ? "not-allowed" : "pointer", marginLeft: 4, opacity: idx === group.length - 1 ? 0.35 : 1 }}>
+                        <ChevronDown size={14} />
+                      </button>
+                      <button type="button" onClick={() => openEdit(r)} style={{ ...btnTable, marginLeft: 6 }}>ویرایش</button>
+                      <button type="button" onClick={() => testRow(r.id)} style={{ ...btnTable, marginLeft: 6 }} title="تست اتصال">
+                        <FlaskConical size={14} style={{ verticalAlign: "middle" }} />
+                      </button>
+                      {rowHasCreditCheck(r, templateCreditMap) ? (
+                        <button
+                          type="button"
+                          onClick={() => checkCredit(r.id)}
+                          disabled={creditBusyId === r.id}
+                          style={{ ...btnTable, marginLeft: 6, opacity: creditBusyId === r.id ? 0.5 : 1, cursor: creditBusyId === r.id ? "wait" : "pointer" }}
+                          title="مانده اعتبار"
+                        >
+                          <Wallet size={14} style={{ verticalAlign: "middle" }} />
+                        </button>
                       ) : null}
-                    </span>
-                  )}
-                </td>
-                <td className="col-short" style={{ fontSize: 12 }}>
-                  {creditById[r.id]?.error ? (
-                    <span style={{ color: "#f87171" }} title={creditById[r.id].error}>خطا</span>
-                  ) : creditById[r.id]?.balance != null ? (
-                    <span title={creditById[r.id].checked_at || ""}>
-                      {creditById[r.id].balance}
-                      {creditById[r.id].currency ? ` ${creditById[r.id].currency}` : ""}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="col-actions">
-                  <button type="button" onClick={() => openEdit(r)} style={{ cursor: "pointer", marginLeft: 6 }}>
-                    ویرایش
-                  </button>
-                  <button type="button" onClick={() => testRow(r.id)} style={{ cursor: "pointer", marginLeft: 6 }} title="یک درخواست آزمایشی کوتاه به این ردیف">
-                    <FlaskConical size={14} style={{ verticalAlign: "middle" }} />
-                  </button>
-                  {rowHasCreditCheck(r, templateCreditMap) ? (
-                    <button
-                      type="button"
-                      onClick={() => checkCredit(r.id)}
-                      disabled={creditBusyId === r.id}
-                      style={{ cursor: creditBusyId === r.id ? "wait" : "pointer", marginLeft: 6, opacity: creditBusyId === r.id ? 0.5 : 1 }}
-                      title="مانده اعتبار حساب"
-                    >
-                      <Wallet size={14} style={{ verticalAlign: "middle" }} />
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={() => remove(r.id)} style={{ cursor: "pointer", marginLeft: 6, color: "#f87171" }}>
-                    <Trash2 size={14} />
-                  </button>
-                </td>
-              </tr>
+                      <button type="button" onClick={() => remove(r.id)} style={{ ...btnDanger, marginLeft: 6 }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -475,39 +651,83 @@ export default function AiApiManagement() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.55)",
+            background: isDarkMode ? "rgba(0,0,0,0.55)" : "rgba(15,23,42,0.35)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 50,
+            zIndex: FORM_PAGE_MODAL_Z_INDEX,
             padding: 16,
           }}
         >
           <div
             style={{
-              background: "#0f172a",
-              border: "1px solid #334155",
+              background: theme.card,
+              border: `1px solid ${theme.border}`,
               borderRadius: 12,
               maxWidth: 720,
               width: "100%",
               maxHeight: "90vh",
               overflow: "auto",
               padding: 20,
+              color: theme.text,
             }}
           >
             <h3 style={{ marginTop: 0 }}>{modal === "create" ? "ردیف جدید" : `ویرایش #${modal.id}`}</h3>
+            <label style={{ display: "block", marginBottom: 8 }}>کاربرد — این API برای کدام قابلیت برنامه است؟</label>
+            {!usageKeyCustom ? (
+              <select
+                style={inp}
+                value={AI_USAGE_KEY_OPTIONS.some((o) => o.key === form.usage_key) ? form.usage_key : ""}
+                onChange={(e) => {
+                  if (e.target.value === "__custom__") {
+                    setUsageKeyCustom(true);
+                    return;
+                  }
+                  onUsageKeyChange(e.target.value);
+                }}
+              >
+                <option value="" disabled>انتخاب کاربرد…</option>
+                {AI_USAGE_KEY_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>{o.labelFa} — {o.key}</option>
+                ))}
+                {form.usage_key && !isKnownUsageKey(form.usage_key) ? (
+                  <option value={form.usage_key}>{form.usage_key} (فعلی)</option>
+                ) : null}
+                <option value="__custom__">سایر (وارد کردن دستی usage_key)</option>
+              </select>
+            ) : (
+              <>
+                <input
+                  style={inp}
+                  value={form.usage_key}
+                  maxLength={L.usageKey}
+                  onChange={(e) => onUsageKeyChange(clampText(e.target.value, L.usageKey))}
+                  dir="ltr"
+                  placeholder="مثلاً news.summarize"
+                />
+                <button type="button" style={{ ...btnGhost, marginBottom: 12, fontSize: 12 }} onClick={() => setUsageKeyCustom(false)}>
+                  بازگشت به لیست کاربردها
+                </button>
+              </>
+            )}
+            {usageKeyWhereFa(form.usage_key) ? (
+              <p style={{ fontSize: 12, opacity: 0.75, margin: "0 0 12px" }}>{usageKeyWhereFa(form.usage_key)}</p>
+            ) : null}
             <label style={{ display: "block", marginBottom: 8 }}>
-              کاربرد (usage_key) <CharCounter value={form.usage_key} max={L.usageKey} />
+              ترتیب در زنجیره پشتیبان (فقط برای همین کاربرد یکتا است)
             </label>
-            <input
-              style={inp}
-              value={form.usage_key}
-              maxLength={L.usageKey}
-              onChange={(e) => setForm((f) => ({ ...f, usage_key: clampText(e.target.value, L.usageKey) }))}
-              dir="ltr"
-            />
-            <label style={{ display: "block", marginBottom: 8 }}>ترتیب در زنجیره پشتیبان (عدد کوچکتر = اولویت بیشتر)</label>
             <input style={inp} type="number" value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} />
+            {formConflict ? (
+              <div style={conflictBox}>
+                <AlertTriangle size={14} style={{ verticalAlign: "middle", marginLeft: 6 }} />
+                ترتیب {form.sort_order} با ردیف #{formConflict.id} ({formConflict.title_fa || formConflict.provider_type}) تداخل دارد.
+                {modal === "create" ? (
+                  <button type="button" style={{ ...btnGhost, marginTop: 8, fontSize: 12 }} onClick={() => setForm((f) => ({ ...f, sort_order: suggestNextSortOrder(rows, f.usage_key) }))}>
+                    پیشنهاد: ترتیب {suggestNextSortOrder(rows, form.usage_key)}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <label style={{ display: "block", marginBottom: 8 }}>
               عنوان فارسی <CharCounter value={form.title_fa} max={L.titleFa} />
             </label>
@@ -519,7 +739,7 @@ export default function AiApiManagement() {
             />
             <label style={{ display: "block", marginBottom: 8 }}>نوع ارائه‌دهنده (slug — از جدول قالب‌ها در دیتابیس)</label>
             {templateSelectOptions.length === 0 ? (
-              <div style={{ ...inp, color: "#fbbf24", fontSize: 13 }}>
+              <div style={{ ...warningBox, ...inp, marginBottom: 12 }}>
                 هنوز قالبی بارگذاری نشد. اگر جدول خالی است، مهاجرت <code style={{ fontSize: 12 }}>005_ai_provider_templates.sql</code> را روی دیتابیس اجرا کنید؛ برای نوع جدید یک ردیف در همان جدول (یا API ادمین) اضافه کنید.
               </div>
             ) : (
@@ -544,14 +764,7 @@ export default function AiApiManagement() {
               dir="ltr"
             />
 
-            <div style={{
-              marginBottom: 16,
-              padding: 14,
-              borderRadius: 8,
-              border: "1px solid #334155",
-              background: "rgba(15,23,42,0.6)",
-            }}
-            >
+            <div style={hintBox}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontWeight: 600 }}>
                 <input
                   type="checkbox"
@@ -637,10 +850,10 @@ export default function AiApiManagement() {
               <input type="checkbox" checked={form.is_enabled} onChange={(e) => setForm((f) => ({ ...f, is_enabled: e.target.checked }))} /> فعال
             </label>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setModal(null)} style={{ padding: "8px 16px", cursor: "pointer", borderRadius: 8 }}>
+              <button type="button" onClick={() => setModal(null)} style={btnGhost}>
                 انصراف
               </button>
-              <button type="button" onClick={submit} disabled={saving} style={{ ...btnPrimary, cursor: saving ? "wait" : "pointer" }}>
+              <button type="button" onClick={submit} disabled={saving || !!formConflict} style={{ ...btnPrimary, cursor: saving || formConflict ? "not-allowed" : "pointer", opacity: saving || formConflict ? 0.55 : 1 }}>
                 <Save size={16} />
                 ذخیره
               </button>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
-  ArrowRight,
   User,
   Lock,
   CheckCircle2,
@@ -14,6 +13,7 @@ import {
   KeyRound,
   FileText,
   Activity,
+  MessageCircle,
 } from "lucide-react";
 
 // =========================================================================
@@ -21,6 +21,8 @@ import {
 // هنگام کپی کردن این فایل به پروژه محلی خود، کافیست خطوط زیر را از حالت کامنت خارج کنید:
 //
 import api from "../api/api";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
+import { PAGE_SETTINGS_WIDE_CSS } from "../constants/pageLayoutWidths.js";
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import { getSessionRoles, hasPermission } from "../utils/userRoles.js";
 import {
@@ -28,6 +30,7 @@ import {
   FieldReportSettingsPanel,
   NewsEntrySettingsPanel,
 } from "../components/settings/AdminSettingsPanels.jsx";
+import MessengerAccountsPanel from "../components/settings/MessengerAccountsPanel.jsx";
 // =========================================================================
 
 // // شبیه‌ساز هوشمند وب‌سرویس‌ها جهت جلوگیری از خطای بیلد در پیش‌نمایش کانوس
@@ -110,6 +113,7 @@ export default function SystemSetting() {
   const visibleTabs = useMemo(() => {
     const all = [
       { id: "appearance", label: "پوسته و پروفایل", icon: Sun, show: true },
+      { id: "messenger_accounts", label: "اکانت‌های پیام‌رسان", icon: MessageCircle, show: true },
       { id: "security", label: "امنیت", icon: Lock, show: true },
       {
         id: "messaging",
@@ -313,7 +317,14 @@ export default function SystemSetting() {
   };
 
   return (
-    <div className="loginPage">
+    <FormPageLayout
+      title="تنظیمات سیستم و کاربری"
+      onBack={goBack}
+      showProfile={false}
+      wide
+      maxWidth={PAGE_SETTINGS_WIDE_CSS}
+      contentPadding="0 0 32px"
+    >
       {/* استایل‌های جامع پورتال تنظیمات سازگار با تم پویا و بیلد ۱۰۰٪ موفق */}
       <style>{`
         .loginPage {
@@ -353,7 +364,7 @@ export default function SystemSetting() {
           position: relative;
           z-index: 10;
           width: 100%;
-          max-width: min(96vw, 960px);
+          max-width: ${PAGE_SETTINGS_WIDE_CSS.replace(/"/g, "")};
         }
         .loginCard {
           background: var(--bg-card);
@@ -493,24 +504,8 @@ export default function SystemSetting() {
       <div className="blob blob1"></div>
       <div className="blob blob2"></div>
 
-      <div className="loginCardWrap">
-        
-        {/* هدر بالایی تنظیمات */}
-        <div style={{ display: "flex", gap: "12px", marginBottom: "25px", alignItems: "center" }}>
-          <button
-            onClick={goBack}
-            className="submitBtn"
-            style={{ width: "45px", height: "45px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "10px", border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text-main)", marginTop: 0 }}
-            title="بازگشت به منوی اصلی"
-          >
-            <ArrowRight size={18} />
-          </button>
-          <h2 style={{ color: "var(--text-main)", margin: 0, fontSize: "1.4rem", fontWeight: "bold" }}>
-            تنظیمات سیستم و کاربری
-          </h2>
-        </div>
 
-        {/* کارت بدنه چند تبِ پورتال تنظیمات */}
+      <div className="loginCardWrap">
         <div className="loginCard" style={{ borderRadius: "24px", direction: "rtl", overflow: "visible" }}>
           
           {/* 🌟 بخش هویتی جدید بالای تب‌ها به عنوان هدر سراسری با همگام‌سازی کامل نقش‌ها */}
@@ -721,9 +716,13 @@ export default function SystemSetting() {
               <NewsEntrySettingsPanel theme={settingsTheme} />
             )}
 
+            {activeTab === "messenger_accounts" && (
+              <MessengerAccountsPanel theme={settingsTheme} mode="self" />
+            )}
+
           </div>
         </div>
       </div>
-    </div>
+    </FormPageLayout>
   );
 }

@@ -8,7 +8,7 @@ export default function PageFontSizeButton({ level, onCycle, className = "v3-ico
       type="button"
       onClick={onCycle}
       className={className}
-      title={`اندازه فونت: ${toPersianDigits(level)} از ${toPersianDigits(6)}`}
+      title={`اندازه فونت ورودی و کارت: ${toPersianDigits(level)} از ${toPersianDigits(6)}`}
       style={{ position: "relative" }}
     >
       <Type size={18} />

@@ -163,7 +163,9 @@ export default function ResizableNewsColumns({
           flexDirection: "column",
         }}
       >
-        {centerPane}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          {centerPane}
+        </div>
       </div>
       <ResizeHandle onDragStart={startDrag("list")} />
       {paneShell(listPane, widths.list)}

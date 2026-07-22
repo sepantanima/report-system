@@ -194,9 +194,58 @@ export function MessageSettingsPanel({ theme }) {
   );
 }
 
+function DuplicateCheckFields({ theme, enabled, scope, threshold, onChange }) {
+  return (
+    <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+      <h5 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700 }}>بررسی تکراری هنگام ذخیره</h5>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 13, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onChange({ duplicate_check_enabled: e.target.checked })}
+        />
+        فعال — هنگام ذخیره/ارسال، تکراری بودن بررسی شود
+      </label>
+      <label style={{ display: "block", fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+        بازه جستجو
+      </label>
+      <select
+        style={{ ...panelInput(theme), maxWidth: 280, marginBottom: 12 }}
+        value={scope}
+        onChange={(e) => onChange({ duplicate_check_scope: e.target.value })}
+        disabled={!enabled}
+      >
+        <option value="today">روز جاری</option>
+        <option value="3days">۳ روز اخیر</option>
+        <option value="7days">۷ روز اخیر</option>
+      </select>
+      <label style={{ display: "block", fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+        آستانه تشابه متنی ({toPersianDigits(String(threshold))}٪)
+      </label>
+      <input
+        type="range"
+        min={50}
+        max={95}
+        step={5}
+        value={threshold}
+        disabled={!enabled}
+        onChange={(e) => onChange({ duplicate_similarity_threshold: parseInt(e.target.value, 10) })}
+        style={{ width: "100%", maxWidth: 280 }}
+      />
+      <p style={{ fontSize: 12, opacity: 0.75, marginTop: 10, lineHeight: 1.8 }}>
+        تکراری دقیق (همان متن و منبع) همیشه هشدار می‌دهد. موارد با شباهت بالاتر از آستانه نیز نمایش داده می‌شوند.
+        پیش‌فرض: فعال، بازه امروز، آستانه {toPersianDigits("70")}٪.
+      </p>
+    </div>
+  );
+}
+
 export function FieldReportSettingsPanel({ theme }) {
   const allowed = hasPermission(getSessionRoles(), "manage_field_entry_limits");
   const [limit, setLimit] = useState(FIELD_DEFAULT_LIMIT);
+  const [dupEnabled, setDupEnabled] = useState(true);
+  const [dupScope, setDupScope] = useState("today");
+  const [dupThreshold, setDupThreshold] = useState(70);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -208,6 +257,9 @@ export function FieldReportSettingsPanel({ theme }) {
     try {
       const s = await fieldReportAdminService.getSettings();
       setLimit(s.max_submissions_per_day ?? FIELD_DEFAULT_LIMIT);
+      setDupEnabled(s.duplicate_check_enabled !== false);
+      setDupScope(s.duplicate_check_scope || "today");
+      setDupThreshold(s.duplicate_similarity_threshold ?? 70);
     } catch (e) {
       setErr(e.response?.data?.error || e.message);
     } finally {
@@ -231,8 +283,16 @@ export function FieldReportSettingsPanel({ theme }) {
         setErr("مقدار باید عدد صفر یا بزرگ‌تر باشد.");
         return;
       }
-      const s = await fieldReportAdminService.updateSettings({ max_submissions_per_day: val });
+      const s = await fieldReportAdminService.updateSettings({
+        max_submissions_per_day: val,
+        duplicate_check_enabled: dupEnabled,
+        duplicate_check_scope: dupScope,
+        duplicate_similarity_threshold: dupThreshold,
+      });
       setLimit(s.max_submissions_per_day);
+      setDupEnabled(s.duplicate_check_enabled !== false);
+      setDupScope(s.duplicate_check_scope || "today");
+      setDupThreshold(s.duplicate_similarity_threshold ?? 70);
       setMsg("تنظیمات ذخیره شد.");
     } catch (e) {
       setErr(e.response?.data?.error || e.message);
@@ -256,7 +316,18 @@ export function FieldReportSettingsPanel({ theme }) {
             پیش‌فرض: {toPersianDigits(String(FIELD_DEFAULT_LIMIT))} گزارش در روز.
             مقدار {toPersianDigits("0")} یعنی بدون محدودیت. مدیر میدانی و مدیر کل معاف هستند.
           </p>
-          <SaveRow theme={theme} saving={saving} onSave={save} onReset={() => setLimit(FIELD_DEFAULT_LIMIT)} />
+          <DuplicateCheckFields
+            theme={theme}
+            enabled={dupEnabled}
+            scope={dupScope}
+            threshold={dupThreshold}
+            onChange={(patch) => {
+              if (patch.duplicate_check_enabled !== undefined) setDupEnabled(patch.duplicate_check_enabled);
+              if (patch.duplicate_check_scope !== undefined) setDupScope(patch.duplicate_check_scope);
+              if (patch.duplicate_similarity_threshold !== undefined) setDupThreshold(patch.duplicate_similarity_threshold);
+            }}
+          />
+          <SaveRow theme={theme} saving={saving} onSave={save} onReset={() => { setLimit(FIELD_DEFAULT_LIMIT); setDupEnabled(true); setDupScope("today"); setDupThreshold(70); }} />
         </>
       )}
     </PanelCard>
@@ -266,6 +337,10 @@ export function FieldReportSettingsPanel({ theme }) {
 export function NewsEntrySettingsPanel({ theme }) {
   const allowed = hasPermission(getSessionRoles(), "manage_news_entry_limits");
   const [limit, setLimit] = useState(NEWS_DEFAULT_LIMIT);
+  const [dupEnabled, setDupEnabled] = useState(true);
+  const [dupScope, setDupScope] = useState("today");
+  const [dupThreshold, setDupThreshold] = useState(70);
+  const [summarizeThreshold, setSummarizeThreshold] = useState(300);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -277,6 +352,10 @@ export function NewsEntrySettingsPanel({ theme }) {
     try {
       const s = await newsEntryAdminService.getSettings();
       setLimit(s.max_submissions_per_day ?? NEWS_DEFAULT_LIMIT);
+      setDupEnabled(s.duplicate_check_enabled !== false);
+      setDupScope(s.duplicate_check_scope || "today");
+      setDupThreshold(s.duplicate_similarity_threshold ?? 70);
+      setSummarizeThreshold(s.summarize_char_threshold ?? 300);
     } catch (e) {
       setErr(e.response?.data?.error || e.message);
     } finally {
@@ -300,8 +379,23 @@ export function NewsEntrySettingsPanel({ theme }) {
         setErr("مقدار باید عدد صفر یا بزرگ‌تر باشد.");
         return;
       }
-      const s = await newsEntryAdminService.updateSettings({ max_submissions_per_day: val });
+      const sumVal = parseInt(summarizeThreshold, 10);
+      if (!Number.isFinite(sumVal) || sumVal < 50 || sumVal > 5000) {
+        setErr("آستانه خلاصه‌سازی باید بین ۵۰ تا ۵۰۰۰ باشد.");
+        return;
+      }
+      const s = await newsEntryAdminService.updateSettings({
+        max_submissions_per_day: val,
+        duplicate_check_enabled: dupEnabled,
+        duplicate_check_scope: dupScope,
+        duplicate_similarity_threshold: dupThreshold,
+        summarize_char_threshold: sumVal,
+      });
       setLimit(s.max_submissions_per_day);
+      setDupEnabled(s.duplicate_check_enabled !== false);
+      setDupScope(s.duplicate_check_scope || "today");
+      setDupThreshold(s.duplicate_similarity_threshold ?? 70);
+      setSummarizeThreshold(s.summarize_char_threshold ?? 300);
       setMsg("تنظیمات ذخیره شد.");
     } catch (e) {
       setErr(e.response?.data?.error || e.message);
@@ -325,7 +419,46 @@ export function NewsEntrySettingsPanel({ theme }) {
             پیش‌فرض: {toPersianDigits(String(NEWS_DEFAULT_LIMIT))} خبر در روز.
             مقدار {toPersianDigits("0")} یعنی بدون محدودیت. فقط «ارسال برای بررسی» شمرده می‌شود.
           </p>
-          <SaveRow theme={theme} saving={saving} onSave={save} onReset={() => setLimit(NEWS_DEFAULT_LIMIT)} />
+
+          <label style={{ display: "block", fontWeight: 600, marginBottom: 8, marginTop: 16, fontSize: 13 }}>
+            آستانه خلاصه‌سازی متن خبر (کاراکتر)
+          </label>
+          <input
+            type="number"
+            min={50}
+            max={5000}
+            style={panelInput(theme)}
+            value={summarizeThreshold}
+            onChange={(e) => setSummarizeThreshold(e.target.value)}
+          />
+          <p style={{ fontSize: 13, opacity: 0.75, marginTop: 10, lineHeight: 1.8 }}>
+            پیش‌فرض: {toPersianDigits("300")}. اگر متن خبر از این حد بیشتر باشد، خلاصه‌سازی پیشنهاد می‌شود.
+            برای اخبار «فوری» بالای این حد، خلاصه الزامی است.
+          </p>
+
+          <DuplicateCheckFields
+            theme={theme}
+            enabled={dupEnabled}
+            scope={dupScope}
+            threshold={dupThreshold}
+            onChange={(patch) => {
+              if (patch.duplicate_check_enabled !== undefined) setDupEnabled(patch.duplicate_check_enabled);
+              if (patch.duplicate_check_scope !== undefined) setDupScope(patch.duplicate_check_scope);
+              if (patch.duplicate_similarity_threshold !== undefined) setDupThreshold(patch.duplicate_similarity_threshold);
+            }}
+          />
+          <SaveRow
+            theme={theme}
+            saving={saving}
+            onSave={save}
+            onReset={() => {
+              setLimit(NEWS_DEFAULT_LIMIT);
+              setDupEnabled(true);
+              setDupScope("today");
+              setDupThreshold(70);
+              setSummarizeThreshold(300);
+            }}
+          />
         </>
       )}
     </PanelCard>

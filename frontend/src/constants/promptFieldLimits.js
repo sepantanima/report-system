@@ -5,6 +5,18 @@ export const PROMPT_FIELD_LIMITS = {
   body: 5000,
 };
 
+/** محدودیت‌های پرامپت راهبردی (مرکز فرماندهی) — هم‌نام با بک‌اند */
+export const STRATEGY_PROMPT_LIMITS = {
+  maxCount: 10,
+  referenceSlotMax: 3,
+  referenceTitleMax: 120,
+  referenceTotalChars: 60000,
+  sourceDigestMaxChars: 50000,
+};
+
+export const STRATEGY_PROMPT_PREFIX = "strategy.";
+export const STRATEGY_SYSTEM_PROMPT_KEYS = ["strategy.soft_war_annex"];
+
 export const AI_API_FIELD_LIMITS = {
   titleFa: 120,
   usageKey: 120,

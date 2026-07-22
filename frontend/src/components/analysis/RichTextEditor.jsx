@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import { Bold, Underline, Heading2, Heading3, Palette, Maximize2, Minimize2, Code2 } from "lucide-react";
+import { Bold, Underline, Strikethrough, Heading2, Heading3, Palette, Maximize2, Minimize2, Code2 } from "lucide-react";
+import { useAppTheme } from "../../context/ThemeContext.jsx";
 import { plainTextLength, stripHtml as stripHtmlUtil } from "../../constants/analysisFieldLimits.js";
 import { pxToEm } from "../../utils/pageFontSize.js";
 import CharCounter from "../news/CharCounter.jsx";
@@ -27,7 +28,7 @@ function useIsMobile() {
   return mobile;
 }
 
-function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColors, setShowColors, applyColor }) {
+function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColors, setShowColors, applyColor, applyFontSize }) {
   const btn = (cmd, title, children, onClick = () => exec(cmd)) => (
     <button
       type="button"
@@ -44,6 +45,7 @@ function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColo
     <div className="rich-text-toolbar" style={{ flexWrap: "wrap", gap: 4, display: "flex", alignItems: "center" }}>
       {btn("bold", "بولد", <Bold />)}
       {btn("underline", "زیرخط", <Underline />)}
+      {btn("strikeThrough", "خط‌خور", <Strikethrough />)}
       {!isMobile && btn("italic", "ایتالیک", <em style={{ fontStyle: "italic", fontSize: pxToEm(12) }}>I</em>)}
       <button
         type="button"
@@ -65,45 +67,73 @@ function Toolbar({ isMobile, isDarkMode, activeCmd, exec, applyHeading, showColo
           <Heading3 />
         </button>
       )}
-      {!isMobile && (
-        <div style={{ position: "relative" }}>
-          <button
-            type="button"
-            className={`rich-text-toolbar-btn${showColors ? " active" : ""}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setShowColors((v) => !v)}
-            title="رنگ متن"
+      <button
+        type="button"
+        className="rich-text-toolbar-btn"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => applyFontSize("2")}
+        title="قلم کوچک"
+        style={{ fontSize: pxToEm(11), fontWeight: 700 }}
+      >
+        ت
+      </button>
+      <button
+        type="button"
+        className="rich-text-toolbar-btn"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => applyFontSize("4")}
+        title="قلم متوسط"
+        style={{ fontSize: pxToEm(14), fontWeight: 700 }}
+      >
+        ت
+      </button>
+      <button
+        type="button"
+        className="rich-text-toolbar-btn"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => applyFontSize("6")}
+        title="قلم بزرگ"
+        style={{ fontSize: pxToEm(18), fontWeight: 700 }}
+      >
+        ت
+      </button>
+      <div style={{ position: "relative" }}>
+        <button
+          type="button"
+          className={`rich-text-toolbar-btn${showColors ? " active" : ""}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setShowColors((v) => !v)}
+          title="رنگ متن"
+        >
+          <Palette />
+        </button>
+        {showColors && (
+          <div style={{
+            position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 20,
+            display: "flex", gap: 5, padding: 6, borderRadius: 8,
+            background: isDarkMode ? "#1e293b" : "#fff",
+            border: `1px solid ${isDarkMode ? "#334155" : "#cbd5e1"}`,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          }}
           >
-            <Palette />
-          </button>
-          {showColors && (
-            <div style={{
-              position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 20,
-              display: "flex", gap: 5, padding: 6, borderRadius: 8,
-              background: isDarkMode ? "#1e293b" : "#fff",
-              border: `1px solid ${isDarkMode ? "#334155" : "#cbd5e1"}`,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            }}
-            >
-              {COLOR_PRESETS.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  title={c.label}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyColor(c.value)}
-                  style={{
-                    width: 20, height: 20, borderRadius: "50%",
-                    border: `2px solid ${isDarkMode ? "#475569" : "#cbd5e1"}`,
-                    background: c.value === "inherit" ? (isDarkMode ? "#94a3b8" : "#64748b") : c.value,
-                    cursor: "pointer",
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+            {COLOR_PRESETS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => applyColor(c.value)}
+                style={{
+                  width: 20, height: 20, borderRadius: "50%",
+                  border: `2px solid ${isDarkMode ? "#475569" : "#cbd5e1"}`,
+                  background: c.value === "inherit" ? (isDarkMode ? "#94a3b8" : "#64748b") : c.value,
+                  cursor: "pointer",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -113,7 +143,7 @@ export default function RichTextEditor({
   onChange,
   onPlainTextChange,
   placeholder = "متن را وارد کنید...",
-  isDarkMode = true,
+  isDarkMode: isDarkModeProp,
   minHeight = 120,
   readOnly = false,
   maxLength,
@@ -121,7 +151,10 @@ export default function RichTextEditor({
   allowSourceView = false,
   resizable = false,
   maxHeight,
+  fillContainer = false,
 }) {
+  const { isDarkMode: themeDark } = useAppTheme();
+  const isDarkMode = isDarkModeProp !== undefined ? isDarkModeProp : themeDark;
   const editorRef = useRef(null);
   const isMobile = useIsMobile();
   const [showColors, setShowColors] = useState(false);
@@ -163,6 +196,7 @@ export default function RichTextEditor({
   const exec = (command, val = null) => { focusEditor(); document.execCommand(command, false, val); emitChange(); };
   const applyHeading = (tag) => { focusEditor(); document.execCommand("formatBlock", false, tag); emitChange(); };
   const applyColor = (color) => { color === "inherit" ? exec("removeFormat") : exec("foreColor", color); setShowColors(false); };
+  const applyFontSize = (size) => { exec("fontSize", String(size)); };
 
   const handleInput = () => {
     if (maxLength && plainTextLength(editorRef.current?.innerHTML || "") > maxLength) {
@@ -220,7 +254,7 @@ export default function RichTextEditor({
 
   return (
     <div
-      className={`rich-text-editor ${isDarkMode ? "dark" : "light"}${fullscreen ? " rich-text-editor--fullscreen" : ""}${resizable ? " rich-text-editor--resizable" : ""}${maxHeight ? " rich-text-editor--fixed-height" : ""}`}
+      className={`rich-text-editor ${isDarkMode ? "dark" : "light"}${fullscreen ? " rich-text-editor--fullscreen" : ""}${resizable ? " rich-text-editor--resizable" : ""}${fillContainer ? " rich-text-editor--fill-container" : ""}${maxHeight && !fillContainer ? " rich-text-editor--fixed-height" : ""}`}
       style={fullscreen ? {
         position: "fixed",
         inset: 0,
@@ -236,6 +270,13 @@ export default function RichTextEditor({
         flex: 1,
         minHeight: 0,
         height: "100%",
+      } : fillContainer ? {
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
       } : maxHeight ? {
         display: "flex",
         flexDirection: "column",
@@ -255,6 +296,7 @@ export default function RichTextEditor({
             showColors={showColors}
             setShowColors={setShowColors}
             applyColor={applyColor}
+            applyFontSize={applyFontSize}
           />
         ) : (
           <span style={{ fontSize: pxToEm(11), opacity: 0.75 }}>نمایش HTML / متن خام (با تگ‌ها)</span>
@@ -288,10 +330,10 @@ export default function RichTextEditor({
           spellCheck={false}
           style={{
             width: "100%",
-            flex: fullscreen || resizable ? 1 : undefined,
-            minHeight: fullscreen ? "60vh" : minHeight,
-            maxHeight: fullscreen ? undefined : maxHeight,
-            overflowY: maxHeight ? "auto" : undefined,
+            flex: fullscreen || resizable || fillContainer ? 1 : undefined,
+            minHeight: fillContainer ? minHeight : undefined,
+            maxHeight: fullscreen || fillContainer ? undefined : maxHeight,
+            overflowY: (maxHeight || fillContainer) ? "auto" : undefined,
             fontFamily: "ui-monospace, Consolas, monospace",
             fontSize: pxToEm(12),
             lineHeight: 1.6,
@@ -308,15 +350,15 @@ export default function RichTextEditor({
       ) : (
       <div
         ref={editorRef}
-        className={`rich-text-area${resizable ? " rich-text-area--resizable" : ""}${maxHeight ? " rich-text-area--fixed-mobile" : ""}`}
+        className={`rich-text-area${resizable ? " rich-text-area--resizable" : ""}${(maxHeight || fillContainer) ? " rich-text-area--fixed-mobile" : ""}`}
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
         style={{
-          minHeight: fullscreen ? "60vh" : minHeight,
-          maxHeight: fullscreen ? undefined : maxHeight,
-          flex: fullscreen || resizable ? 1 : undefined,
-          overflowY: maxHeight ? "auto" : undefined,
+          minHeight: fullscreen ? "60vh" : (fillContainer ? minHeight : minHeight),
+          maxHeight: fullscreen || fillContainer ? undefined : maxHeight,
+          flex: fullscreen || resizable || fillContainer ? 1 : undefined,
+          overflowY: (maxHeight || fillContainer) ? "auto" : undefined,
         }}
         onInput={handleInput}
         onBlur={emitChange}

@@ -5,11 +5,31 @@ import {
   TOPIC_FIELD_LIMITS,
   MISSION_FIELD_LIMITS,
   ANALYSIS_FIELD_LIMITS,
+  BRIEF_FIELD_LIMITS,
   plainTextLength,
   stripHtml,
 } from "../constants/analysisFieldLimits.js";
 
-export { TOPIC_FIELD_LIMITS, MISSION_FIELD_LIMITS, ANALYSIS_FIELD_LIMITS, plainTextLength, stripHtml };
+export { TOPIC_FIELD_LIMITS, MISSION_FIELD_LIMITS, ANALYSIS_FIELD_LIMITS, BRIEF_FIELD_LIMITS, plainTextLength, stripHtml };
+
+/** Assignment statuses counted as in-progress (aligned with GET /topics assignment_active). */
+export const MISSION_ACTIVE_STATUSES = [
+  "Assigned", "InProgress", "Submitted", "UnderReview", "NeedsRevision", "Revised",
+];
+export const MISSION_TERMINAL_STATUSES = ["Cancelled", "Archived"];
+
+export function missionActiveStatusSql(alias) {
+  const list = MISSION_ACTIVE_STATUSES.map((s) => `'${s}'`).join(",");
+  const col = alias ? `${alias}.status` : "status";
+  return `${col} IN (${list})`;
+}
+
+export const TOPIC_ASSIGNMENT_AGG_SQL = `
+           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status NOT IN ('Cancelled','Archived')) as assignment_count,
+           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status NOT IN ('Cancelled','Archived')) as assignment_total,
+           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status IN ('Assigned','InProgress','Submitted','UnderReview','NeedsRevision','Revised')) as assignment_active,
+           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status = 'FinalApproved') as assignment_done,
+           (SELECT COUNT(*)::int FROM tbl_analysis_assignments a WHERE a.topic_id = t.id AND a.status IN ('Cancelled','Archived')) as assignment_cancelled`;
 
 export async function generateTopicCode(client = pool) {
   const year = new Date().getFullYear();
@@ -21,6 +41,21 @@ export async function generateTopicCode(client = pool) {
   let seq = 1;
   if (result.rows[0]?.topic_code) {
     const parts = result.rows[0].topic_code.split("-");
+    seq = parseInt(parts[parts.length - 1], 10) + 1;
+  }
+  return `${prefix}${String(seq).padStart(4, "0")}`;
+}
+
+export async function generateBriefCode(client = pool) {
+  const year = new Date().getFullYear();
+  const prefix = `BRI-${year}-`;
+  const result = await client.query(
+    `SELECT submission_code FROM tbl_analysis_brief_submissions WHERE submission_code LIKE $1 ORDER BY id DESC LIMIT 1`,
+    [`${prefix}%`]
+  );
+  let seq = 1;
+  if (result.rows[0]?.submission_code) {
+    const parts = result.rows[0].submission_code.split("-");
     seq = parseInt(parts[parts.length - 1], 10) + 1;
   }
   return `${prefix}${String(seq).padStart(4, "0")}`;
@@ -120,6 +155,52 @@ export function validateAssignmentPayload(body = {}) {
   const L = MISSION_FIELD_LIMITS;
   if (body.guidelines !== undefined && plainTextLength(body.guidelines) > L.guidelines) {
     return `دستورالعمل حداکثر ${L.guidelines} کاراکتر باشد`;
+  }
+  return null;
+}
+
+export function validateBriefPayload(body = {}) {
+  const L = BRIEF_FIELD_LIMITS;
+  const entryMode = body.entry_mode || "self";
+  if (!["self", "external", "topic_proposal"].includes(entryMode)) return "نوع ثبت نامعتبر است";
+
+  if (entryMode === "topic_proposal") {
+    if (!body.title?.trim()) return "موضوع پیشنهادی الزامی است";
+    if (String(body.title).length > TOPIC_FIELD_LIMITS.title) {
+      return `موضوع پیشنهادی حداکثر ${TOPIC_FIELD_LIMITS.title} کاراکتر باشد`;
+    }
+    if (!body.content?.trim()) return "توضیح موضوع الزامی است";
+    const descLen = plainTextLength(body.content);
+    if (descLen > L.topicProposalDescription) {
+      return `توضیح موضوع حداکثر ${L.topicProposalDescription} کاراکتر باشد`;
+    }
+    if (body.importance_reason !== undefined && plainTextLength(body.importance_reason) > L.importance_reason) {
+      return `دلیل اهمیت حداکثر ${L.importance_reason} کاراکتر باشد`;
+    }
+    return null;
+  }
+
+  if (!body.title?.trim()) return "عنوان الزامی است";
+  if (String(body.title).length > L.title) return `عنوان حداکثر ${L.title} کاراکتر باشد`;
+  if (!body.content?.trim()) return "متن تحلیل الزامی است";
+  if (plainTextLength(body.content) > L.content) return `متن تحلیل حداکثر ${L.content} کاراکتر باشد`;
+  if (body.tags !== undefined && String(body.tags || "").length > L.tags) {
+    return `برچسب حداکثر ${L.tags} کاراکتر باشد`;
+  }
+  if (body.context_type && !["news", "report", "general", ""].includes(body.context_type)) {
+    return "نوع مرجع نامعتبر است";
+  }
+  if (entryMode === "external") {
+    if (!body.attribution_text?.trim()) return "منبع/نویسنده الزامی است";
+    if (String(body.attribution_text).length > L.attribution) {
+      return `منبع/نویسنده حداکثر ${L.attribution} کاراکتر باشد`;
+    }
+  }
+  if (body.attribution_text !== undefined && String(body.attribution_text || "").length > L.attribution) {
+    return `منبع/نویسنده حداکثر ${L.attribution} کاراکتر باشد`;
+  }
+  if (body.composition_date !== undefined && body.composition_date !== null && body.composition_date !== "") {
+    if (!toGregorianDate(body.composition_date)) return "تاریخ نگارش نامعتبر است";
   }
   return null;
 }

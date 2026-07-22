@@ -50,6 +50,9 @@ export default function NotificationBell({ isDarkMode: isDarkModeProp }) {
 
   const [preview, setPreview] = useState([]);
 
+  const [fetchError, setFetchError] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
   const [menuStyle, setMenuStyle] = useState(null);
 
   const boxRef = useRef(null);
@@ -61,27 +64,21 @@ export default function NotificationBell({ isDarkMode: isDarkModeProp }) {
 
 
   const refresh = useCallback(async () => {
-
     try {
-
       const [c, inbox] = await Promise.all([
-
         messageService.unreadCount(),
-
         messageService.inbox({ unread_only: true, limit: 5 }),
-
       ]);
-
       setCount(c);
-
       setPreview(Array.isArray(inbox) ? inbox : []);
-
-    } catch {
-
+      setFetchError(false);
+      setSessionExpired(false);
+    } catch (err) {
       setCount(0);
-
+      const is401 = err?.response?.status === 401;
+      setFetchError(!is401);
+      setSessionExpired(is401);
     }
-
   }, []);
 
 
@@ -237,9 +234,9 @@ export default function NotificationBell({ isDarkMode: isDarkModeProp }) {
       <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
 
         {preview.length === 0 ? (
-
-          <div style={{ padding: 16, fontSize: 12, color: panel.subText, textAlign: "center" }}>پیام جدیدی نیست</div>
-
+          <div style={{ padding: 16, fontSize: 12, color: panel.subText, textAlign: "center" }}>
+            {fetchError ? "خطا در دریافت پیام‌ها — اتصال شبکه را بررسی کنید" : sessionExpired ? "نشست منقضی شده — در حال انتقال به ورود..." : "پیام جدیدی نیست"}
+          </div>
         ) : (
 
           preview.map((m) => (
@@ -375,7 +372,20 @@ export default function NotificationBell({ isDarkMode: isDarkModeProp }) {
       >
 
         <Bell size={18} />
-
+        {fetchError ? (
+          <span
+            style={{
+              position: "absolute",
+              top: 2,
+              left: 2,
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "#f59e0b",
+            }}
+            title="خطا در دریافت پیام‌ها"
+          />
+        ) : null}
         {count > 0 ? (
 
           <span

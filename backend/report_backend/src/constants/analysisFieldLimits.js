@@ -1,15 +1,19 @@
 /** محدودیت کاراکتر — هم‌راستا با frontend/src/constants/analysisFieldLimits.js */
 export const ANALYSIS_FIELD_LIMITS = {
-  short: 80,
-  description: 150,
-  analysisContent: 2000,
+  short: 150,
+  description: 300,
+  axisDescription: 2500,
+  analysisContent: 6000,
+  briefTitle: 200,
+  briefContent: 3000,
+  briefTags: 80,
 };
 
 export const TOPIC_FIELD_LIMITS = {
   title: ANALYSIS_FIELD_LIMITS.short,
   domain: ANALYSIS_FIELD_LIMITS.short,
   keywords: ANALYSIS_FIELD_LIMITS.short,
-  description: ANALYSIS_FIELD_LIMITS.description,
+  description: ANALYSIS_FIELD_LIMITS.axisDescription,
   importance_reason: ANALYSIS_FIELD_LIMITS.description,
 };
 
@@ -20,6 +24,17 @@ export const MISSION_FIELD_LIMITS = {
   guidelines: ANALYSIS_FIELD_LIMITS.description,
   feedback: ANALYSIS_FIELD_LIMITS.description,
   evaluatorComment: ANALYSIS_FIELD_LIMITS.description,
+};
+
+export const BRIEF_FIELD_LIMITS = {
+  title: ANALYSIS_FIELD_LIMITS.briefTitle,
+  content: ANALYSIS_FIELD_LIMITS.briefContent,
+  topicProposalDescription: ANALYSIS_FIELD_LIMITS.axisDescription,
+  importance_reason: ANALYSIS_FIELD_LIMITS.description,
+  tags: ANALYSIS_FIELD_LIMITS.briefTags,
+  attribution: 500,
+  managerNote: ANALYSIS_FIELD_LIMITS.description,
+  rejectReason: ANALYSIS_FIELD_LIMITS.description,
 };
 
 export function stripHtml(html = "") {

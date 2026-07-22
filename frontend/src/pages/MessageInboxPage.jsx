@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Loader2, Reply, Send, Settings, Trash2, Pencil } from "lucide-react";
+import { Loader2, Reply, Send, Settings, Trash2, Pencil, CheckCheck } from "lucide-react";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
 import MultiSelect from "../components/MultiSelect.jsx";
 import MessageReadStatusPanel from "../components/messaging/MessageReadStatusPanel.jsx";
@@ -20,6 +20,7 @@ import { useAppTheme } from "../context/ThemeContext.jsx";
 import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
 import { formatMessageDateTime } from "../utils/messageDateUtils.js";
 import { MESSAGE_INBOX_HELP } from "../content/messageFormHelp.jsx";
+import useAnalysisToast from "../hooks/useAnalysisToast.jsx";
 
 export default function MessageInboxPage() {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ export default function MessageInboxPage() {
   const [recipients, setRecipients] = useState([]);
   const [userOptions, setUserOptions] = useState([]);
   const [sending, setSending] = useState(false);
-  const [toast, setToast] = useState("");
+  const { showToast, Toast } = useAnalysisToast();
   const [checkedIds, setCheckedIds] = useState(() => new Set());
   const [showDeleted, setShowDeleted] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -121,11 +122,6 @@ export default function MessageInboxPage() {
     openMessage(m, { fromNavigation: true });
     navigate(location.pathname, { replace: true, state: { ...location.state, openId: undefined } });
   }, [location.state?.openId, inbox, location.pathname, navigate]);
-
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3500);
-  };
 
   const onRecipientsChange = (vals) => {
     const labelMap = new Map(mergedUserOptions.map((o) => [String(o.value), o.label]));
@@ -254,6 +250,25 @@ export default function MessageInboxPage() {
     }
   };
 
+  const bulkMarkRead = async () => {
+    const ids = [...checkedIds].map((x) => parseInt(x, 10));
+    if (!ids.length) return showToast("پیامی انتخاب نشده");
+    try {
+      const res = await messageService.bulkMarkRead(ids);
+      setCheckedIds(new Set());
+      showToast(`${toPersianDigits(String(res.marked ?? ids.length))} پیام به‌عنوان خوانده‌شده ثبت شد`);
+      const rows = await messageService.inbox({ limit: 100, include_deleted: showDeleted && isSystemAdmin });
+      const nextInbox = Array.isArray(rows) ? rows : [];
+      setInbox(nextInbox);
+      if (selected) {
+        const refreshed = nextInbox.find((x) => String(x.id) === String(selected.id));
+        if (refreshed) setSelected(refreshed);
+      }
+    } catch (e) {
+      showToast(e.response?.data?.error || "خطا");
+    }
+  };
+
   const startEdit = (m) => {
     setEditForm({
       title: m.title || "",
@@ -318,11 +333,7 @@ export default function MessageInboxPage() {
       helpTitle="راهنمای پیام‌ها"
     >
       <style>{MESSAGE_PAGE_CSS}</style>
-      {toast ? (
-        <div style={{ marginBottom: 10, padding: 10, borderRadius: 10, background: "rgba(14,165,233,0.15)" }}>
-          {toast}
-        </div>
-      ) : null}
+      {Toast}
 
       <div className="message-tab-row" style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
         {[
@@ -414,6 +425,16 @@ export default function MessageInboxPage() {
                   </label>
                 ) : null}
               </div>
+              {checkedIds.size > 0 && tab === "inbox" ? (
+                <button
+                  type="button"
+                  onClick={bulkMarkRead}
+                  style={{ ...messageTabBtn(theme, false, "ghost"), display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  <CheckCheck size={14} />
+                  خوانده‌شده ({toPersianDigits(String(checkedIds.size))})
+                </button>
+              ) : null}
               {checkedIds.size > 0 && bulkScope ? (
                 <button
                   type="button"
@@ -467,6 +488,14 @@ export default function MessageInboxPage() {
                       <div style={{ opacity: 0.7, marginTop: 4, fontSize: "0.86em" }}>
                         {m.sender_name || "—"} — {formatMessageDateTime(m.created_at)}
                       </div>
+                      {m.entity_ref ? (
+                        <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.78em", color: "#0ea5e9", background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.22)", borderRadius: 6, padding: "1px 6px", maxWidth: "100%" }}>
+                          <span>🔗</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {m.entity_ref.type === "news" ? "خبر" : "گزارش"}: {m.entity_ref.label}
+                          </span>
+                        </div>
+                      ) : null}
                     </button>
                   </div>
                 );
@@ -543,6 +572,25 @@ export default function MessageInboxPage() {
                   {selected.created_at ? ` · ${formatMessageDateTime(selected.created_at)}` : ""}
                   {selected.edited_at ? ` · ویرایش: ${formatMessageDateTime(selected.edited_at)}` : ""}
                 </div>
+                {selected.entity_ref ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 14, padding: "8px 12px", borderRadius: 10, background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.25)", fontSize: "0.88em", color: theme.text }}>
+                    <span style={{ fontWeight: 700, color: "#0ea5e9" }}>
+                      {selected.entity_ref.type === "news" ? "🔗 مربوط به خبر:" : "🔗 مربوط به گزارش شما:"}
+                    </span>
+                    {selected.entity_ref.topic ? (
+                      <span style={{ padding: "1px 8px", borderRadius: 6, background: "rgba(148,163,184,0.18)" }}>{selected.entity_ref.topic}</span>
+                    ) : null}
+                    {selected.entity_ref.label ? (
+                      <span style={{ fontWeight: 600 }}>«{selected.entity_ref.label}»</span>
+                    ) : null}
+                    {selected.entity_ref.date ? (
+                      <span style={{ opacity: 0.75 }}>{toPersianDigits(String(selected.entity_ref.date))}</span>
+                    ) : null}
+                    {selected.entity_ref.code ? (
+                      <span style={{ opacity: 0.7, fontFamily: "monospace", direction: "ltr" }}>#{selected.entity_ref.code}</span>
+                    ) : null}
+                  </div>
+                ) : null}
                 {editing ? (
                   <div>
                     <label style={{ fontWeight: 600 }}>عنوان</label>

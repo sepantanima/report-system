@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import useLogout from "../hooks/useLogout.js";
 import {
   LogOut,
   FilePlus,
   Users,
-  Search,
   LayoutDashboard,
   Settings,
   Activity,
@@ -21,26 +21,32 @@ import {
   Bell,
   Megaphone,
   CheckCircle,
+  BarChart3,
+  Layers,
+  Crosshair,
+  Radio,
+  ScrollText,
+  FilePenLine,
+  Wand2,
 } from "lucide-react";
 import {
   decodeToken,
   getSessionRoles,
   getRoleLabelFa,
-  hasPermission,
   persistSessionRoles,
 } from "../utils/userRoles.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { ANALYSIS_TERMS, BRIEF_TERMS } from "../constants/analysisTerminology.js";
+import useAnalysisMenuBadges from "../hooks/useAnalysisMenuBadges.js";
+import useUserManagementBadges from "../hooks/useUserManagementBadges.js";
+import { getWelcomeGreeting, normalizeGender } from "../utils/userGreeting.js";
 import NotificationBell from "../components/messaging/NotificationBell.jsx";
 import GlobalAnnouncementBanner from "../components/messaging/GlobalAnnouncementBanner.jsx";
+import { PAGE_WIDE_CSS } from "../constants/pageLayoutWidths.js";
+import { PERMISSION_CATEGORIES } from "../constants/permissionCategories.js";
 
 // 🌟 انتقال آرایه ساختاری منوها به خارج از کامپوننت جهت حل خطای کامپایلر ری‌اکت
-// متغیرهای استاتیک نباید در هر رندر درون بدنه کامپوننت بازسازی شوند
-// =========================================================================
-const ACTION_CATEGORIES = [
-  { id: "field", title: "گزارشات میدانی", color: "#06b6d4" },
-  { id: "analysis", title: "فرایند تحلیل", color: "#10b981" },
-  { id: "news", title: "اخبار و پردازش", color: "#a855f7" },
-  { id: "system", title: "مدیریت و گزارشات", color: "#f59e0b" },
-];
+const ACTION_CATEGORIES = PERMISSION_CATEGORIES;
 
 function hexToRgb(hex) {
   const h = String(hex || "").replace("#", "");
@@ -67,6 +73,10 @@ const CATEGORY_THEMES = {
     base: "#a855f7",
     accents: ["#7e22ce", "#9333ea", "#a855f7", "#c084fc", "#8b5cf6", "#d8b4fe"],
   },
+  command: {
+    base: "#e11d48",
+    accents: ["#9f1239", "#be123c", "#e11d48", "#fb7185", "#f43f5e", "#fda4af"],
+  },
   system: {
     base: "#f59e0b",
     accents: ["#b45309", "#d97706", "#f59e0b", "#fbbf24", "#ea580c", "#fcd34d"],
@@ -90,6 +100,14 @@ function getActionButtonStyle(categoryId, index) {
 
 const allActions = [
   {
+    id: 3,
+    title: "مدیریت گزارشات",
+    icon: <Activity size={24} />,
+    path: "/field-monitor",
+    permission: "monitor_reports",
+    category: "field",
+  },
+  {
     id: 1,
     title: "ثبت گزارش میدانی",
     icon: <FilePlus size={24} />,
@@ -103,15 +121,8 @@ const allActions = [
     icon: <Users size={24} />,
     path: "/users",
     permission: "manage_users",
+    badgeKey: "analyst_suggestions",
     category: "system",
-  },
-  {
-    id: 3,
-    title: "پایش گزارشات میدانی",
-    icon: <Activity size={24} />,
-    path: "/field-monitor",
-    permission: "monitor_reports",
-    category: "field",
   },
   {
     id: 51,
@@ -170,6 +181,14 @@ const allActions = [
     category: "system",
   },
   {
+    id: 57,
+    title: "فرستنده‌های ناشناس",
+    icon: <Users size={24} />,
+    path: "/admin/unmapped-senders",
+    permission: "manage_messenger_accounts",
+    category: "news",
+  },
+  {
     id: 10,
     title: "پردازش هوشمند اخبار",
     icon: <Cpu size={24} />,
@@ -178,12 +197,28 @@ const allActions = [
     category: "news",
   },
   {
-    id: 6,
-    title: "جستجوی گزارشات",
-    icon: <Search size={24} />,
-    path: "/search",
-    permission: "search_reports",
-    category: "field",
+    id: 62,
+    title: "همگام‌سازی",
+    icon: <Layers size={24} />,
+    path: "/admin/sync",
+    permission: "sync.view",
+    category: "system",
+  },
+  {
+    id: 63,
+    title: "گزارش راهبر آنلاین",
+    icon: <FilePenLine size={24} />,
+    path: "/admin/briefing",
+    permission: "sync.briefing",
+    category: "system",
+  },
+  {
+    id: 64,
+    title: "نقش و مجوز",
+    icon: <Shield size={24} />,
+    path: "/admin/rbac",
+    permission: "rbac.manage",
+    category: "system",
   },
   {
     id: 7,
@@ -211,7 +246,7 @@ const allActions = [
   },
   {
     id: 8,
-    title: "گزارشات تحلیلی",
+    title: "داشبورد گزارشات میدانی",
     icon: <Activity size={24} />,
     path: "/field-reports-dashboard",
     permission: "analytics",
@@ -266,19 +301,36 @@ const allActions = [
     category: "system",
   },
   {
+    id: 16,
+    title: BRIEF_TERMS?.menuLabel || "ارسال تحلیل کوتاه",
+    icon: <FilePlus size={24} />,
+    path: "/analysis/brief-submit",
+    permission: "analysis_brief_submit",
+    category: "analysis",
+  },
+  {
+    id: 18,
+    title: ANALYSIS_TERMS.manageAxesMenu,
+    icon: <Layers size={24} />,
+    path: ANALYSIS_TERMS.topicsManagementPath,
+    permissions: ["analysis_propose", "analysis_topic_approve", "analysis_manage"],
+    badgeKey: "approve_topics",
+    category: "analysis",
+  },
+  {
     id: 11,
-    title: "مدیریت تحلیل‌ها",
+    title: ANALYSIS_TERMS.missionManagementMenu,
     icon: <Shield size={24} />,
-    path: "/analysis/management",
+    path: ANALYSIS_TERMS.missionsManagementPath,
     permission: "analysis_manage",
     category: "analysis",
   },
   {
-    id: 15,
-    title: "تصویب محورها",
-    icon: <CheckCircle size={24} />,
-    path: "/analysis/management?tab=approve",
-    permission: "analysis_topic_approve",
+    id: 17,
+    title: "داشبورد تحلیل‌ها",
+    icon: <BarChart3 size={24} />,
+    path: "/analysis/dashboard",
+    permission: "analysis_manage",
     category: "analysis",
   },
   {
@@ -286,24 +338,49 @@ const allActions = [
     title: "مأموریت‌های تحلیل من",
     icon: <FilePlus size={24} />,
     path: "/analysis/my-missions",
-    permission: "analysis_missions",
+    permissions: ["analysis_missions", "analysis_review"],
+    badgeKeys: ["my_missions", "review_queue"],
     category: "analysis",
   },
   {
-    id: 13,
-    title: "ثبت محور تحلیل",
-    icon: <FilePlus size={24} />,
-    path: "/analysis/propose-topic",
-    permission: "analysis_propose",
-    category: "analysis",
+    id: 70,
+    title: "مرکز فرماندهی",
+    icon: <Crosshair size={24} />,
+    path: "/command",
+    permission: "command_center",
+    category: "command",
   },
   {
-    id: 14,
-    title: "بازبینی تحلیل‌ها",
-    icon: <Activity size={24} />,
-    path: "/analysis/review",
-    permission: "analysis_review",
-    category: "analysis",
+    id: 71,
+    title: "تالار اخبار زنده",
+    icon: <Radio size={24} />,
+    path: "/command/live-news",
+    permission: "command_live_news",
+    category: "command",
+  },
+  {
+    id: 73,
+    title: "کتابخانه خروجی‌ها",
+    icon: <ScrollText size={24} />,
+    path: "/command/outputs",
+    permission: "command_outputs",
+    category: "command",
+  },
+  {
+    id: 75,
+    title: "مدیریت تحلیل راهبردی",
+    icon: <Wand2 size={24} />,
+    path: "/command/strategy-manage",
+    permission: "command_outputs_manage",
+    category: "command",
+  },
+  {
+    id: 74,
+    title: "پرامپت‌های راهبردی",
+    icon: <FilePenLine size={24} />,
+    path: "/command/prompts",
+    permission: "command_manage_prompts",
+    category: "command",
   },
 ];
 
@@ -344,8 +421,24 @@ const toPersianDigits = (val) => {
   return String(val).replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
 };
 
+const formatBadgeCount = (n) => {
+  const num = Number(n) || 0;
+  if (num <= 0) return null;
+  if (num > 99) return toPersianDigits("99+");
+  return toPersianDigits(num);
+};
+
 export default function MainForm() {
   const navigate = useNavigate();
+  const logout = useLogout();
+  const { hasPermission: canAccess, permissions } = useAuth();
+  const canManageUsers = canAccess("manage_users");
+  const { badges: analysisBadges } = useAnalysisMenuBadges();
+  const { badges: userMgmtBadges } = useUserManagementBadges(canManageUsers);
+  const badges = useMemo(
+    () => ({ ...analysisBadges, ...userMgmtBadges }),
+    [analysisBadges, userMgmtBadges],
+  );
 
   // مهار و نمایش ساعت زنده در بالای فرم
   const [liveTime, setLiveTime] = useState(() => {
@@ -365,11 +458,12 @@ export default function MainForm() {
   // حل مشکل عدم تشخیص نام با ردیابی چندمرحله‌ای لوکال استوریج و توکن دیکود شده
   const [userMeta] = useState(() => {
     if (typeof window === "undefined") {
-      return { name: "...", username: "...", roles: ["user"] };
+      return { name: "...", username: "...", roles: ["user"], gender: "male" };
     }
     
     let name = "کاربر محترم";
     let username = localStorage.getItem("username") || "user";
+    let gender = normalizeGender(localStorage.getItem("gender"));
     
     // ۱. بررسی وجود مشخصه نام در توکن معتبر
     const token = localStorage.getItem("token");
@@ -377,6 +471,7 @@ export default function MainForm() {
       const decoded = decodeToken(token);
       if (decoded.name) name = decoded.name;
       if (decoded.username) username = decoded.username;
+      if (decoded.gender) gender = normalizeGender(decoded.gender);
     }
     
     // ۲. در صورت عدم ردیابی در توکن، واکشی مستقیم از سشن مرورگر
@@ -392,8 +487,13 @@ export default function MainForm() {
 
     const roles = getSessionRoles();
     persistSessionRoles(roles);
-    return { name, username, roles };
+    return { name, username, roles, gender };
   });
+
+  const welcomeGreeting = useMemo(
+    () => getWelcomeGreeting(userMeta.name, userMeta.gender),
+    [userMeta.name, userMeta.gender],
+  );
 
   const [roles, setRoles] = useState(userMeta.roles);
 
@@ -404,12 +504,18 @@ export default function MainForm() {
   }, []);
 
   const filteredActions = useMemo(() => {
-    return allActions.filter((action) => hasPermission(roles, action.permission));
-  }, [roles]);
+    return allActions.filter((action) => {
+      if (action.permissions?.length) {
+        return action.permissions.some((p) => canAccess(p));
+      }
+      return canAccess(action.permission);
+    });
+  }, [canAccess, permissions]);
 
   const handleLogout = () => {
-    localStorage.clear();
-    navigate("/");
+    if (window.confirm("خروج از حساب کاربری؟")) {
+      logout();
+    }
   };
 
   const groupedActions = useMemo(() => {
@@ -470,6 +576,9 @@ export default function MainForm() {
         .loginCardWrap {
           position: relative;
           z-index: 10;
+          width: ${PAGE_WIDE_CSS};
+          max-width: ${PAGE_WIDE_CSS};
+          margin: 0 auto;
         }
         .loginCard {
           background: var(--bg-card);
@@ -489,6 +598,26 @@ export default function MainForm() {
           cursor: pointer;
           position: relative;
           overflow: hidden;
+        }
+        .menu-action-badge {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: #ef4444;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+          pointer-events: none;
+          z-index: 1;
         }
         .action-card-button:hover {
           transform: translateY(-4px);
@@ -578,7 +707,7 @@ export default function MainForm() {
       <div className="blob blob1"></div>
       <div className="blob blob2"></div>
 
-      <div className="loginCardWrap" style={{ maxWidth: "700px", width: "95%" }}>
+      <div className="loginCardWrap">
         
         {/* هدر کلاسیک پنل */}
         <div className="loginHeader" style={{ marginBottom: "25px", textAlign: "center" }}>
@@ -608,7 +737,7 @@ export default function MainForm() {
             <LayoutDashboard size={36} color="#38bdf8" />
           </div>
           <h2 className="title" style={{ marginTop: "15px", fontSize: "1.6rem", fontWeight: "bold", color: "var(--text-main)" }}>
-            سامانه پایش و مانیتورینگ سپنتا
+            سامانه پایش، نظارت و تحلیل اخبار
           </h2>
           
           {/* مشخصات هویتی و نقش‌های فعال کاربر جاری */}
@@ -617,7 +746,11 @@ export default function MainForm() {
               <NotificationBell />
               <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--text-sub)" }}>
                 <User size={14} color="#38bdf8" />
-                <span>جناب آقای <b>{userMeta.name}</b> خوش آمدید</span>
+                <span>
+                  {welcomeGreeting.titleBefore}{" "}
+                  <b>{welcomeGreeting.name}</b>{" "}
+                  {welcomeGreeting.titleAfter}
+                </span>
               </div>
             </div>
             <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginTop: "2px" }}>
@@ -669,6 +802,12 @@ export default function MainForm() {
                   <div className="menu-category-grid">
                     {group.items.map((item, idx) => {
                       const btnStyle = getActionButtonStyle(group.id, idx);
+                      const badgeCount = item.badgeKeys
+                        ? item.badgeKeys.reduce((sum, key) => sum + (Number(badges[key]) || 0), 0)
+                        : item.badgeKey
+                          ? badges[item.badgeKey]
+                          : 0;
+                      const badgeLabel = formatBadgeCount(badgeCount);
                       return (
                       <button
                         key={item.id}
@@ -683,6 +822,11 @@ export default function MainForm() {
                           "--hover-shadow": btnStyle.hoverShadow,
                         }}
                       >
+                        {badgeLabel && (
+                          <span className="menu-action-badge" aria-label={`${badgeCount} مورد در انتظار`}>
+                            {badgeLabel}
+                          </span>
+                        )}
                         <div className="icon-box" style={{ color: btnStyle.accentColor }}>{item.icon}</div>
                         <span style={{ fontSize: "12px", fontWeight: "bold", opacity: 0.95, textAlign: "center", lineHeight: 1.5 }}>{item.title}</span>
                       </button>

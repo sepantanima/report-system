@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import ThemedDatePicker from "./ThemedDatePicker.jsx";
 import RichTextEditor from "./RichTextEditor.jsx";
 import SearchableUserSelect from "./SearchableUserSelect.jsx";
+import SearchableOptionSelect from "./SearchableOptionSelect.jsx";
 import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { MISSION_FIELD_LIMITS } from "../../constants/analysisFieldLimits.js";
 import { gregorianToPersianPicker, persianDateToGregorian } from "../../utils/analysisMonitorUtils.js";
@@ -70,6 +71,7 @@ export default function MissionAssignForm({
               emptyMessage="کاربری با نقش تحلیل‌گر در سامانه یافت نشد"
               inputStyle={S.selectStyle}
               labelStyle={S.labelStyle}
+              isDarkMode={isDarkMode}
             />
           </div>
           <div style={S.inputWrapper}>
@@ -82,16 +84,24 @@ export default function MissionAssignForm({
               emptyMessage="کاربری با نقش راهنما در سامانه یافت نشد"
               inputStyle={S.selectStyle}
               labelStyle={S.labelStyle}
+              isDarkMode={isDarkMode}
             />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
             <div style={S.inputWrapper}>
-              <label style={S.labelStyle}>اولویت</label>
-              <select style={S.selectStyle} value={assign.priority} onChange={(e) => onChange({ ...assign, priority: e.target.value })}>
-                <option value="high">فوری</option>
-                <option value="medium">متوسط</option>
-                <option value="low">عادی</option>
-              </select>
+              <SearchableOptionSelect
+                label="اولویت"
+                value={assign.priority}
+                onChange={(v) => onChange({ ...assign, priority: v })}
+                options={[
+                  { value: "high", label: "فوری" },
+                  { value: "medium", label: "متوسط" },
+                  { value: "low", label: "عادی" },
+                ]}
+                inputStyle={S.selectStyle}
+                labelStyle={S.labelStyle}
+                isDarkMode={isDarkMode}
+              />
             </div>
             <div style={S.inputWrapper}>
               <label style={S.labelStyle}>{ANALYSIS_TERMS.missionDeadline} (شمسی)</label>

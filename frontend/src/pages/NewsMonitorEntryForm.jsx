@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { Save, Send, ClipboardPaste, FileText, PlusCircle, Trash2 } from "lucide-react";
+import { Save, Send, ClipboardPaste, FileText, PlusCircle, Trash2, Inbox } from "lucide-react";
 import FormPageLayout from "../components/common/FormPageLayout.jsx";
+import { PAGE_MEDIUM_PX } from "../constants/pageLayoutWidths.js";
 import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
 import RichTextEditor, { stripHtml } from "../components/analysis/RichTextEditor.jsx";
 import MultiSelect from "../components/MultiSelect.jsx";
@@ -16,14 +17,46 @@ import newsMonitorService from "../services/newsMonitorService.js";
 import { decodeToken, getSessionRoles, hasPermission } from "../utils/userRoles.js";
 import { useAppTheme } from "../context/ThemeContext.jsx";
 import { plainTextLength } from "../constants/analysisFieldLimits.js";
-import { NEWS_PRIORITIES } from "../constants/newsMonitorMeta.js";
+import { NEWS_PRIORITIES, NEWS_WORKFLOW_STATES, NEWS_REVIEW_STATES, DUPLICATE_STATUSES } from "../constants/newsMonitorMeta.js";
 import { NEWS_FIELD_LIMITS, validateNewsEntryPayload } from "../constants/newsFieldLimits.js";
 import { NEWS_ENTRY_HELP } from "../content/newsFormHelp.jsx";
 import DailyQuotaBanner, { isQuotaExhausted } from "../components/common/DailyQuotaBanner.jsx";
 import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
 import { clampText } from "../utils/limitInput.js";
 import { toPersianDigits, toEnDigit } from "../utils/analysisMonitorUtils.js";
+import DuplicateWarningModal from "../components/common/DuplicateWarningModal.jsx";
+import { parseDuplicateCheckError } from "../utils/duplicateCheckUtils.js";
 import { NEWS_EDITOR_BODY_HEIGHT, NEWS_EDITOR_BOX_HEIGHT } from "../constants/newsEditorLayout.js";
+import useAnalysisToast from "../hooks/useAnalysisToast.jsx";
+
+function submissionStatusLabel(item) {
+  const dup = item.duplicate_status && item.duplicate_status !== "none"
+    ? DUPLICATE_STATUSES[item.duplicate_status]?.label
+    : null;
+  if (dup) return dup;
+  const ws = NEWS_WORKFLOW_STATES[item.workflow_status]?.label || item.workflow_status || "—";
+  const rs = item.review_state && item.review_state !== "pending"
+    ? NEWS_REVIEW_STATES[item.review_state]?.label
+    : null;
+  return rs ? `${ws} — ${rs}` : ws;
+}
+
+function submissionStatusColor(item) {
+  if (item.duplicate_status && item.duplicate_status !== "none") {
+    return DUPLICATE_STATUSES[item.duplicate_status]?.color || "#f59e0b";
+  }
+  if (item.review_state === "rejected") {
+    return NEWS_REVIEW_STATES.rejected.color;
+  }
+  return NEWS_WORKFLOW_STATES[item.workflow_status]?.color || undefined;
+}
+
+function isSubmissionReadOnly(item) {
+  if (!item) return true;
+  if (item.duplicate_status && item.duplicate_status !== "none") return true;
+  if (item.review_state === "rejected") return true;
+  return item.workflow_status !== "pending";
+}
 
 const emptyForm = (sender = "") => ({
   raw_text: "",
@@ -32,6 +65,7 @@ const emptyForm = (sender = "") => ({
   sender,
   priority: 3,
   category_ids: [],
+  monitor_note: "",
   source_date: new DateObject({ calendar: persian }),
   source_time_hm: nowTimeHm(),
 });
@@ -60,7 +94,13 @@ export default function NewsMonitorEntryForm() {
   const { isDarkMode } = useAppTheme();
   const [drafts, setDrafts] = useState([]);
   const [draftsOpen, setDraftsOpen] = useState(true);
+  const [submissions, setSubmissions] = useState([]);
+  const [submissionsOpen, setSubmissionsOpen] = useState(false);
+  const [viewingSubmissionId, setViewingSubmissionId] = useState(null);
+  const [duplicateModal, setDuplicateModal] = useState(null);
   const [editingDraftId, setEditingDraftId] = useState(null);
+  /** 'new' = پیش‌نویس، 'pending' = خبر ارسال‌شده قابل ویرایش */
+  const [editingWorkflow, setEditingWorkflow] = useState(null);
 
   const theme = useMemo(() => ({
     bg: isDarkMode ? "#0f172a" : "#f8fafc",
@@ -82,16 +122,11 @@ export default function NewsMonitorEntryForm() {
   const [sourceOptions, setSourceOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState("");
+  const { showToast, Toast } = useAnalysisToast();
   const [form, setForm] = useState(() => emptyForm(defaultSender));
   const [dailyQuota, setDailyQuota] = useState(null);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3500);
-  };
 
   const loadMeta = useCallback(async () => {
     try {
@@ -115,6 +150,17 @@ export default function NewsMonitorEntryForm() {
     }
   }, []);
 
+  const loadSubmissions = useCallback(async () => {
+    try {
+      const rows = await newsMonitorService.mySubmissions({ duplicate: "include" });
+      setSubmissions(rows || []);
+      return rows || [];
+    } catch {
+      setSubmissions([]);
+      return [];
+    }
+  }, []);
+
   const loadDailyQuota = useCallback(async () => {
     try {
       const data = await newsMonitorService.dailyQuota();
@@ -128,22 +174,24 @@ export default function NewsMonitorEntryForm() {
     if (allowed) {
       loadMeta();
       loadDrafts();
+      loadSubmissions();
       loadDailyQuota();
     }
-  }, [allowed, loadMeta, loadDrafts, loadDailyQuota]);
+  }, [allowed, loadMeta, loadDrafts, loadSubmissions, loadDailyQuota]);
 
   const entryFieldError = useMemo(
     () => validateNewsEntryPayload({
       raw_text: form.raw_text,
       source: form.source,
       source_url: form.source_url,
+      monitor_note: form.monitor_note,
     }),
-    [form.raw_text, form.source, form.source_url],
+    [form.raw_text, form.source, form.source_url, form.monitor_note],
   );
 
   const rawTextLen = plainTextLength(form.raw_text);
 
-  const buildPayload = (submit = false) => {
+  const buildPayload = (submit = false, forceDuplicate = false) => {
     const dateObj = form.source_date;
     const jalali = dateObj
       ? toEnDigit(new DateObject(dateObj).format("YYYY-MM-DD")).replace(/[^0-9-]/g, "")
@@ -158,7 +206,9 @@ export default function NewsMonitorEntryForm() {
       category_ids: form.category_ids.map((x) => parseInt(x, 10)).filter(Number.isFinite),
       source_date_jalali: jalali,
       source_time_hm: toEnDigit(parseTimeInput(form.source_time_hm)),
+      monitor_note: (form.monitor_note || "").trim() || undefined,
       submit,
+      ...(forceDuplicate ? { force_duplicate: true } : {}),
     };
   };
 
@@ -177,42 +227,89 @@ export default function NewsMonitorEntryForm() {
 
   const resetForm = () => {
     setEditingDraftId(null);
+    setEditingWorkflow(null);
+    setViewingSubmissionId(null);
     setForm(emptyForm(defaultSender));
   };
 
-  useEffect(() => {
-    setForm((f) => ({ ...f, sender: defaultSender }));
-  }, [defaultSender]);
+  const performSave = async (submit, forceDuplicate = false) => {
+    const isDraft = editingWorkflow === "new";
+    const isPendingEdit = editingWorkflow === "pending";
+    if (editingDraftId) {
+      const payload = buildPayload(false, forceDuplicate);
+      const updated = await newsMonitorService.update(editingDraftId, payload);
+      if (submit && isDraft) {
+        await newsMonitorService.submit(
+          editingDraftId,
+          forceDuplicate ? { force_duplicate: true } : {},
+        );
+        showToast("ارسال شد برای بررسی");
+        resetForm();
+      } else if (submit && isPendingEdit) {
+        showToast("این خبر قبلاً ارسال شده — فقط «ذخیره تغییرات» کافی است");
+      } else {
+        showToast(isPendingEdit ? "تغییرات ذخیره شد" : "پیش‌نویس به‌روز شد");
+        if (isPendingEdit) {
+          setViewingSubmissionId(editingDraftId);
+        }
+      }
+      if (updated?.id) {
+        if (isPendingEdit) {
+          setSubmissions((prev) => prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+        }
+        if (isDraft) {
+          setDrafts((prev) => prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+        }
+      }
+    } else {
+      await newsMonitorService.create(buildPayload(submit, forceDuplicate));
+      showToast(submit ? "ارسال شد برای بررسی" : "پیش‌نویس ذخیره شد");
+      resetForm();
+    }
+    loadDrafts();
+    await loadSubmissions();
+    if (submit) loadDailyQuota();
+  };
 
-  const handleSave = async (submit = false) => {
+  const handleSave = async (submit = false, forceDuplicate = false) => {
     if (!validate()) return;
     setSaving(true);
     try {
-      if (editingDraftId) {
-        await newsMonitorService.update(editingDraftId, buildPayload(false));
-        if (submit) {
-          await newsMonitorService.submit(editingDraftId);
-          showToast("ارسال شد برای بررسی");
-          resetForm();
-        } else {
-          showToast("پیش‌نویس به‌روز شد");
-        }
-      } else {
-        await newsMonitorService.create(buildPayload(submit));
-        showToast(submit ? "ارسال شد برای بررسی" : "پیش‌نویس ذخیره شد");
-        resetForm();
-      }
-      loadDrafts();
-      if (submit) loadDailyQuota();
+      await performSave(submit, forceDuplicate);
+      setDuplicateModal(null);
     } catch (e) {
-      showToast(e.response?.data?.error || "خطا در ثبت");
+      const dup = parseDuplicateCheckError(e);
+      if (dup?.can_force && !forceDuplicate) {
+        setDuplicateModal({
+          code: dup.code,
+          matches: dup.matches,
+          pendingSubmit: submit,
+        });
+        return;
+      }
+      showToast(e.response?.data?.error || (e.response?.status === 401 ? "نشست منقضی شده — دوباره وارد شوید" : "خطا در ثبت"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDuplicateConfirm = async () => {
+    if (!duplicateModal) return;
+    setSaving(true);
+    try {
+      await performSave(duplicateModal.pendingSubmit, true);
+      setDuplicateModal(null);
+    } catch (e) {
+      showToast(e.response?.data?.error || (e.response?.status === 401 ? "نشست منقضی شده — دوباره وارد شوید" : "خطا در ثبت"));
     } finally {
       setSaving(false);
     }
   };
 
   const openDraft = (item) => {
+    setViewingSubmissionId(null);
     setEditingDraftId(item.id);
+    setEditingWorkflow("new");
     setForm({
       raw_text: item.raw_text || "",
       source: item.source || "",
@@ -220,14 +317,52 @@ export default function NewsMonitorEntryForm() {
       sender: defaultSender,
       priority: Number(item.priority || 3),
       category_ids: (item.category_ids || []).map(String),
+      monitor_note: item.monitor_note || "",
       source_date: jalaliToDateObject(item.source_date_jalali),
       source_time_hm: item.source_time_hm || nowTimeHm(),
     });
     showToast(`پیش‌نویس #${item.id} بارگذاری شد`);
   };
 
+  const openSubmission = (item) => {
+    setViewingSubmissionId(item.id);
+    // برگشتی و تکراری فقط مشاهده — بدون ویرایش
+    if (!isSubmissionReadOnly(item) && item.workflow_status === "pending") {
+      setEditingDraftId(item.id);
+      setEditingWorkflow("pending");
+      setForm({
+        raw_text: item.raw_text || "",
+        source: item.source || "",
+        source_url: item.source_url || "",
+        sender: defaultSender,
+        priority: Number(item.priority || 3),
+        category_ids: (item.category_ids || []).map(String),
+        monitor_note: item.monitor_note || "",
+        source_date: jalaliToDateObject(item.source_date_jalali),
+        source_time_hm: item.source_time_hm || nowTimeHm(),
+      });
+      showToast(`خبر #${item.id} برای ویرایش بارگذاری شد`);
+    } else {
+      setEditingDraftId(null);
+      setEditingWorkflow(null);
+      if (item.review_state === "rejected") {
+        showToast("این خبر برگشت خورده — فقط قابل مشاهده است");
+      } else if (item.duplicate_status && item.duplicate_status !== "none") {
+        showToast("این خبر تکراری علامت خورده — فقط قابل مشاهده است");
+      }
+    }
+  };
+
+  useEffect(() => {
+    setForm((f) => ({ ...f, sender: defaultSender }));
+  }, [defaultSender]);
+
   const handleDeleteDraft = async (draftId, e) => {
     e?.stopPropagation?.();
+    if (editingWorkflow !== "new") {
+      showToast("فقط پیش‌نویس‌ها قابل حذف هستند — اخبار ارسال‌شده را نمی‌توان از اینجا حذف کرد");
+      return;
+    }
     if (!window.confirm("این پیش‌نویس حذف شود؟")) return;
     setSaving(true);
     try {
@@ -295,6 +430,7 @@ export default function NewsMonitorEntryForm() {
   });
 
   return (
+    <>
     <FormPageLayout
       title="ورود خبر (پایشگر)"
       documentTitle="ورود خبر (پایشگر)"
@@ -302,13 +438,9 @@ export default function NewsMonitorEntryForm() {
       onHelp={() => <NEWS_ENTRY_HELP />}
       helpTitle="راهنمای ثبت خبر"
       contentPadding="16px 16px 80px"
-      maxWidth="720px"
+      maxWidth={PAGE_MEDIUM_PX}
     >
-      {toast ? (
-        <div style={{ marginBottom: 12, padding: "0.5em 0.75em", borderRadius: 8, background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.35)", fontSize: "0.9em" }}>
-          {toast}
-        </div>
-      ) : null}
+      {Toast}
 
       <DailyQuotaBanner quota={dailyQuota} itemLabel="خبر" isDarkMode={theme.isDarkMode} />
 
@@ -401,12 +533,16 @@ export default function NewsMonitorEntryForm() {
             {editingDraftId ? (
               <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: "0.88em", color: theme.accent, fontWeight: 700 }}>
-                  در حال ویرایش پیش‌نویس #{toPersianDigits(editingDraftId)}
+                  {editingWorkflow === "pending"
+                    ? `در حال ویرایش خبر ارسالی #${toPersianDigits(editingDraftId)}`
+                    : `در حال ویرایش پیش‌نویس #${toPersianDigits(editingDraftId)}`}
                 </span>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => handleDeleteDraft(editingDraftId)} disabled={saving} style={{ ...btnStyle(false), minHeight: "2.2em", padding: "0.4em 0.75em", fontSize: "0.85em", color: "#f87171", borderColor: "rgba(239,68,68,0.4)" }}>
-                    <Trash2 size={14} /> حذف پیش‌نویس
-                  </button>
+                  {editingWorkflow === "new" ? (
+                    <button type="button" onClick={() => handleDeleteDraft(editingDraftId)} disabled={saving} style={{ ...btnStyle(false), minHeight: "2.2em", padding: "0.4em 0.75em", fontSize: "0.85em", color: "#f87171", borderColor: "rgba(239,68,68,0.4)" }}>
+                      <Trash2 size={14} /> حذف پیش‌نویس
+                    </button>
+                  ) : null}
                   <button type="button" onClick={resetForm} style={{ ...btnStyle(false), minHeight: "2.2em", padding: "0.4em 0.75em", fontSize: "0.85em" }}>
                     <PlusCircle size={14} /> خبر جدید
                   </button>
@@ -471,6 +607,23 @@ export default function NewsMonitorEntryForm() {
             </div>
 
             <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <label style={{ fontSize: "0.85em", opacity: 0.8 }}>
+                  علت اهمیت و ارتباط با سازمان (اختیاری)
+                </label>
+                <CharCounter current={(form.monitor_note || "").length} max={NEWS_FIELD_LIMITS.monitorNote} style={{ fontSize: "0.75em" }} />
+              </div>
+              <input
+                type="text"
+                value={form.monitor_note || ""}
+                onChange={(e) => set("monitor_note", clampText(e.target.value, NEWS_FIELD_LIMITS.monitorNote))}
+                maxLength={NEWS_FIELD_LIMITS.monitorNote}
+                placeholder="مثلاً: ارتباط مستقیم با امنیت داخلی واحد"
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: "0.85em", opacity: 0.8, display: "block", marginBottom: 8 }}>تاریخ و ساعت انتشار</label>
               <div style={{
                 display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center",
@@ -521,16 +674,18 @@ export default function NewsMonitorEntryForm() {
                 onClick={() => handleSave(false)}
                 style={{ ...btnStyle(false), opacity: saving || entryFieldError ? 0.55 : 1, cursor: entryFieldError ? "not-allowed" : "pointer" }}
               >
-                <Save size={16} /> {editingDraftId ? "ذخیره پیش‌نویس" : "ذخیره پیش‌نویس"}
+                <Save size={16} /> {editingWorkflow === "pending" ? "ذخیره تغییرات" : "ذخیره پیش‌نویس"}
               </button>
-              <button
-                type="button"
-                disabled={saving || !!entryFieldError || isQuotaExhausted(dailyQuota)}
-                onClick={() => handleSave(true)}
-                style={{ ...btnStyle(true), opacity: saving || entryFieldError || isQuotaExhausted(dailyQuota) ? 0.55 : 1, cursor: entryFieldError || isQuotaExhausted(dailyQuota) ? "not-allowed" : "pointer" }}
-              >
-                <Send size={16} /> {saving ? "در حال ارسال..." : "ارسال برای بررسی"}
-              </button>
+              {editingWorkflow !== "pending" ? (
+                <button
+                  type="button"
+                  disabled={saving || !!entryFieldError || isQuotaExhausted(dailyQuota)}
+                  onClick={() => handleSave(true)}
+                  style={{ ...btnStyle(true), opacity: saving || entryFieldError || isQuotaExhausted(dailyQuota) ? 0.55 : 1, cursor: entryFieldError || isQuotaExhausted(dailyQuota) ? "not-allowed" : "pointer" }}
+                >
+                  <Send size={16} /> {saving ? "در حال ارسال..." : "ارسال برای بررسی"}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -541,7 +696,186 @@ export default function NewsMonitorEntryForm() {
               theme={theme}
             />
           ) : null}
+
+          {submissions.length > 0 ? (
+            <div style={{ marginTop: 14, marginBottom: 14, background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: "hidden" }}>
+              <button
+                type="button"
+                onClick={() => setSubmissionsOpen((v) => !v)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  border: "none",
+                  background: "rgba(34,197,94,0.06)",
+                  color: theme.text,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: "0.92em",
+                  fontWeight: 700,
+                }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <Inbox size={16} /> اخبار ارسالی من ({toPersianDigits(submissions.length)})
+                  {(() => {
+                    const rejectedN = submissions.filter((x) => x.review_state === "rejected").length;
+                    const dupN = submissions.filter((x) => x.duplicate_status && x.duplicate_status !== "none").length;
+                    if (!rejectedN && !dupN) return null;
+                    return (
+                      <span style={{ fontSize: "0.82em", fontWeight: 600, opacity: 0.9 }}>
+                        {rejectedN ? (
+                          <span style={{ color: "#ef4444", marginLeft: 6 }}>
+                            برگشتی: {toPersianDigits(rejectedN)}
+                          </span>
+                        ) : null}
+                        {dupN ? (
+                          <span style={{ color: "#f59e0b", marginLeft: 6 }}>
+                            تکراری: {toPersianDigits(dupN)}
+                          </span>
+                        ) : null}
+                      </span>
+                    );
+                  })()}
+                </span>
+                <span style={{ opacity: 0.6 }}>{submissionsOpen ? "▲" : "▼"}</span>
+              </button>
+              {submissionsOpen ? (
+                <div style={{ maxHeight: 280, overflowY: "auto", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <p style={{ margin: "0 0 4px", fontSize: "0.78em", opacity: 0.7, lineHeight: 1.7 }}>
+                    اخبار برگشت‌خورده و تکراری فقط برای اطلاع شماست و قابل ویرایش نیستند.
+                  </p>
+                  {submissions.map((s) => {
+                    const preview = stripHtml(s.raw_text || s.cleaned_text || "").slice(0, 70);
+                    const active = viewingSubmissionId === s.id;
+                    const statusColor = submissionStatusColor(s) || theme.text;
+                    const readOnly = isSubmissionReadOnly(s);
+                    const isRejected = s.review_state === "rejected";
+                    const isDup = s.duplicate_status && s.duplicate_status !== "none";
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => openSubmission(s)}
+                        style={{
+                          width: "100%",
+                          textAlign: "right",
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border: active
+                            ? `1px solid ${isRejected ? "#ef4444" : isDup ? "#f59e0b" : "#22c55e"}`
+                            : `1px solid ${theme.border}`,
+                          background: active
+                            ? (isRejected ? "rgba(239,68,68,0.08)" : isDup ? "rgba(245,158,11,0.08)" : "rgba(34,197,94,0.08)")
+                            : theme.inputBg,
+                          color: theme.text,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          fontSize: "0.88em",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                          <span style={{ fontWeight: 700, color: theme.accent }}>
+                            #{toPersianDigits(s.id)} · {s.source || "بدون منبع"}
+                          </span>
+                          <span style={{
+                            fontSize: "0.82em",
+                            fontWeight: 600,
+                            color: statusColor,
+                            opacity: 0.95,
+                          }}
+                          >
+                            {submissionStatusLabel(s)}
+                          </span>
+                        </div>
+                        <div style={{ opacity: 0.85, textAlign: "justify" }}>{preview}{preview.length >= 70 ? "…" : ""}</div>
+                        {!readOnly ? (
+                          <div style={{ fontSize: "0.78em", color: "#38bdf8", marginTop: 4 }}>قابل ویرایش</div>
+                        ) : isRejected ? (
+                          <div style={{ fontSize: "0.78em", color: "#ef4444", marginTop: 4 }}>
+                            برگشت به فرستنده — فقط مشاهده
+                            {s.status_note ? ` · ${String(s.status_note).slice(0, 60)}${String(s.status_note).length > 60 ? "…" : ""}` : ""}
+                          </div>
+                        ) : isDup ? (
+                          <div style={{ fontSize: "0.78em", color: "#f59e0b", marginTop: 4 }}>تکراری — فقط مشاهده</div>
+                        ) : (
+                          <div style={{ fontSize: "0.78em", opacity: 0.65, marginTop: 4 }}>فقط مشاهده</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {viewingSubmissionId && editingDraftId !== viewingSubmissionId ? (
+            <div style={{
+              marginBottom: 14,
+              padding: 12,
+              borderRadius: 10,
+              background: theme.card,
+              border: `1px solid ${theme.border}`,
+              fontSize: "0.88em",
+              lineHeight: 1.7,
+            }}
+            >
+              {(() => {
+                const s = submissions.find((x) => x.id === viewingSubmissionId);
+                if (!s) return null;
+                const isRejected = s.review_state === "rejected";
+                const isDup = s.duplicate_status && s.duplicate_status !== "none";
+                return (
+                  <>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>جزئیات خبر #{toPersianDigits(s.id)}</div>
+                    <div style={{ opacity: 0.85 }}>وضعیت: {submissionStatusLabel(s)}</div>
+                    {isRejected || isDup ? (
+                      <div style={{
+                        marginTop: 8, padding: "8px 10px", borderRadius: 8,
+                        background: isRejected ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
+                        border: `1px solid ${isRejected ? "rgba(239,68,68,0.35)" : "rgba(245,158,11,0.35)"}`,
+                        fontSize: "0.92em",
+                      }}
+                      >
+                        {isRejected ? "این خبر به شما برگشت خورده و قابل ویرایش یا ارسال مجدد از اینجا نیست." : null}
+                        {isDup ? "این خبر به‌عنوان تکراری ثبت شده و از جریان انتشار خارج است." : null}
+                        {s.status_note ? (
+                          <div style={{ marginTop: 6 }}>
+                            <b>یادداشت مدیر:</b>
+                            {" "}
+                            {s.status_note}
+                          </div>
+                        ) : null}
+                        {s.monitor_note ? (
+                          <div style={{ marginTop: 6 }}>
+                            <b>یادداشت پایشگر:</b>
+                            {" "}
+                            {s.monitor_note}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div style={{ marginTop: 8, textAlign: "justify", opacity: 0.9 }}>
+                      {stripHtml(s.raw_text || s.cleaned_text || "")}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
         </div>
     </FormPageLayout>
+
+      <DuplicateWarningModal
+        open={!!duplicateModal}
+        code={duplicateModal?.code}
+        matches={duplicateModal?.matches || []}
+        theme={theme}
+        saving={saving}
+        onCancel={() => setDuplicateModal(null)}
+        onConfirm={handleDuplicateConfirm}
+      />
+    </>
   );
 }

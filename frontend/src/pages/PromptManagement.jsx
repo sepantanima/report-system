@@ -7,6 +7,8 @@ import { getSessionRoles, hasRole } from "../utils/userRoles.js";
 import { PROMPT_FIELD_LIMITS, validatePromptCreateClient } from "../constants/promptFieldLimits.js";
 import { PROMPT_LIST_PREFIX_CHOICES } from "../constants/promptListPrefixes.js";
 import { clampText } from "../utils/limitInput.js";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme } from "../theme/formPageTheme.js";
 
 function CharCounter({ value, max }) {
   const n = value != null ? String(value).length : 0;
@@ -17,48 +19,74 @@ function CharCounter({ value, max }) {
   );
 }
 
-const inp = {
-  width: "100%",
-  padding: 8,
-  marginBottom: 12,
-  borderRadius: 6,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#fff",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-};
+function getPromptStyles(theme, isDarkMode) {
+  const inp = {
+    width: "100%",
+    padding: 8,
+    marginBottom: 12,
+    borderRadius: 6,
+    background: theme.inputBg,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+  };
 
-const btnGhost = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#e2e8f0",
-  padding: "8px 14px",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
+  const btnGhost = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: isDarkMode ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
+    padding: "8px 14px",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  };
 
-const btnPrimary = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 16px",
-  cursor: "pointer",
-  background: "#0ea5e9",
-  border: "none",
-  borderRadius: 8,
-  color: "#fff",
-  fontFamily: "inherit",
-};
+  const btnPrimary = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 16px",
+    cursor: "pointer",
+    background: "#0ea5e9",
+    border: "none",
+    borderRadius: 8,
+    color: "#fff",
+    fontFamily: "inherit",
+  };
+
+  const panel = {
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+    background: theme.card,
+    color: theme.text,
+    fontSize: 13,
+  };
+
+  const code = {
+    fontSize: 12,
+    background: isDarkMode ? "rgba(0,0,0,0.25)" : "#e2e8f0",
+    color: theme.text,
+    padding: "2px 6px",
+    borderRadius: 4,
+  };
+
+  return { inp, btnGhost, btnPrimary, panel, code };
+}
 
 const emptyCreateForm = () => ({ prompt_key: "", title_fa: "", body: "" });
 
 export default function PromptManagement() {
   const navigate = useNavigate();
+  const { isDarkMode } = useAppTheme();
+  const theme = getFormPageTheme(isDarkMode);
+  const styles = useMemo(() => getPromptStyles(theme, isDarkMode), [theme, isDarkMode]);
+  const { inp, btnGhost, btnPrimary, panel, code } = styles;
   const roles = getSessionRoles();
   const allowed = hasRole(roles, "admin");
 
@@ -277,16 +305,7 @@ export default function PromptManagement() {
         </div>
       </div>
 
-      <div
-        style={{
-          marginBottom: 16,
-          padding: 14,
-          borderRadius: 8,
-          border: "1px solid #334155",
-          background: "#1e293b",
-          fontSize: 13,
-        }}
-      >
+      <div style={panel}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>متغیرهای مجاز در متن پرامپت (بر اساس اکشن فرم)</div>
         <label style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           اکشن:&nbsp;
@@ -314,7 +333,7 @@ export default function PromptManagement() {
               <ul style={{ margin: "8px 0 0", paddingRight: 20 }}>
                 {varMeta.server.map((v) => (
                   <li key={v.name}>
-                    <code style={{ fontSize: 12, background: "#0f172a", padding: "2px 6px", borderRadius: 4 }}>{`{{${v.name}}}`}</code>
+                    <code style={code}>{`{{${v.name}}}`}</code>
                     {" — "}
                     {v.label_fa}
                   </li>
@@ -333,10 +352,10 @@ export default function PromptManagement() {
       {err ? <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div> : null}
       {loading ? <div>در حال بارگذاری…</div> : null}
 
-      <div style={{ overflowX: "auto", border: "1px solid #334155", borderRadius: 8 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div className="form-page-table-wrap" style={{ border: `1px solid ${theme.border}`, borderRadius: 8 }}>
+        <table className="form-page-table">
           <thead>
-            <tr style={{ background: "#1e293b" }}>
+            <tr style={{ background: isDarkMode ? "#1e293b" : "#f1f5f9", color: theme.text }}>
               <th style={{ padding: 10, textAlign: "right" }}>کلید</th>
               <th style={{ padding: 10, textAlign: "right" }}>عنوان</th>
               <th style={{ padding: 10, textAlign: "right" }}>به‌روزرسانی</th>
@@ -345,7 +364,7 @@ export default function PromptManagement() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.prompt_key} style={{ borderTop: "1px solid #334155" }}>
+              <tr key={r.prompt_key} style={{ borderTop: `1px solid ${theme.border}`, color: theme.text }}>
                 <td style={{ padding: 10, fontFamily: "monospace", fontSize: 12 }}>{r.prompt_key}</td>
                 <td style={{ padding: 10 }}>{r.title_fa}</td>
                 <td style={{ padding: 10 }}>{r.updated_at ? new Date(r.updated_at).toLocaleString("fa-IR") : "—"}</td>
@@ -375,14 +394,15 @@ export default function PromptManagement() {
         >
           <div
             style={{
-              background: "#0f172a",
-              border: "1px solid #334155",
+              background: theme.card,
+              border: `1px solid ${theme.border}`,
               borderRadius: 12,
               maxWidth: 720,
               width: "100%",
               maxHeight: "90vh",
               overflow: "auto",
               padding: 20,
+              color: theme.text,
             }}
           >
             <h3 style={{ marginTop: 0 }}>
@@ -416,8 +436,8 @@ export default function PromptManagement() {
             <label style={{ display: "block", marginBottom: 8 }}>
               متن پرامپت <CharCounter value={form.body} max={L.body} />
             </label>
-            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.85 }}>
-              در صورت استفاده از توکن‌های <code style={{ fontSize: 11 }}>{"{{NAME}}"}</code>، همه باید در زمان اجرا مقدار داشته باشند؛ فهرست متغیرهای هر اکشن در بخش بالای صفحه است.
+            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.85, color: theme.muted }}>
+              در صورت استفاده از توکن‌های <code style={code}>{"{{NAME}}"}</code>، همه باید در زمان اجرا مقدار داشته باشند؛ فهرست متغیرهای هر اکشن در بخش بالای صفحه است.
             </p>
             <textarea
               value={form.body}

@@ -10,13 +10,13 @@ import TopicFormModal from "../../components/analysis/TopicFormModal.jsx";
 import { ANALYSIS_TERMS } from "../../constants/analysisTerminology.js";
 import { APPROVAL_DETAIL_HELP } from "../../content/analysisFormHelp.jsx";
 import analysisService from "../../services/analysisService";
-import { useManagementBackUrl } from "../../hooks/useManagementBackUrl.js";
+import { useApprovalBackUrl } from "../../hooks/useManagementBackUrl.js";
 import { EMPTY_TOPIC_FORM } from "../../utils/analysisMonitorUtils.js";
 
 export default function AnalysisTopicApprovalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const backTo = useManagementBackUrl("approve");
+  const backTo = useApprovalBackUrl();
   const { isDarkMode } = useAppTheme();
   const S = getUnitReportFormStyles(isDarkMode);
   const theme = { card: isDarkMode ? "#1e293b" : "#fff", border: isDarkMode ? "#334155" : "#e2e8f0", text: isDarkMode ? "#f1f5f9" : "#1e293b" };

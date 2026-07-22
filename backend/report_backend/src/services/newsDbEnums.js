@@ -11,6 +11,10 @@ export function sqlNewsDuplicateStatus(alias = "bk") {
   return `trim(both '''' from trim(COALESCE(${alias}.duplicate_status, 'none')))`;
 }
 
+export function sqlNewsPublishStatus(alias = "bk") {
+  return `trim(both '''' from trim(COALESCE(${alias}.publish_status, 'none')))`;
+}
+
 /** هم‌راستا با resolveDuplicateStatus — ستون duplicate_status + پرچم legacy is_duplicate */
 export function sqlNewsIsFlaggedDuplicate(alias = "bk") {
   const ds = sqlNewsDuplicateStatus(alias);

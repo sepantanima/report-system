@@ -6,6 +6,8 @@ import {
   jalaliDateToRefKeyStart,
   jalaliDateToRefKeyEnd,
 } from "./newsMonitorService.js";
+import { instanceNewsAndSql } from "./instanceScopeService.js";
+import { userRoleTextExpr, userRoleTextSelect } from "../utils/userRoleSql.js";
 import {
   computeMonitorScore,
   computeEditorScore,
@@ -15,11 +17,18 @@ import {
   QUALITY_LABELS,
   STATUS_LABELS,
 } from "../constants/newsAnalyticsScoring.js";
-import { sqlNewsDuplicateStatus, sqlNewsReviewState, sqlNewsWorkflow } from "./newsDbEnums.js";
+import { sqlNewsDuplicateStatus, sqlNewsReviewState, sqlNewsWorkflow, sqlNewsPublishStatus } from "./newsDbEnums.js";
+import {
+  buildSenderResolveJoinsForAnalytics,
+  RESOLVED_USER_ID_SQL,
+  SENDER_RESOLVE_JOINS,
+  NEWS_SENDER_SOURCE_MARKER_NOT_EXISTS_SQL,
+} from "../utils/senderResolveSql.js";
 
 const WS = sqlNewsWorkflow();
 const RS = sqlNewsReviewState();
 const DS = sqlNewsDuplicateStatus();
+const PS = sqlNewsPublishStatus();
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_ROWS = 500;
@@ -61,7 +70,9 @@ function statusSql(status) {
     case "rejected":
       return `${RS} = 'rejected'`;
     case "published":
-      return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${DS} = 'none'`;
+      return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${PS} = 'ready' AND ${DS} = 'none'`;
+    case "banked":
+      return `${WS} = 'finalized' AND COALESCE(bk.is_approved, 0) = 1 AND ${PS} = 'banked' AND ${DS} = 'none'`;
     default:
       return null;
   }
@@ -70,7 +81,7 @@ function statusSql(status) {
 export function buildAnalyticsWhere(filters = {}, scope = {}) {
   const params = [];
   let where = ` WHERE 1=1`;
-  const joins = ` LEFT JOIN tbl_users obs ON obs.id = bk.observer_id `;
+  const joins = buildSenderResolveJoinsForAnalytics();
 
   const fromKey = filters.from_ref_key || jalaliDateToRefKeyStart(filters.start_date);
   const toKey = filters.to_ref_key || jalaliDateToRefKeyEnd(filters.end_date);
@@ -131,14 +142,14 @@ export function buildAnalyticsWhere(filters = {}, scope = {}) {
     if (scope.level === "monitor" || scope.level === "editor") {
       if (scope.userId && userId !== scope.userId && scope.level !== "admin" && scope.level !== "chief") {
         params.push(scope.userId);
-        where += ` AND bk.observer_id = $${params.length}`;
+        where += ` AND ${RESOLVED_USER_ID_SQL} = $${params.length}`;
       } else {
         params.push(userId);
-        where += ` AND bk.observer_id = $${params.length}`;
+        where += ` AND ${RESOLVED_USER_ID_SQL} = $${params.length}`;
       }
     } else {
       params.push(userId);
-      where += ` AND bk.observer_id = $${params.length}`;
+      where += ` AND ${RESOLVED_USER_ID_SQL} = $${params.length}`;
     }
   }
 
@@ -171,27 +182,27 @@ function addRank(rows) {
 export async function getAnalyticsFiltersMeta() {
   const [categories, sources, units, monitors, editors, chiefs] = await Promise.all([
     pool.query(`SELECT id, code, title_fa FROM tbl_news_categories WHERE is_active = true ORDER BY sort_order`),
-    pool.query(`SELECT DISTINCT source FROM tbl_news WHERE source IS NOT NULL AND trim(source) <> '' ORDER BY source LIMIT 200`),
+    pool.query(`SELECT DISTINCT source FROM tbl_news WHERE source IS NOT NULL AND trim(source) <> ''${instanceNewsAndSql("tbl_news")} ORDER BY source LIMIT 200`),
     pool.query(`SELECT "UnitCode" AS unit_cd, "UnitShortName" AS unit_name FROM tbl_units ORDER BY "UnitShortName" LIMIT 500`),
     pool.query(`
       SELECT DISTINCT u.id, u.name, u.username
       FROM tbl_users u
       WHERE u.active IS DISTINCT FROM false
-        AND (u.role::text ILIKE '%news_monitor%' OR u.role::text ILIKE '%admin%')
+        AND (${userRoleTextExpr("u")} ILIKE '%news_monitor%' OR ${userRoleTextExpr("u")} ILIKE '%admin%')
       ORDER BY u.name LIMIT 300
     `),
     pool.query(`
       SELECT DISTINCT u.id, u.name, u.username
       FROM tbl_users u
       WHERE u.active IS DISTINCT FROM false
-        AND (u.role::text ILIKE '%news_editor%' OR u.role::text ILIKE '%news_chief%' OR u.role::text ILIKE '%admin%')
+        AND (${userRoleTextExpr("u")} ILIKE '%news_editor%' OR ${userRoleTextExpr("u")} ILIKE '%news_chief%' OR ${userRoleTextExpr("u")} ILIKE '%admin%')
       ORDER BY u.name LIMIT 300
     `),
     pool.query(`
       SELECT DISTINCT u.id, u.name, u.username
       FROM tbl_users u
       WHERE u.active IS DISTINCT FROM false
-        AND (u.role::text ILIKE '%news_chief%' OR u.role::text ILIKE '%admin%')
+        AND (${userRoleTextExpr("u")} ILIKE '%news_chief%' OR ${userRoleTextExpr("u")} ILIKE '%admin%')
       ORDER BY u.name LIMIT 100
     `),
   ]);
@@ -227,8 +238,20 @@ export async function getAnalyticsOverview(filters, scope) {
         COUNT(*) FILTER (
           WHERE COALESCE(bk.workflow_status, 'new') = 'finalized'
             AND COALESCE(bk.is_approved, 0) = 1
+            AND trim(both '''' from trim(COALESCE(bk.publish_status, 'none'))) = 'ready'
             AND COALESCE(bk.duplicate_status, 'none') = 'none'
-        )::int AS published
+        )::int AS published,
+        COUNT(*) FILTER (
+          WHERE COALESCE(bk.workflow_status, 'new') = 'finalized'
+            AND COALESCE(bk.is_approved, 0) = 1
+            AND trim(both '''' from trim(COALESCE(bk.publish_status, 'none'))) = 'banked'
+            AND COALESCE(bk.duplicate_status, 'none') = 'none'
+        )::int AS banked,
+        COUNT(*) FILTER (
+          WHERE NULLIF(trim(bk.sender), '') IS NOT NULL
+            AND ${RESOLVED_USER_ID_SQL} IS NULL
+            AND ${NEWS_SENDER_SOURCE_MARKER_NOT_EXISTS_SQL}
+        )::int AS unmapped_sender
       FROM base_key bk
       ${joins}
       ${where}
@@ -242,6 +265,7 @@ export async function getAnalyticsOverview(filters, scope) {
       { name: STATUS_LABELS.approved, value: row.approved || 0, key: "approved" },
       { name: STATUS_LABELS.rejected, value: row.rejected || 0, key: "rejected" },
       { name: STATUS_LABELS.published, value: row.published || 0, key: "published" },
+      { name: STATUS_LABELS.banked, value: row.banked || 0, key: "banked" },
     ].map((x) => ({ ...x, percent: pct(x.value, total) }));
     return { summary: row, pie, total };
   });
@@ -355,19 +379,19 @@ export async function getUnitParticipation(filters, scope) {
              un."UnitShortName" AS unit_name,
              COUNT(DISTINCT bk.id)::int AS news_count,
              COUNT(DISTINCT obs.id) FILTER (
-               WHERE obs.role::text ILIKE '%news_monitor%'
+               WHERE ${userRoleTextExpr("obs")} ILIKE '%news_monitor%'
              )::int AS monitor_count,
              COUNT(DISTINCT ed.id) FILTER (
-               WHERE ed.role::text ILIKE '%news_editor%'
+               WHERE ${userRoleTextExpr("ed")} ILIKE '%news_editor%'
              )::int AS editor_count,
              COUNT(DISTINCT ch.id) FILTER (
-               WHERE ch.role::text ILIKE '%news_chief%'
+               WHERE ${userRoleTextExpr("ch")} ILIKE '%news_chief%'
              )::int AS chief_count
       FROM base_key bk
       ${joins}
       LEFT JOIN tbl_units un ON un."UnitCode" = obs.unit_cd
-      LEFT JOIN tbl_users ed ON ed.unit_cd = un."UnitCode" AND ed.role::text ILIKE '%news_editor%'
-      LEFT JOIN tbl_users ch ON ch.unit_cd = un."UnitCode" AND ch.role::text ILIKE '%news_chief%'
+      LEFT JOIN tbl_users ed ON ed.unit_cd = un."UnitCode" AND ${userRoleTextExpr("ed")} ILIKE '%news_editor%'
+      LEFT JOIN tbl_users ch ON ch.unit_cd = un."UnitCode" AND ${userRoleTextExpr("ch")} ILIKE '%news_chief%'
       ${where}
       GROUP BY un."UnitCode", un."UnitShortName"
       HAVING COUNT(DISTINCT bk.id) > 0
@@ -389,8 +413,8 @@ export async function getMonitorRankings(filters, scope) {
     const { where, params, joins } = buildAnalyticsWhere(filters, scope);
     const sql = `
       ${NEWS_REF_KEY_CTE}
-      SELECT u.id AS user_id,
-             COALESCE(u.name, u.username) AS name,
+      SELECT obs.id AS user_id,
+             COALESCE(obs.name, obs.username) AS name,
              un."UnitShortName" AS unit_name,
              COUNT(*)::int AS news_count,
              ROUND(AVG(
@@ -401,10 +425,10 @@ export async function getMonitorRankings(filters, scope) {
              )::numeric, 2) AS avg_quality_weight
       FROM base_key bk
       ${joins}
-      JOIN tbl_users u ON u.id = bk.observer_id
-      LEFT JOIN tbl_units un ON un."UnitCode" = u.unit_cd
+      LEFT JOIN tbl_units un ON un."UnitCode" = obs.unit_cd
       ${where}
-      GROUP BY u.id, u.name, u.username, un."UnitShortName"
+        AND ${RESOLVED_USER_ID_SQL} IS NOT NULL
+      GROUP BY obs.id, obs.name, obs.username, un."UnitShortName"
       HAVING COUNT(*) > 0
       ORDER BY news_count DESC
       LIMIT ${MAX_ROWS}

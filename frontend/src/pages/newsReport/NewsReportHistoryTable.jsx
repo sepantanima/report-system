@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, Search, Send, Trash2 } from "lucide-react";
+import { Download, Loader2, Search, Trash2 } from "lucide-react";
+import ReportFilePublishActions from "./ReportFilePublishActions.jsx";
 import newsReportService from "../../services/newsReportService.js";
 import { toPersianDigits } from "../../utils/analysisMonitorUtils.js";
 
@@ -9,6 +10,7 @@ const FORMAT_LABELS = {
   txt: "TXT",
   pdf: "PDF",
   html: "HTML",
+  zip: "ZIP",
 };
 
 const PAGE_SIZES = [10, 20, 50];
@@ -19,7 +21,6 @@ export default function NewsReportHistoryTable({
   refreshKey = 0,
   onError,
   destinations = [],
-  destinationId = "",
 }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -29,7 +30,6 @@ export default function NewsReportHistoryTable({
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [publishingId, setPublishingId] = useState(null);
   const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
@@ -68,23 +68,6 @@ export default function NewsReportHistoryTable({
       onError?.(e.response?.data?.error || e.message);
     } finally {
       setDeletingId(null);
-    }
-  };
-
-  const onPublish = async (row) => {
-    if (!destinationId) {
-      onError?.("مقصد انتشار را از بالا انتخاب کنید.");
-      return;
-    }
-    setPublishingId(row.id);
-    onError?.("");
-    try {
-      await newsReportService.publishReport(row.id, { destination_id: parseInt(destinationId, 10) });
-      await load();
-    } catch (e) {
-      onError?.(e.response?.data?.error || e.message);
-    } finally {
-      setPublishingId(null);
     }
   };
 
@@ -232,16 +215,17 @@ export default function NewsReportHistoryTable({
                 <td style={tdStyle}>{row.publish_status || "—"}</td>
                 <td style={tdStyle}>{formatDate(row.created_at)}</td>
                 <td style={tdStyle}>
-                  <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      title="ارسال به پیام‌رسان"
-                      disabled={row.status !== "ready" || publishingId === row.id || !destinationId}
-                      onClick={() => onPublish(row)}
-                      style={{ ...iconBtn(theme), color: "#22c55e" }}
-                    >
-                      {publishingId === row.id ? <Loader2 size={14} className="spin" /> : <Send size={14} />}
-                    </button>
+                  <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <ReportFilePublishActions
+                      reportId={row.id}
+                      fileName={row.file_name}
+                      status={row.status}
+                      destinations={destinations}
+                      theme={theme}
+                      onError={onError}
+                      onPublished={load}
+                      compact
+                    />
                     <button
                       type="button"
                       title="دانلود"

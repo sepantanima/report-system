@@ -1,5 +1,7 @@
 /** پالت فرم ثبت گزارش یگان — تیره و روشن (هم‌راستا با تم تنظیمات سیستم) */
 
+import { PAGE_REPORT_MAX, scalePageWidth } from "../constants/pageLayoutWidths.js";
+
 function buildDarkUnitStyles() {
   const inputStyle = {
     width: "100%",
@@ -26,7 +28,7 @@ function buildDarkUnitStyles() {
     cardStyle: {
       background: "#0f172a",
       borderRadius: "14px",
-      maxWidth: "480px",
+      maxWidth: `${scalePageWidth(480)}px`,
       margin: "auto",
       border: "1px solid #1e293b",
       overflow: "hidden",
@@ -180,7 +182,7 @@ function buildDarkUnitStyles() {
     reportListContainer: {
       background: "#0f172a",
       width: "100%",
-      maxWidth: "1000px",
+      maxWidth: `${PAGE_REPORT_MAX}px`,
       margin: "0 auto",
       padding: "15px",
       borderRadius: "12px",
@@ -384,7 +386,7 @@ function buildLightUnitStyles(d) {
     cardStyle: {
       background: L.card,
       borderRadius: "14px",
-      maxWidth: "480px",
+      maxWidth: `${scalePageWidth(480)}px`,
       margin: "auto",
       border: `1px solid ${L.border}`,
       overflow: "hidden",
@@ -442,7 +444,7 @@ function buildLightUnitStyles(d) {
     reportListContainer: {
       background: L.card,
       width: "100%",
-      maxWidth: "1000px",
+      maxWidth: `${PAGE_REPORT_MAX}px`,
       margin: "0 auto",
       padding: "15px",
       borderRadius: "12px",

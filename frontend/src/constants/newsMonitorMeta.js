@@ -1,5 +1,5 @@
 export const NEWS_PRIORITIES = {
-  1: { label: "خیلی مهم", color: "#dc2626" },
+  1: { label: "فوری", color: "#dc2626" },
   2: { label: "مهم", color: "#f59e0b" },
   3: { label: "عادی", color: "#64748b" },
   4: { label: "فاقد اهمیت", color: "#94a3b8" },
@@ -16,9 +16,21 @@ export const NEWS_QUALITY = {
 export const NEWS_REVIEW_STATES = {
   pending: { label: "بدون حکم", color: "#64748b" },
   approved: { label: "تأیید", color: "#22c55e" },
-  rejected: { label: "رد", color: "#ef4444" },
+  rejected: { label: "برگشت به فرستنده", color: "#ef4444" },
   rumor: { label: "شایعه", color: "#a855f7" },
 };
+
+export const NEWS_PUBLISH_STATUSES = {
+  none: { label: "—", color: "#64748b" },
+  ready: { label: "آماده انتشار", color: "#22c55e" },
+  banked: { label: "بانک انتظار", color: "#0ea5e9" },
+};
+
+export const PUBLISH_FILTER_OPTIONS = [
+  { value: "", label: "همه" },
+  { value: "ready", label: "آماده انتشار" },
+  { value: "banked", label: "بانک انتظار" },
+];
 
 export const NEWS_WORKFLOW_STATES = {
   new: { label: "پیش‌نویس", color: "#38bdf8" },
@@ -38,6 +50,32 @@ export const DUPLICATE_FILTER_OPTIONS = [
   { value: "suspicious", label: "فقط مشکوک" },
   { value: "only", label: "همه تکراری" },
   { value: "include", label: "همه (شامل تکراری)" },
+];
+
+export const NEWS_RELEVANCE_STATUSES = {
+  unset: { label: "نامشخص", color: "#64748b" },
+  relevant: { label: "مرتبط", color: "#22c55e" },
+  irrelevant: { label: "غیرمرتبط", color: "#94a3b8" },
+};
+
+export const NEWS_EDITORIAL_STATES = {
+  pending: { label: "پالایش‌نشده", color: "#f59e0b" },
+  manual: { label: "پالایش دستی", color: "#38bdf8" },
+  ai: { label: "پالایش AI", color: "#a855f7" },
+};
+
+export const RELEVANCE_FILTER_OPTIONS = [
+  { value: "active", label: "مرتبط (پیش‌فرض — مخفی کردن غیرمرتبط)" },
+  { value: "relevant", label: "فقط مرتبط" },
+  { value: "irrelevant", label: "فقط غیرمرتبط" },
+  { value: "all", label: "همه" },
+];
+
+export const EDITORIAL_FILTER_OPTIONS = [
+  { value: "", label: "همه" },
+  { value: "pending", label: "پالایش‌نشده" },
+  { value: "manual", label: "پالایش دستی" },
+  { value: "ai", label: "پالایش AI" },
 ];
 
 /** n8n گاهی enum را با کوتیشن اضافی ذخیره می‌کند: 'pending' */

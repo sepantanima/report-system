@@ -36,8 +36,8 @@ export default function NewsReportStepNav({
       display: "flex",
       alignItems: "center",
       gap: 8,
-      flexWrap: "wrap",
-      marginBottom: 12,
+      width: "100%",
+      marginBottom: 0,
       flexShrink: 0,
     }}
     >
@@ -58,7 +58,6 @@ export default function NewsReportStepNav({
         gap: 6,
         justifyContent: "center",
         flexWrap: "wrap",
-        minWidth: 0,
       }}
       >
         {STEPS.map((s) => {

@@ -6,16 +6,13 @@ import { getUnitReportFormStyles } from "../theme/unitReportFormStyles";
 import CharCounter from "../components/news/CharCounter.jsx";
 import { FIELD_FIELD_LIMITS, validateUnitReportPayload } from "../constants/fieldFieldLimits.js";
 import { clampText } from "../utils/limitInput.js";
+import FormPageLayout from "../components/common/FormPageLayout.jsx";
+import { PAGE_WIDE_MAX, PAGE_CONTENT_PX, scalePageWidth } from "../constants/pageLayoutWidths.js";
 import { UNIT_REPORT_HELP, UNIT_REPORT_OUTPUT_HELP } from "../content/fieldFormHelp.jsx";
-import StandardFormHeader from "../components/common/StandardFormHeader.jsx";
-import HelpModal from "../components/common/HelpModal.jsx";
 import ThemedDatePicker from "../components/analysis/ThemedDatePicker.jsx";
 import { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { usePageFontSize } from "../utils/pageFontSize.js";
-import { ANALYSIS_MONITOR_CSS } from "../theme/analysisMonitorStyles.js";
-import { FORM_PAGE_CSS } from "../theme/formPageStyles.js";
 import { toPersianDigits } from "../utils/analysisMonitorUtils.js";
 import DailyQuotaBanner, { isQuotaExhausted } from "../components/common/DailyQuotaBanner.jsx";
 import EntityMessagesPanel from "../components/messaging/EntityMessagesPanel.jsx";
@@ -74,7 +71,6 @@ const CLASSIFICATION_OPTIONS = [
 export default function UnitReportForm() {
   const navigate = useNavigate();
   const { isDarkMode } = useAppTheme();
-  const { fontSizePx } = usePageFontSize();
   const {
     containerStyle,
     cardStyle,
@@ -147,8 +143,6 @@ export default function UnitReportForm() {
   // --- وضعیت‌های اطلاعات کاربر و پنل‌ها ---
   const [userMeta, setUserMeta] = useState({ name: "...", unitcd: "---", statename: "نامشخص" });
   const [showReportsPanel, setShowReportsPanel] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showOutputHelp, setShowOutputHelp] = useState(false);
   const [reportDate, setReportDate] = useState(new Date());
   const [reportPickerDate, setReportPickerDate] = useState(() => new DateObject({ calendar: persian }));
   const [dailyReports, setDailyReports] = useState({}); // گزارش‌های دسته‌بندی شده
@@ -435,21 +429,25 @@ export default function UnitReportForm() {
   );
 
   return (
-    <div
-      className="page-font-root"
-      style={{
-        ...containerStyle,
-        fontSize: fontSizePx,
-        ["--page-font-size"]: fontSizePx,
-      }}
-    >
-      <style>{ANALYSIS_MONITOR_CSS}</style>
-      <style>{FORM_PAGE_CSS}</style>
-      {/* پنل اصلی ثبت گزارش */}
-      <div
-        style={{ ...cardStyle, display: showReportsPanel ? "none" : "block" }}
-        className="no-print"
+    <>
+      <FormPageLayout
+        title={showReportsPanel ? "مشاهده خروجی یگان" : "گزارش میدانی یگان"}
+        subtitle={showReportsPanel ? reportDateSubtitle : undefined}
+        onBack={showReportsPanel ? () => setShowReportsPanel(false) : undefined}
+        backTo="/main"
+        onHelp={showReportsPanel ? () => <UNIT_REPORT_OUTPUT_HELP /> : () => <UNIT_REPORT_HELP />}
+        helpTitle={showReportsPanel ? "راهنمای مشاهده خروجی یگان" : "راهنمای ثبت گزارش میدانی"}
+        card
+        wide
+        headerEnd={!showReportsPanel ? (
+          <>
+            <span style={{ fontSize: "0.79em", color: subMuted }}>{userMeta.name}</span>
+            <div style={unitBadge}>{userMeta.unitcd}</div>
+          </>
+        ) : undefined}
       >
+      {!showReportsPanel ? (
+      <div className="no-print">
         <div style={dateTopBar}>
           📅 امروز: {getFullTodayText()}
         </div>
@@ -474,18 +472,6 @@ export default function UnitReportForm() {
             </button>
           </div>
         )}
-
-        <StandardFormHeader
-          variant="embedded"
-          title="گزارش میدانی یگان"
-          onHelp={() => setShowHelpModal(true)}
-          headerEnd={(
-            <>
-              <span style={{ fontSize: "0.79em", color: subMuted }}>{userMeta.name}</span>
-              <div style={unitBadge}>{userMeta.unitcd}</div>
-            </>
-          )}
-        />
 
         <div style={formContent}>
           <div style={inputWrapper} ref={historyPanelRef}>
@@ -653,310 +639,8 @@ export default function UnitReportForm() {
           </div>
         </div>
       </div>
-
-      <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} title="راهنمای ثبت گزارش میدانی" maxWidth={560}>
-        <UNIT_REPORT_HELP />
-      </HelpModal>
-
-      <HelpModal open={showOutputHelp} onClose={() => setShowOutputHelp(false)} title="راهنمای مشاهده خروجی یگان" maxWidth={560}>
-        <UNIT_REPORT_OUTPUT_HELP />
-      </HelpModal>
-
-      {/* مودال ویرایش گزارش‌های عادی کاربر */}
-      {editingReport && (
-        <div style={modalOverlay}>
-          <div style={{ ...modalContent, maxWidth: "600px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#0ea5e9" }}>اصلاح و ویرایش گزارش عادی</span>
-              <XIcon onClick={() => setEditingReport(null)} style={{ color: "#94a3b8" }} />
-            </div>
-            
-            <div style={{ marginBottom: "10px" }}>
-              <label style={labelStyle}>اصلاح عنوان</label>
-              <input
-                style={inputStyle}
-                value={editTitle}
-                onChange={(e) => setEditTitle(clampText(e.target.value, FIELD_FIELD_LIMITS.unitShort))}
-                maxLength={FIELD_FIELD_LIMITS.unitShort}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={labelStyle}>اصلاح متن گزارش</label>
-              <textarea
-                style={{ ...textareaStyle, height: "150px" }}
-                value={editText}
-                onChange={(e) => setEditText(clampText(e.target.value, FIELD_FIELD_LIMITS.unitLong))}
-                maxLength={FIELD_FIELD_LIMITS.unitLong}
-              />
-            </div>
-            
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>اصلاح سطح فوریت</label>
-              <div style={priorityGroup}>
-                {["عادی", "مهم", "فوری"].map((p) => {
-                  const isActive = editPriority === p;
-                  let activeColor = "#3b82f6";
-                  if (p === "مهم") activeColor = "#f59e0b";
-                  if (p === "فوری") activeColor = "#ef4444";
-
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setEditPriority(p)}
-                      style={{
-                        ...priorityBtn,
-                        background: isActive ? activeColor : "#1e293b",
-                        border: isActive ? `1px solid ${activeColor}` : "1px solid #334155",
-                        color: isActive ? "#fff" : "#94a3b8",
-                      }}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>اصلاح دامنه‌ی انتشار</label>
-              <div style={priorityGroup}>
-                {CLASSIFICATION_OPTIONS.map((c) => {
-                  const isActive = editClassification === c.label;
-                  return (
-                    <button
-                      key={c.label}
-                      type="button"
-                      onClick={() => setEditClassification(c.label)}
-                      style={{
-                        ...priorityBtn,
-                        background: isActive ? c.color : "#1e293b",
-                        border: isActive ? `1px solid ${c.color}` : "1px solid #334155",
-                        color: isActive ? "#fff" : "#94a3b8",
-                      }}
-                    >
-                      {c.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {editingReport?.hash_key ? (
-              <EntityMessagesPanel
-                entityType="field_report"
-                entityId={editingReport.hash_key}
-                theme={entityMsgTheme}
-              />
-            ) : null}
-
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={submitEdit}
-                disabled={!editTitle.trim() || !editText.trim() || !!editFieldError}
-                style={{
-                  ...sendBtn,
-                  opacity: !editTitle.trim() || !editText.trim() || editFieldError ? 0.55 : 1,
-                  cursor: editFieldError ? "not-allowed" : "pointer",
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> ذخیره تغییرات
-              </button>
-              <button onClick={() => setEditingReport(null)} style={backBtn}>انصراف</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* مودال لیست گزارش‌های برگشتی کاربر */}
-      {showRejectedModal && (
-        <div style={modalOverlay}>
-          <div style={{ ...modalContent, maxWidth: "800px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${helpHeadingBorder}`, paddingBottom: "12px", marginBottom: "20px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <AlertIcon />
-                <span style={{ fontWeight: "bold", color: "#f59e0b", fontSize: "16px" }}>گزارشات برگشت‌خورده توسط مدیریت ارشد ({rejectedReportsList.length})</span>
-              </div>
-              <XIcon onClick={() => setShowRejectedModal(false)} style={{ color: subMuted }} />
-            </div>
-
-            <div style={{ maxHeight: "400px", overflowY: "auto", paddingLeft: "5px" }}>
-              {rejectedReportsList.length === 0 ? (
-                <div style={{ textAlign: "center", color: emptyStateColor, padding: "20px" }}>گزارش برگشتی جدیدی یافت نشد.</div>
-              ) : (
-                rejectedReportsList.map((r, i) => (
-                  <div key={i} style={{ background: rejectedCardBg, border: "1px solid #ef4444", borderRadius: "10px", padding: "15px", marginBottom: "15px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                      <span style={{ color: "#38bdf8", fontWeight: "bold", fontSize: "13px" }}>موضوع: {r.category}</span>
-                      <span style={{ color: subMuted, fontSize: "11px" }}>📅 {r.date} | ⏰ {r.send_time}</span>
-                    </div>
-                    <div style={{ fontWeight: "bold", color: headingOnCard, marginBottom: "8px", fontSize: "14px" }}>عنوان: {r.title}</div>
-                    <div style={{ color: rejectedInnerTextColor, fontSize: "12.5px", textAlign: "justify", lineHeight: "1.6", background: rejectedInnerTextBg, padding: "10px", borderRadius: "8px", marginBottom: "10px" }}>{r.raw_text || r.text}</div>
-                    
-                    {/* نمایش علت برگشت با استفاده از فیلد جدید دیتابیس (workflow_logs) */}
-                    {r.workflow_logs && (
-                      <div style={{ background: "rgba(239, 68, 68, 0.12)", color: "#ef4444", padding: "10px", borderRadius: "8px", fontSize: "12px", border: "1px solid rgba(239, 68, 68, 0.25)", marginBottom: "10px", whiteSpace: "pre-line" }}>
-                        <strong>⚠️ تاریخچه جریان رفت و برگشت و علت عدم تایید:</strong>
-                        <div style={{ marginTop: "4px" }}>{r.workflow_logs}</div>
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", justifySelf: "end", gap: "8px" }}>
-                      <button 
-                        onClick={() => {
-                          setEditingRejectedReport(r);
-                          setEditTitle(r.title);
-                          setEditText(r.raw_text || r.text);
-                          setEditPriority(r.priority || "عادی");
-                          setEditClassification(r.classification || "عمومی");
-                        }}
-                        style={{ ...goToTargetBtn, background: "#f59e0b" }}
-                      >
-                        <svg style={{ marginLeft: "4px" }} xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> اصلاح و ارسال مجدد به مانیتورینگ
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(r.hash_key)}
-                        style={{ ...goToTargetBtn, background: "#ef4444" }}
-                      >
-                        <TrashIcon /> حذف دائمی
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <button onClick={() => setShowRejectedModal(false)} style={closeModalBtn}>بستن پنجره</button>
-          </div>
-        </div>
-      )}
-
-      {/* مودال ویرایش و اصلاح گزارش برگشتی */}
-      {editingRejectedReport && (
-        <div style={{ ...modalOverlay, zIndex: 1100 }}>
-          <div style={{ ...modalContent, maxWidth: "600px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#f59e0b" }}>اصلاح و انتشار مجدد گزارش برگشتی</span>
-              <XIcon onClick={() => setEditingRejectedReport(null)} style={{ color: "#94a3b8" }} />
-            </div>
-
-            {editingRejectedReport.workflow_logs && (
-              <div style={{ background: "rgba(239, 68, 68, 0.08)", color: "#ef4444", padding: "10px", borderRadius: "8px", fontSize: "12px", border: "1px solid rgba(239, 68, 68, 0.15)", marginBottom: "12px", whiteSpace: "pre-line" }}>
-                <strong>آخرین بازخورد کارشناس مرکز:</strong>
-                <div>{editingRejectedReport.workflow_logs}</div>
-              </div>
-            )}
-
-            <div style={{ marginBottom: "10px" }}>
-              <label style={labelStyle}>عنوان اصلاح‌شده (حداکثر {toPersianDigits(FIELD_FIELD_LIMITS.unitShort)} کاراکتر)</label>
-              <input
-                style={inputStyle}
-                value={editTitle}
-                onChange={(e) => setEditTitle(clampText(e.target.value, FIELD_FIELD_LIMITS.unitShort))}
-                maxLength={FIELD_FIELD_LIMITS.unitShort}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={labelStyle}>متن اصلاح‌شده گزارش (حداکثر {toPersianDigits(FIELD_FIELD_LIMITS.unitLong)} کاراکتر)</label>
-              <textarea
-                style={{ ...textareaStyle, height: "150px" }}
-                value={editText}
-                onChange={(e) => setEditText(clampText(e.target.value, FIELD_FIELD_LIMITS.unitLong))}
-                maxLength={FIELD_FIELD_LIMITS.unitLong}
-              />
-            </div>
-            
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>سطح فوریت</label>
-              <div style={priorityGroup}>
-                {["عادی", "مهم", "فوری"].map((p) => {
-                  const isActive = editPriority === p;
-                  let activeColor = "#3b82f6";
-                  if (p === "مهم") activeColor = "#f59e0b";
-                  if (p === "فوری") activeColor = "#ef4444";
-
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setEditPriority(p)}
-                      style={{
-                        ...priorityBtn,
-                        background: isActive ? activeColor : "#1e293b",
-                        border: isActive ? `1px solid ${activeColor}` : "1px solid #334155",
-                        color: isActive ? "#fff" : "#94a3b8",
-                      }}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>دامنه‌ی انتشار</label>
-              <div style={priorityGroup}>
-                {CLASSIFICATION_OPTIONS.map((c) => {
-                  const isActive = editClassification === c.label;
-                  return (
-                    <button
-                      key={c.label}
-                      type="button"
-                      onClick={() => setEditClassification(c.label)}
-                      style={{
-                        ...priorityBtn,
-                        background: isActive ? c.color : "#1e293b",
-                        border: isActive ? `1px solid ${c.color}` : "1px solid #334155",
-                        color: isActive ? "#fff" : "#94a3b8",
-                      }}
-                    >
-                      {c.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {editingRejectedReport?.hash_key ? (
-              <EntityMessagesPanel
-                entityType="field_report"
-                entityId={editingRejectedReport.hash_key}
-                theme={entityMsgTheme}
-              />
-            ) : null}
-
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={submitRejectedEdit}
-                disabled={!editTitle.trim() || !editText.trim() || !!editFieldError}
-                style={{
-                  ...sendBtn,
-                  background: "#f59e0b",
-                  opacity: !editTitle.trim() || !editText.trim() || editFieldError ? 0.55 : 1,
-                  cursor: editFieldError ? "not-allowed" : "pointer",
-                }}
-              >
-                <svg style={{ marginLeft: "4px" }} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> اصلاح و ارسال مجدد
-              </button>
-              <button onClick={() => setEditingRejectedReport(null)} style={backBtn}>انصراف</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* پنل خروجی و چاپ گزارشات امروز یگان */}
-      {showReportsPanel && (
-        <div style={{ ...reportListContainer, minHeight: "100vh", maxWidth: "100%", padding: 0, borderRadius: 0 }}>
-          <StandardFormHeader
-            title="مشاهده خروجی یگان"
-            subtitle={reportDateSubtitle}
-            onBack={() => setShowReportsPanel(false)}
-            onHelp={() => setShowOutputHelp(true)}
-          />
-
-          <div style={{ padding: "12px 16px 24px", maxWidth: 1100, margin: "0 auto" }}>
+      ) : (
+          <div style={{ padding: "12px 16px 24px", maxWidth: PAGE_WIDE_MAX, margin: "0 auto" }}>
           <div className="form-page-panel-bar no-print">
             <div className="form-page-search" style={{ ...searchWrapper, flex: 1 }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px", flexShrink: 0 }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -1080,6 +764,289 @@ export default function UnitReportForm() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+    </FormPageLayout>
+
+      {editingReport && (
+        <div style={modalOverlay}>
+          <div style={{ ...modalContent, maxWidth: `${scalePageWidth(600)}px` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
+              <span style={{ fontWeight: "bold", color: "#0ea5e9" }}>اصلاح و ویرایش گزارش عادی</span>
+              <XIcon onClick={() => setEditingReport(null)} style={{ color: "#94a3b8" }} />
+            </div>
+            
+            <div style={{ marginBottom: "10px" }}>
+              <label style={labelStyle}>اصلاح عنوان</label>
+              <input
+                style={inputStyle}
+                value={editTitle}
+                onChange={(e) => setEditTitle(clampText(e.target.value, FIELD_FIELD_LIMITS.unitShort))}
+                maxLength={FIELD_FIELD_LIMITS.unitShort}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStyle}>اصلاح متن گزارش</label>
+              <textarea
+                style={{ ...textareaStyle, height: "150px" }}
+                value={editText}
+                onChange={(e) => setEditText(clampText(e.target.value, FIELD_FIELD_LIMITS.unitLong))}
+                maxLength={FIELD_FIELD_LIMITS.unitLong}
+              />
+            </div>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>اصلاح سطح فوریت</label>
+              <div style={priorityGroup}>
+                {["عادی", "مهم", "فوری"].map((p) => {
+                  const isActive = editPriority === p;
+                  let activeColor = "#3b82f6";
+                  if (p === "مهم") activeColor = "#f59e0b";
+                  if (p === "فوری") activeColor = "#ef4444";
+
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setEditPriority(p)}
+                      style={{
+                        ...priorityBtn,
+                        background: isActive ? activeColor : "#1e293b",
+                        border: isActive ? `1px solid ${activeColor}` : "1px solid #334155",
+                        color: isActive ? "#fff" : "#94a3b8",
+                      }}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>اصلاح دامنه‌ی انتشار</label>
+              <div style={priorityGroup}>
+                {CLASSIFICATION_OPTIONS.map((c) => {
+                  const isActive = editClassification === c.label;
+                  return (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => setEditClassification(c.label)}
+                      style={{
+                        ...priorityBtn,
+                        background: isActive ? c.color : "#1e293b",
+                        border: isActive ? `1px solid ${c.color}` : "1px solid #334155",
+                        color: isActive ? "#fff" : "#94a3b8",
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {editingReport?.hash_key ? (
+              <EntityMessagesPanel
+                entityType="field_report"
+                entityId={editingReport.hash_key}
+                theme={entityMsgTheme}
+              />
+            ) : null}
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={submitEdit}
+                disabled={!editTitle.trim() || !editText.trim() || !!editFieldError}
+                style={{
+                  ...sendBtn,
+                  opacity: !editTitle.trim() || !editText.trim() || editFieldError ? 0.55 : 1,
+                  cursor: editFieldError ? "not-allowed" : "pointer",
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> ذخیره تغییرات
+              </button>
+              <button onClick={() => setEditingReport(null)} style={backBtn}>انصراف</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* مودال لیست گزارش‌های برگشتی کاربر */}
+      {showRejectedModal && (
+        <div style={modalOverlay}>
+          <div style={{ ...modalContent, maxWidth: PAGE_CONTENT_PX }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${helpHeadingBorder}`, paddingBottom: "12px", marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <AlertIcon />
+                <span style={{ fontWeight: "bold", color: "#f59e0b", fontSize: "16px" }}>گزارشات برگشت‌خورده توسط مدیریت ارشد ({rejectedReportsList.length})</span>
+              </div>
+              <XIcon onClick={() => setShowRejectedModal(false)} style={{ color: subMuted }} />
+            </div>
+
+            <div style={{ maxHeight: "400px", overflowY: "auto", paddingLeft: "5px" }}>
+              {rejectedReportsList.length === 0 ? (
+                <div style={{ textAlign: "center", color: emptyStateColor, padding: "20px" }}>گزارش برگشتی جدیدی یافت نشد.</div>
+              ) : (
+                rejectedReportsList.map((r, i) => (
+                  <div key={i} style={{ background: rejectedCardBg, border: "1px solid #ef4444", borderRadius: "10px", padding: "15px", marginBottom: "15px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
+                      <span style={{ color: "#38bdf8", fontWeight: "bold", fontSize: "13px" }}>موضوع: {r.category}</span>
+                      <span style={{ color: subMuted, fontSize: "11px" }}>📅 {r.date} | ⏰ {r.send_time}</span>
+                    </div>
+                    <div style={{ fontWeight: "bold", color: headingOnCard, marginBottom: "8px", fontSize: "14px" }}>عنوان: {r.title}</div>
+                    <div style={{ color: rejectedInnerTextColor, fontSize: "12.5px", textAlign: "justify", lineHeight: "1.6", background: rejectedInnerTextBg, padding: "10px", borderRadius: "8px", marginBottom: "10px" }}>{r.raw_text || r.text}</div>
+                    
+                    {/* نمایش علت برگشت با استفاده از فیلد جدید دیتابیس (workflow_logs) */}
+                    {r.workflow_logs && (
+                      <div style={{ background: "rgba(239, 68, 68, 0.12)", color: "#ef4444", padding: "10px", borderRadius: "8px", fontSize: "12px", border: "1px solid rgba(239, 68, 68, 0.25)", marginBottom: "10px", whiteSpace: "pre-line" }}>
+                        <strong>⚠️ تاریخچه جریان رفت و برگشت و علت عدم تایید:</strong>
+                        <div style={{ marginTop: "4px" }}>{r.workflow_logs}</div>
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", justifySelf: "end", gap: "8px" }}>
+                      <button 
+                        onClick={() => {
+                          setEditingRejectedReport(r);
+                          setEditTitle(r.title);
+                          setEditText(r.raw_text || r.text);
+                          setEditPriority(r.priority || "عادی");
+                          setEditClassification(r.classification || "عمومی");
+                        }}
+                        style={{ ...goToTargetBtn, background: "#f59e0b" }}
+                      >
+                        <svg style={{ marginLeft: "4px" }} xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> اصلاح و ارسال مجدد به مانیتورینگ
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(r.hash_key)}
+                        style={{ ...goToTargetBtn, background: "#ef4444" }}
+                      >
+                        <TrashIcon /> حذف دائمی
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <button onClick={() => setShowRejectedModal(false)} style={closeModalBtn}>بستن پنجره</button>
+          </div>
+        </div>
+      )}
+
+      {/* مودال ویرایش و اصلاح گزارش برگشتی */}
+      {editingRejectedReport && (
+        <div style={{ ...modalOverlay, zIndex: 1100 }}>
+          <div style={{ ...modalContent, maxWidth: `${scalePageWidth(600)}px` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
+              <span style={{ fontWeight: "bold", color: "#f59e0b" }}>اصلاح و انتشار مجدد گزارش برگشتی</span>
+              <XIcon onClick={() => setEditingRejectedReport(null)} style={{ color: "#94a3b8" }} />
+            </div>
+
+            {editingRejectedReport.workflow_logs && (
+              <div style={{ background: "rgba(239, 68, 68, 0.08)", color: "#ef4444", padding: "10px", borderRadius: "8px", fontSize: "12px", border: "1px solid rgba(239, 68, 68, 0.15)", marginBottom: "12px", whiteSpace: "pre-line" }}>
+                <strong>آخرین بازخورد کارشناس مرکز:</strong>
+                <div>{editingRejectedReport.workflow_logs}</div>
+              </div>
+            )}
+
+            <div style={{ marginBottom: "10px" }}>
+              <label style={labelStyle}>عنوان اصلاح‌شده (حداکثر {toPersianDigits(FIELD_FIELD_LIMITS.unitShort)} کاراکتر)</label>
+              <input
+                style={inputStyle}
+                value={editTitle}
+                onChange={(e) => setEditTitle(clampText(e.target.value, FIELD_FIELD_LIMITS.unitShort))}
+                maxLength={FIELD_FIELD_LIMITS.unitShort}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStyle}>متن اصلاح‌شده گزارش (حداکثر {toPersianDigits(FIELD_FIELD_LIMITS.unitLong)} کاراکتر)</label>
+              <textarea
+                style={{ ...textareaStyle, height: "150px" }}
+                value={editText}
+                onChange={(e) => setEditText(clampText(e.target.value, FIELD_FIELD_LIMITS.unitLong))}
+                maxLength={FIELD_FIELD_LIMITS.unitLong}
+              />
+            </div>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>سطح فوریت</label>
+              <div style={priorityGroup}>
+                {["عادی", "مهم", "فوری"].map((p) => {
+                  const isActive = editPriority === p;
+                  let activeColor = "#3b82f6";
+                  if (p === "مهم") activeColor = "#f59e0b";
+                  if (p === "فوری") activeColor = "#ef4444";
+
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setEditPriority(p)}
+                      style={{
+                        ...priorityBtn,
+                        background: isActive ? activeColor : "#1e293b",
+                        border: isActive ? `1px solid ${activeColor}` : "1px solid #334155",
+                        color: isActive ? "#fff" : "#94a3b8",
+                      }}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ ...labelStyle, display: "block", marginBottom: "8px" }}>دامنه‌ی انتشار</label>
+              <div style={priorityGroup}>
+                {CLASSIFICATION_OPTIONS.map((c) => {
+                  const isActive = editClassification === c.label;
+                  return (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => setEditClassification(c.label)}
+                      style={{
+                        ...priorityBtn,
+                        background: isActive ? c.color : "#1e293b",
+                        border: isActive ? `1px solid ${c.color}` : "1px solid #334155",
+                        color: isActive ? "#fff" : "#94a3b8",
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {editingRejectedReport?.hash_key ? (
+              <EntityMessagesPanel
+                entityType="field_report"
+                entityId={editingRejectedReport.hash_key}
+                theme={entityMsgTheme}
+              />
+            ) : null}
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={submitRejectedEdit}
+                disabled={!editTitle.trim() || !editText.trim() || !!editFieldError}
+                style={{
+                  ...sendBtn,
+                  background: "#f59e0b",
+                  opacity: !editTitle.trim() || !editText.trim() || editFieldError ? 0.55 : 1,
+                  cursor: editFieldError ? "not-allowed" : "pointer",
+                }}
+              >
+                <svg style={{ marginLeft: "4px" }} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> اصلاح و ارسال مجدد
+              </button>
+              <button onClick={() => setEditingRejectedReport(null)} style={backBtn}>انصراف</button>
+            </div>
           </div>
         </div>
       )}
@@ -1092,7 +1059,7 @@ export default function UnitReportForm() {
             .action-btns-container { flex-direction: column; gap: 12px; }
             td, th { font-size: 11px !important; padding: 8px 4px !important; }
         }
-        .v3-form-body { ${isDarkMode ? "background: #0f172a; color: #f1f5f9;" : "background: #ffffff; color: #0f172a; border: 1px solid #e2e8f0;"} padding: 24px; border-radius: 16px; max-width: 600px; margin: 20px auto; direction: rtl; }
+        .v3-form-body { ${isDarkMode ? "background: #0f172a; color: #f1f5f9;" : "background: #ffffff; color: #0f172a; border: 1px solid #e2e8f0;"} padding: 24px; border-radius: 16px; max-width: ${scalePageWidth(600)}px; margin: 20px auto; direction: rtl; }
         .v3-form-body label, .v3-form-body .form-label { color: ${isDarkMode ? "#cbd5e1" : "#475569"} !important; font-size: 13px; font-weight: 500; display: block; margin-bottom: 8px; margin-top: 16px; }
         .v3-form-body input[type="text"], .v3-form-body select, .v3-form-body textarea { width: 100% !important; ${isDarkMode ? "background-color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: #ffffff !important;" : "background-color: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important;"} padding: 10px 14px !important; border-radius: 10px !important; font-family: inherit !important; font-size: inherit !important; outline: none !important; box-sizing: border-box; transition: border-color 0.2s; }
         .v3-form-body input:focus, .v3-form-body select:focus, .v3-form-body textarea:focus { border-color: #38bdf8 !important; }
@@ -1112,6 +1079,6 @@ export default function UnitReportForm() {
             th:nth-child(6), td:nth-child(6) { display: none !important; }
         }
       `}</style>
-    </div>
+    </>
   );
 }

@@ -17,6 +17,12 @@ import { getSessionRoles, hasPermission, hasRole } from "../utils/userRoles.js";
 import { MANAGEMENT_SUMMARY_BODY_MAX } from "../constants/promptFieldLimits.js";
 import { FIELD_MGMT_SUMMARY_HELP } from "../content/fieldFormHelp.jsx";
 import { clampText } from "../utils/limitInput.js";
+import { useAppTheme } from "../context/ThemeContext.jsx";
+import { getFormPageTheme } from "../theme/formPageTheme.js";
+import {
+  getFieldManagementSummaryStyles,
+  summaryTypeBadgeStyle,
+} from "../theme/fieldManagementSummaryPageStyles.js";
 
 const toPersianDigits = (val) =>
   String(val ?? "").replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
@@ -60,55 +66,6 @@ function displayTitleForList(title) {
   return `${cut.trim()}…`;
 }
 
-const inputStyle = {
-  padding: "8px 10px",
-  borderRadius: 8,
-  background: "#1e293b",
-  border: "1px solid #334155",
-  color: "#e2e8f0",
-  width: "100%",
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-};
-
-const btnStyle = (variant = "ghost") => ({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 14px",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: 13,
-  border: variant === "ghost" ? "1px solid #334155" : "none",
-  background:
-    variant === "primary" ? "#0ea5e9" : variant === "purple" ? "#7c3aed" : "#1e293b",
-  color: variant === "ghost" ? "#e2e8f0" : "#fff",
-});
-
-const modalOverlay = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.6)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 80,
-  padding: 16,
-};
-
-const modalBox = (maxWidth = 720) => ({
-  background: "#0f172a",
-  border: "1px solid #334155",
-  borderRadius: 14,
-  width: "100%",
-  maxWidth,
-  maxHeight: "88vh",
-  overflowY: "auto",
-  padding: 20,
-  color: "#e2e8f0",
-});
-
 const EMPTY_FILTERS = {
   q: "",
   dates: null,
@@ -121,6 +78,13 @@ const EMPTY_FILTERS = {
 
 export default function FieldManagementSummary() {
   const navigate = useNavigate();
+  const { isDarkMode } = useAppTheme();
+  const theme = getFormPageTheme(isDarkMode);
+  const styles = useMemo(
+    () => getFieldManagementSummaryStyles(theme, isDarkMode),
+    [theme, isDarkMode],
+  );
+  const { inp, btn, filterPanel, modalOverlay, modalBox, tableWrap, tableWrapInner, tableHeadBg, tableRowBorder, expandedRowBg } = styles;
   const roles = getSessionRoles();
   const allowed = hasPermission(roles, "field_mgmt_summary");
   const isAdmin = hasRole(roles, "admin");
@@ -318,9 +282,9 @@ export default function FieldManagementSummary() {
 
   if (!allowed) {
     return (
-      <div style={{ padding: 24, textAlign: "center", color: "#e2e8f0", background: "#0f172a", minHeight: "100vh" }}>
+      <div style={{ padding: 24, textAlign: "center", color: theme.text, background: theme.bg, minHeight: "100vh" }}>
         <p>دسترسی مجاز نیست.</p>
-        <button type="button" style={btnStyle()} onClick={() => navigate("/main")}>
+        <button type="button" style={btn()} onClick={() => navigate("/main")}>
           بازگشت
         </button>
       </div>
@@ -351,7 +315,7 @@ export default function FieldManagementSummary() {
       toolbarExtra={(
         <>
           {isAdmin ? (
-            <button type="button" style={{ ...btnStyle(), fontSize: "0.86em" }} onClick={() => navigate("/admin/prompts")}>
+            <button type="button" style={{ ...btn(), fontSize: "0.86em" }} onClick={() => navigate("/admin/prompts")}>
               پرامپت‌ها
             </button>
           ) : null}
@@ -362,26 +326,15 @@ export default function FieldManagementSummary() {
         </>
       )}
     >
-      {err ? <div style={{ color: "#f87171", marginBottom: 12 }}>{err}</div> : null}
+      {err ? <div style={{ color: theme.danger || "#dc2626", marginBottom: 12 }}>{err}</div> : null}
 
       {/* نوار فیلتر */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: 10,
-          padding: 14,
-          border: "1px solid #334155",
-          borderRadius: 12,
-          background: "#111c2e",
-          marginBottom: 16,
-        }}
-      >
+      <div style={filterPanel}>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>جستجو (عنوان / جزء عنوان)</label>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>جستجو (عنوان / جزء عنوان)</label>
           <div style={{ position: "relative" }}>
             <input
-              style={{ ...inputStyle, paddingLeft: 30 }}
+              style={{ ...inp, paddingLeft: 30 }}
               value={filters.q}
               onChange={(e) => setFilter({ q: e.target.value })}
               placeholder="جستجو..."
@@ -390,7 +343,7 @@ export default function FieldManagementSummary() {
           </div>
         </div>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>بازه تاریخ ایجاد (شمسی)</label>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>بازه تاریخ ایجاد (شمسی)</label>
           <ThemedDatePicker
             value={filters.dates}
             onChange={(d) => setFilter({ dates: d })}
@@ -402,8 +355,8 @@ export default function FieldManagementSummary() {
           />
         </div>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>نوع خلاصه</label>
-          <select style={inputStyle} value={filters.summaryType} onChange={(e) => setFilter({ summaryType: e.target.value })}>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>نوع خلاصه</label>
+          <select style={inp} value={filters.summaryType} onChange={(e) => setFilter({ summaryType: e.target.value })}>
             <option value="">همه</option>
             <option value="general">عمومی</option>
             <option value="provincial">استانی</option>
@@ -411,8 +364,8 @@ export default function FieldManagementSummary() {
           </select>
         </div>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>نوع گزارش</label>
-          <select style={inputStyle} value={filters.periodKind} onChange={(e) => setFilter({ periodKind: e.target.value })}>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>نوع گزارش</label>
+          <select style={inp} value={filters.periodKind} onChange={(e) => setFilter({ periodKind: e.target.value })}>
             <option value="">همه</option>
             <option value="daily">روزانه</option>
             <option value="weekly">هفتگی</option>
@@ -423,34 +376,37 @@ export default function FieldManagementSummary() {
           </select>
         </div>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>استان‌ها</label>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>استان‌ها</label>
           <MultiSelect
             options={provinceOptions}
             values={filters.provinces}
             onChange={(v) => setFilter({ provinces: v })}
             placeholder="همه استان‌ها"
+            theme={theme}
           />
         </div>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>یگان‌ها</label>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>یگان‌ها</label>
           <MultiSelect
             options={unitOptions}
             values={filters.units}
             onChange={(v) => setFilter({ units: v })}
             placeholder="همه یگان‌ها"
+            theme={theme}
           />
         </div>
         <div>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>موضوعات</label>
+          <label style={{ fontSize: 12, opacity: 0.8, color: theme.muted }}>موضوعات</label>
           <MultiSelect
             options={topicOptions}
             values={filters.topics}
             onChange={(v) => setFilter({ topics: v })}
             placeholder="همه موضوعات"
+            theme={theme}
           />
         </div>
         <div style={{ display: "flex", alignItems: "flex-end" }}>
-          <button type="button" style={{ ...btnStyle(), color: "#f59e0b" }} onClick={() => setFilters(EMPTY_FILTERS)}>
+          <button type="button" style={{ ...btn(), color: "#f59e0b" }} onClick={() => setFilters(EMPTY_FILTERS)}>
             <RotateCcw size={15} />
             پاک‌سازی فیلترها
           </button>
@@ -458,10 +414,10 @@ export default function FieldManagementSummary() {
       </div>
 
       {/* جدول */}
-      <div style={{ overflowX: "auto", border: "1px solid #334155", borderRadius: 12 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 980 }}>
+      <div style={tableWrap}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 980, color: theme.text }}>
           <thead>
-            <tr style={{ background: "#1e293b", textAlign: "right" }}>
+            <tr style={{ background: tableHeadBg, textAlign: "right" }}>
               <th style={{ padding: "10px 8px", width: 48 }}>ردیف</th>
               <SortHeader col="created_at">تاریخ ایجاد</SortHeader>
               <SortHeader col="summary_type">نوع خلاصه</SortHeader>
@@ -482,7 +438,7 @@ export default function FieldManagementSummary() {
               </tr>
             ) : data.rows.length ? (
               data.rows.map((row, i) => (
-                <tr key={row.id} style={{ borderTop: "1px solid #1f2c44" }}>
+                <tr key={row.id} style={{ borderTop: tableRowBorder }}>
                   <td style={{ padding: 8 }}>{toPersianDigits(page * limit + i + 1)}</td>
                   <td style={{ padding: 8, whiteSpace: "nowrap" }}>{faTimestampJalali(row.created_at)}</td>
                   <td style={{ padding: 8 }}>
@@ -491,25 +447,7 @@ export default function FieldManagementSummary() {
                         padding: "2px 10px",
                         borderRadius: 999,
                         fontSize: 12,
-                        background:
-                          row.summary_type === "general"
-                            ? "rgba(34,197,94,0.12)"
-                            : row.summary_type === "provincial"
-                              ? "rgba(59,130,246,0.15)"
-                              : "rgba(245,158,11,0.15)",
-                        color:
-                          row.summary_type === "general"
-                            ? "#86efac"
-                            : row.summary_type === "provincial"
-                              ? "#93c5fd"
-                              : "#fcd34d",
-                        border: `1px solid ${
-                          row.summary_type === "general"
-                            ? "rgba(34,197,94,0.35)"
-                            : row.summary_type === "provincial"
-                              ? "rgba(59,130,246,0.4)"
-                              : "rgba(245,158,11,0.4)"
-                        }`,
+                        ...summaryTypeBadgeStyle(row.summary_type, isDarkMode),
                       }}
                     >
                       {TYPE_FA[row.summary_type] || row.summary_type}
@@ -529,10 +467,10 @@ export default function FieldManagementSummary() {
                   <td style={{ padding: 8, textAlign: "center" }}>{toPersianDigits(row.report_count)}</td>
                   <td style={{ padding: 8 }}>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button type="button" title="ویرایش متن خلاصه" onClick={() => openEdit(row)} style={{ ...btnStyle(), padding: 7 }}>
+                      <button type="button" title="ویرایش متن خلاصه" onClick={() => openEdit(row)} style={{ ...btn(), padding: 7 }}>
                         <Edit3 size={15} color="#38bdf8" />
                       </button>
-                      <button type="button" title="لیست گزارشات مربوطه" onClick={() => openReports(row)} style={{ ...btnStyle(), padding: 7 }}>
+                      <button type="button" title="لیست گزارشات مربوطه" onClick={() => openReports(row)} style={{ ...btn(), padding: 7 }}>
                         <ListOrdered size={15} color="#a78bfa" />
                       </button>
                       <button
@@ -542,7 +480,7 @@ export default function FieldManagementSummary() {
                           setExportTarget(row);
                           setWithReports(true);
                         }}
-                        style={{ ...btnStyle(), padding: 7 }}
+                        style={{ ...btn(), padding: 7 }}
                       >
                         <FileDown size={15} color="#34d399" />
                       </button>
@@ -567,10 +505,10 @@ export default function FieldManagementSummary() {
           مجموع: {toPersianDigits(data.total)} خلاصه — صفحه {toPersianDigits(page + 1)} از {toPersianDigits(totalPages)}
         </span>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" style={btnStyle()} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+          <button type="button" style={btn()} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
             قبلی
           </button>
-          <button type="button" style={btnStyle()} disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
+          <button type="button" style={btn()} disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
             بعدی
           </button>
         </div>
@@ -582,7 +520,7 @@ export default function FieldManagementSummary() {
           <div style={modalBox(760)}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 15 }}>ویرایش خلاصه مدیریتی — {editTitle.trim() || `#${editTarget.id}`}</h3>
-              <button type="button" onClick={() => setEditTarget(null)} style={{ ...btnStyle(), padding: 6 }}>
+              <button type="button" onClick={() => setEditTarget(null)} style={{ ...btn(), padding: 6 }}>
                 <X size={16} />
               </button>
             </div>
@@ -592,20 +530,20 @@ export default function FieldManagementSummary() {
             <label style={{ fontSize: 12, opacity: 0.8, display: "block", marginBottom: 6 }}>عنوان خلاصه</label>
             <input
               type="text"
-              style={{ ...inputStyle, marginBottom: 14 }}
+              style={{ ...inp, marginBottom: 14 }}
               value={editTitle}
               maxLength={480}
               onChange={(e) => setEditTitle(clampText(e.target.value, 480))}
               placeholder="عنوان موجز"
             />
-            <RichTextEditor value={editBody} onChange={setEditBody} maxLength={MANAGEMENT_SUMMARY_BODY_MAX} minHeight={220} />
+            <RichTextEditor value={editBody} onChange={setEditBody} maxLength={MANAGEMENT_SUMMARY_BODY_MAX} minHeight={220} isDarkMode={isDarkMode} />
             <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button type="button" style={btnStyle()} onClick={() => setEditTarget(null)}>
+              <button type="button" style={btn()} onClick={() => setEditTarget(null)}>
                 انصراف
               </button>
               <button
                 type="button"
-                style={btnStyle("primary")}
+                style={btn("primary")}
                 disabled={editBusy || !stripHtml(editBody).trim() || !editTitle.trim()}
                 onClick={saveEdit}
               >
@@ -625,15 +563,15 @@ export default function FieldManagementSummary() {
               <h3 style={{ margin: 0, fontSize: 15 }}>
                 گزارشات مربوطه ({toPersianDigits(reportsTarget.refs?.length || 0)}) — {reportsTarget.summary?.title}
               </h3>
-              <button type="button" onClick={() => setReportsTarget(null)} style={{ ...btnStyle(), padding: 6 }}>
+              <button type="button" onClick={() => setReportsTarget(null)} style={{ ...btn(), padding: 6 }}>
                 <X size={16} />
               </button>
             </div>
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: 0 }}>{reportsTarget.summary?.subtitle}</p>
-            <div style={{ overflowX: "auto", border: "1px solid #334155", borderRadius: 10 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <div style={tableWrapInner}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: theme.text }}>
                 <thead>
-                  <tr style={{ background: "#1e293b", textAlign: "right" }}>
+                  <tr style={{ background: tableHeadBg, textAlign: "right" }}>
                     <th style={{ padding: 8 }}>ردیف</th>
                     <th style={{ padding: 8 }}>تاریخ</th>
                     <th style={{ padding: 8 }}>استان</th>
@@ -647,7 +585,7 @@ export default function FieldManagementSummary() {
                 <tbody>
                   {(reportsTarget.refs || []).map((r, i) => (
                     <React.Fragment key={r.hash_key}>
-                      <tr style={{ borderTop: "1px solid #1f2c44" }}>
+                      <tr style={{ borderTop: tableRowBorder }}>
                         <td style={{ padding: 8 }}>{toPersianDigits(i + 1)}</td>
                         <td style={{ padding: 8, whiteSpace: "nowrap" }}>{faStoredJalali(r.date)}</td>
                         <td style={{ padding: 8 }}>{r.StateName || "—"}</td>
@@ -658,7 +596,7 @@ export default function FieldManagementSummary() {
                         <td style={{ padding: 8 }}>
                           <button
                             type="button"
-                            style={{ ...btnStyle(), padding: "4px 10px", fontSize: 11 }}
+                            style={{ ...btn(), padding: "4px 10px", fontSize: 11 }}
                             onClick={() => setExpandedRef(expandedRef === r.hash_key ? null : r.hash_key)}
                           >
                             {expandedRef === r.hash_key ? "بستن" : "نمایش کامل"}
@@ -667,7 +605,7 @@ export default function FieldManagementSummary() {
                       </tr>
                       {expandedRef === r.hash_key ? (
                         <tr>
-                          <td colSpan={8} style={{ padding: 12, background: "#111c2e", lineHeight: 1.9, whiteSpace: "pre-wrap" }}>
+                          <td colSpan={8} style={{ padding: 12, background: expandedRowBg, lineHeight: 1.9, whiteSpace: "pre-wrap", color: theme.text }}>
                             {r.cleaned_text || r.raw_text || "متنی ثبت نشده است"}
                           </td>
                         </tr>
@@ -687,7 +625,7 @@ export default function FieldManagementSummary() {
           <div style={modalBox(420)}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 15 }}>خروجی — {exportTarget.title || `#${exportTarget.id}`}</h3>
-              <button type="button" onClick={() => setExportTarget(null)} style={{ ...btnStyle(), padding: 6 }}>
+              <button type="button" onClick={() => setExportTarget(null)} style={{ ...btn(), padding: 6 }}>
                 <X size={16} />
               </button>
             </div>
@@ -702,15 +640,15 @@ export default function FieldManagementSummary() {
               </label>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" style={btnStyle("primary")} disabled={exportBusy} onClick={() => doExport("pdf")}>
+              <button type="button" style={btn("primary")} disabled={exportBusy} onClick={() => doExport("pdf")}>
                 <FileDown size={15} />
                 PDF
               </button>
-              <button type="button" style={btnStyle("primary")} disabled={exportBusy} onClick={() => doExport("docx")}>
+              <button type="button" style={btn("primary")} disabled={exportBusy} onClick={() => doExport("docx")}>
                 <FileDown size={15} />
                 Word
               </button>
-              <button type="button" style={btnStyle()} disabled={exportBusy} onClick={doPrint}>
+              <button type="button" style={btn()} disabled={exportBusy} onClick={doPrint}>
                 <Printer size={15} />
                 چاپ
               </button>

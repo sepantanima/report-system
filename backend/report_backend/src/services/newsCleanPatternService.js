@@ -1,6 +1,7 @@
 import pool from "../db.js";
 import { compilePhraseToRegExp, compilePatternRow, compileRawRegex, detectMatchKind } from "./newsIngest/newsPatternCompiler.js";
 import { cleanNewsPlainText } from "./newsIngest/newsPatternCleaner.js";
+import { getNewsEntrySettings } from "./newsEntrySettingsService.js";
 
 const CACHE_TTL_MS = 60_000;
 let cache = { at: 0, rows: [] };
@@ -172,8 +173,11 @@ export async function deletePattern(id) {
 
 export async function testPatternClean(text) {
   const patterns = await listEnabledPatternsCompiled();
+  const settings = await getNewsEntrySettings();
   const before = String(text ?? "");
-  const result = cleanNewsPlainText(before, patterns);
+  const result = cleanNewsPlainText(before, patterns, {
+    summarizeThreshold: settings.summarize_char_threshold,
+  });
   const matched = patterns.filter((p) => p.id != null && result.removedPatternIds.includes(p.id));
   return {
     before,

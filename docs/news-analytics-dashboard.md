@@ -13,7 +13,8 @@
 | در حال بررسی | `workflow_status IN ('pending','reviewed')` و `review_state = 'pending'` |
 | تأیید شده | `review_state = 'approved'` |
 | رد شده | `review_state = 'rejected'` |
-| منتشر شده | `workflow_status = 'finalized'` + `is_approved = 1` + غیرتکراری |
+| منتشر شده | `workflow_status = 'finalized'` + `is_approved = 1` + `publish_status = 'ready'` + غیرتکراری |
+| بانک انتظار | `workflow_status = 'finalized'` + `is_approved = 1` + `publish_status = 'banked'` + غیرتکراری |
 
 ## فیلترها
 
